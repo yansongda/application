@@ -9,12 +9,25 @@ import logger from "./logger";
 
 type TokenBundleResponse = LoginResponse | LoginRefreshResponse;
 
-const getTokenBundle = () => ({
-  access_token: wx.getStorageSync(STORAGE.ACCESS_TOKEN) as string,
-  refresh_token: wx.getStorageSync(STORAGE.REFRESH_TOKEN) as string,
-  expired_in: wx.getStorageSync(STORAGE.ACCESS_TOKEN_EXPIRED_IN) as number,
-  expired_at: wx.getStorageSync(STORAGE.ACCESS_TOKEN_EXPIRED_AT) as number,
-});
+interface TokenBundle {
+  access_token: string;
+  refresh_token: string;
+  expired_in: number;
+  expired_at: number;
+}
+
+const getTokenBundle = (): TokenBundle => {
+  const bundle = wx.getStorageSync(STORAGE.TOKEN_BUNDLE) as
+    | TokenBundle
+    | undefined;
+
+  return {
+    access_token: bundle?.access_token ?? "",
+    refresh_token: bundle?.refresh_token ?? "",
+    expired_in: bundle?.expired_in ?? 0,
+    expired_at: bundle?.expired_at ?? 0,
+  };
+};
 
 const saveTokenBundle = (response: TokenBundleResponse) => {
   if (!response.access_token) {
@@ -29,17 +42,16 @@ const saveTokenBundle = (response: TokenBundleResponse) => {
 
   const expired_at = Date.now() + response.expired_in * 1000;
 
-  wx.setStorageSync(STORAGE.ACCESS_TOKEN, response.access_token);
-  wx.setStorageSync(STORAGE.REFRESH_TOKEN, response.refresh_token);
-  wx.setStorageSync(STORAGE.ACCESS_TOKEN_EXPIRED_IN, response.expired_in);
-  wx.setStorageSync(STORAGE.ACCESS_TOKEN_EXPIRED_AT, expired_at);
+  wx.setStorageSync(STORAGE.TOKEN_BUNDLE, {
+    access_token: response.access_token,
+    refresh_token: response.refresh_token,
+    expired_in: response.expired_in,
+    expired_at,
+  });
 };
 
 const clearTokenBundle = () => {
-  wx.removeStorageSync(STORAGE.ACCESS_TOKEN);
-  wx.removeStorageSync(STORAGE.REFRESH_TOKEN);
-  wx.removeStorageSync(STORAGE.ACCESS_TOKEN_EXPIRED_IN);
-  wx.removeStorageSync(STORAGE.ACCESS_TOKEN_EXPIRED_AT);
+  wx.removeStorageSync(STORAGE.TOKEN_BUNDLE);
 };
 
 const isAccessTokenFresh = (): boolean => {
