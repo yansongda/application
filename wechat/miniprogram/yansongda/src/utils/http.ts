@@ -1,8 +1,8 @@
 import { PATH } from "@constant/access-token";
-import { STORAGE, URL } from "@constant/app";
+import { URL } from "@constant/app";
 import { CODE, WECHAT_MESSAGE } from "@constant/error";
 import { HttpError } from "@models/error";
-import { refreshFallback, refreshToken } from "@utils/app";
+import { getTokenBundle, refreshFallback, refreshToken } from "@utils/app";
 import logger from "@utils/logger";
 import type { Request, RequestData, RequestQuery, Response } from "types/http";
 import type { WxRequestFail, WxRequestSuccess } from "types/wechat";
@@ -54,8 +54,9 @@ const formatHeaders = (request: Request): void => {
     request.headers = {};
   }
 
-  request.headers.authorization =
-    `Bearer ${wx.getStorageSync(STORAGE.ACCESS_TOKEN)}` || "";
+  const accessToken = getTokenBundle().access_token;
+
+  request.headers.authorization = accessToken ? `Bearer ${accessToken}` : "";
 };
 
 // Shallow-clone for mutation: formatUrl/formatHeaders mutate the original.

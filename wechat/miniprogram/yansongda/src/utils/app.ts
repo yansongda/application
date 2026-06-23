@@ -203,6 +203,7 @@ const upgrade = () => {
 
 export {
   clearTokenBundle,
+  getTokenBundle,
   isAccessTokenFresh,
   login,
   refreshFallback,
