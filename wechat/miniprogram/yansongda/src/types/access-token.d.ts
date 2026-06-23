@@ -8,4 +8,18 @@ export interface LoginRequest extends RequestData {
 
 export interface LoginResponse {
   access_token: string;
+  expired_in: number;
+  refresh_token: string;
+}
+
+export interface LoginRefreshRequest extends RequestData {
+  platform: string;
+  third_id: string;
+  refresh_token: string;
+}
+
+export interface LoginRefreshResponse {
+  access_token: string;
+  expired_in: number;
+  refresh_token: string;
 }
