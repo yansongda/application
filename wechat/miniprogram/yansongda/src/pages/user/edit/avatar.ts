@@ -2,6 +2,7 @@ import api from "@api/user";
 import { STORAGE } from "@constant/app";
 import { DEFAULT } from "@constant/user";
 import error from "@utils/error";
+import logger from "@utils/logger";
 import user from "@utils/user";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
@@ -26,22 +27,40 @@ Page({
     });
   },
   async onChooseAvatar(e: ChooseAvatarButtonTap<unknown, unknown>) {
-    await wx.showLoading({ title: "上传中", icon: "loading", mask: true });
+    try {
+      await wx.showLoading({ title: "处理中", icon: "loading", mask: true });
 
-    const res = await wx.compressImage({
-      src: e.detail.avatarUrl.toString(),
-      quality: 50,
-    });
+      const res = await wx.compressImage({
+        src: e.detail.avatarUrl.toString(),
+        quality: 50,
+      });
 
-    wx.getFileSystemManager().readFile({
-      filePath: res.tempFilePath,
-      encoding: "base64",
-      success: async (res: WxGetFileSystemManagerReadFileSuccess) => {
-        this.setData({ avatar: `data:image/jpeg;base64,${res.data}` });
+      const fileRes: WxGetFileSystemManagerReadFileSuccess = await new Promise(
+        (resolve, reject) => {
+          wx.getFileSystemManager().readFile({
+            filePath: res.tempFilePath,
+            encoding: "base64",
+            success: resolve,
+            fail: reject,
+          });
+        },
+      );
 
-        await wx.hideLoading();
-      },
-    });
+      this.setData({
+        avatar: `data:image/jpeg;base64,${String(fileRes.data)}`,
+      });
+    } catch (e: unknown) {
+      logger.error("头像处理失败", e);
+
+      Toast({
+        message: "头像处理失败，请重试",
+        theme: "error",
+        duration: 2000,
+        direction: "column",
+      });
+    } finally {
+      await wx.hideLoading();
+    }
   },
   async submit() {
     Toast({
