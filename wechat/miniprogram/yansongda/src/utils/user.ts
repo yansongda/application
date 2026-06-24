@@ -14,7 +14,13 @@ const detail = async (): Promise<User> => {
     /* empty */
   }
 
-  return sync();
+  try {
+    return await sync();
+  } catch (_e) {
+    /* empty */
+  }
+
+  return { phone: "", config: undefined };
 };
 
 const sync = async (): Promise<User> => {
