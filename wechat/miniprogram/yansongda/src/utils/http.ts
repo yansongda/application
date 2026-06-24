@@ -25,8 +25,10 @@ let inFlightRefresh: Promise<unknown> | null = null;
 
 // Login / refresh / valid endpoints must NOT trigger a recursive refresh
 // when they themselves return 1004 — doing so would loop infinitely.
-const isAuthEndpoint = (url: string): boolean =>
-  AUTH_ENDPOINTS.some((ep) => url.includes(ep));
+const isAuthEndpoint = (url: string): boolean => {
+  const pathOnly = url.split("?", 1)[0];
+  return AUTH_ENDPOINTS.some((ep) => pathOnly.endsWith(ep));
+};
 
 const formatUrl = (request: Request): void => {
   if (typeof request.query !== "undefined") {
