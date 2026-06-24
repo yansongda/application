@@ -28,18 +28,19 @@ const isAuthEndpoint = (url: string): boolean => {
 
 const formatUrl = (request: Request): void => {
   if (typeof request.query !== "undefined") {
-    const query = request.query;
+    const params = new URLSearchParams();
 
-    const paramsArray: string[] = [];
+    for (const key of Object.keys(request.query)) {
+      const value = request.query[key];
+      if (value !== null && value !== undefined && value !== "") {
+        params.append(key, String(value));
+      }
+    }
 
-    // biome-ignore lint: no-check
-    Object.keys(request.query).forEach(
-      (key) => query[key] && paramsArray.push(`${key}=${query[key]}`),
-    );
-
-    request.url += `${
-      request.url.search(/\?/) === -1 ? "?" : "&"
-    }${paramsArray.join("&")}`;
+    const qs = params.toString();
+    if (qs) {
+      request.url += `${request.url.search(/\?/) === -1 ? "?" : "&"}${qs}`;
+    }
   }
 
   if (!request.url.startsWith("http")) {
