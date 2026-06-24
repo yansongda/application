@@ -7,7 +7,10 @@ const CODE = {
   HTTP: 2000,
   // http 内部参数错误
   HTTP_PARAMS: 2001,
-  // 后端业务响应码 - token 过期
+  // 后端业务响应码 - 认证相关
+  BACKEND_AUTH_HEADER_MISSING: 1000,
+  BACKEND_AUTH_TOKEN_INVALID: 1001,
+  BACKEND_AUTH_FORMAT_INVALID: 1002,
   BACKEND_TOKEN_EXPIRED: 1004,
   // http 业务接口 - token
   HTTP_API_ACCESS_TOKEN_LOGIN: 2100,

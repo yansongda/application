@@ -15,6 +15,13 @@ const AUTH_ENDPOINTS = [
   PATH.VALID,
 ] as readonly string[];
 
+const REFRESH_TRIGGER_CODES: readonly number[] = [
+  CODE.BACKEND_AUTH_HEADER_MISSING,
+  CODE.BACKEND_AUTH_TOKEN_INVALID,
+  CODE.BACKEND_AUTH_FORMAT_INVALID,
+  CODE.BACKEND_TOKEN_EXPIRED,
+];
+
 // Deduplicates concurrent refresh attempts — only one refresh is in flight
 // at any time; subsequent callers await the same promise.
 let inFlightRefresh: Promise<unknown> | null = null;
@@ -156,7 +163,7 @@ const wxRequest = <T>(
           return;
         }
 
-        if (Number(res.data.code) === CODE.BACKEND_TOKEN_EXPIRED) {
+        if (REFRESH_TRIGGER_CODES.includes(Number(res.data.code))) {
           handleTokenExpired<T>(
             preserved,
             Number(res.data.code),
@@ -220,7 +227,7 @@ const wxUpload = <T>(
           return;
         }
 
-        if (Number(response.code) === CODE.BACKEND_TOKEN_EXPIRED) {
+        if (REFRESH_TRIGGER_CODES.includes(Number(response.code))) {
           handleTokenExpired<T>(
             preserved,
             Number(response.code),
