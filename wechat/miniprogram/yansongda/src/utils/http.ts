@@ -15,10 +15,6 @@ const AUTH_ENDPOINTS = [
   PATH.VALID,
 ] as readonly string[];
 
-// Symbol cannot be serialized by JSON.stringify or spread-copy, so it never
-// leaks into wx.request data/header even if cloneRequest misses a field.
-const RETRY_MARKER = Symbol("retry");
-
 // Deduplicates concurrent refresh attempts — only one refresh is in flight
 // at any time; subsequent callers await the same promise.
 let inFlightRefresh: Promise<unknown> | null = null;
@@ -62,8 +58,6 @@ const formatHeaders = (request: Request): void => {
 };
 
 // Shallow-clone for mutation: formatUrl/formatHeaders mutate the original.
-// Only copies JSON-safe properties — Symbol keys (like RETRY_MARKER) are
-// intentionally excluded so they stay internal to the request lifecycle.
 const cloneRequest = (req: Request): Request => ({
   url: req.url,
   query: req.query ? { ...req.query } : undefined,
@@ -93,10 +87,11 @@ const handleTokenExpired = async <T>(
   originalRequest: Request,
   code: number,
   message: string,
+  isRetry?: boolean,
 ): Promise<T> => {
-  // Single-retry guard: if the marker is present, we already retried once
-  // after a refresh — reject immediately to prevent an infinite loop.
-  if ((originalRequest as Record<symbol, boolean>)[RETRY_MARKER]) {
+  // Single-retry guard: if we already retried once after a refresh —
+  // reject immediately to prevent an infinite loop.
+  if (isRetry) {
     return Promise.reject(new HttpError(code, message));
   }
 
@@ -112,26 +107,31 @@ const handleTokenExpired = async <T>(
   }
 
   const retryRequest = cloneRequest(originalRequest);
-  // Mark this clone so a second 1004 from the retry is caught by the guard above.
-  (retryRequest as Record<symbol, boolean>)[RETRY_MARKER] = true;
 
-  return request<T>(retryRequest);
+  return request<T>(retryRequest, { isRetry: true });
 };
 
-const request = <T>(req: Request): Promise<T> => {
+const request = <T>(
+  req: Request,
+  opts: { isRetry?: boolean } = {},
+): Promise<T> => {
   const preserved = cloneRequest(req);
 
   formatUrl(req);
   formatHeaders(req);
 
   if (req.isUploadFile) {
-    return wxUpload(req, preserved);
+    return wxUpload(req, preserved, opts);
   }
 
-  return wxRequest(req, preserved);
+  return wxRequest(req, preserved, opts);
 };
 
-const wxRequest = <T>(req: Request, preserved: Request) => {
+const wxRequest = <T>(
+  req: Request,
+  preserved: Request,
+  opts: { isRetry?: boolean } = {},
+) => {
   logger.info(
     "请求接口",
     req.url.indexOf("users/update") === -1 ? req : "用户更新",
@@ -160,6 +160,7 @@ const wxRequest = <T>(req: Request, preserved: Request) => {
             preserved,
             Number(res.data.code),
             res.data.message,
+            opts.isRetry,
           ).then(resolve, reject);
           return;
         }
@@ -181,7 +182,11 @@ const wxRequest = <T>(req: Request, preserved: Request) => {
   });
 };
 
-const wxUpload = <T>(req: Request, preserved: Request) => {
+const wxUpload = <T>(
+  req: Request,
+  preserved: Request,
+  opts: { isRetry?: boolean } = {},
+) => {
   logger.info("请求上传接口", req.url, req.headers);
 
   return new Promise<T>((resolve, reject) => {
@@ -219,6 +224,7 @@ const wxUpload = <T>(req: Request, preserved: Request) => {
             preserved,
             Number(response.code),
             response.message,
+            opts.isRetry,
           ).then(resolve, reject);
           return;
         }
