@@ -45,6 +45,37 @@ git branch --show-current
 
 ### Step 2: Bump Version & Update CHANGELOG
 
+**Determine the version bump by analyzing the actual code diff, not just commit messages.**
+
+```bash
+cd application-rs
+
+# Step 1: List commits since last tag (reference only)
+git log <PREV_TAG>..HEAD --oneline
+
+# Step 2: Inspect each commit's actual changes (THIS is what matters)
+git show --stat <commit>
+
+# Step 3: Review the aggregate diff
+git diff <PREV_TAG>..HEAD
+```
+
+**Commit messages are a hint; the diff is the truth.** A `fix:` commit may only touch a comment (no bump needed), while a `chore:` commit may introduce a new API (MINOR bump). Apply SemVer based on **behavioral impact**:
+
+| What Changed | Version Bump | Example |
+|--------------|-------------|---------|
+| New user-facing feature / new API / new binary behavior | **MINOR** | `1.13.0` → `1.14.0` |
+| Bug fix with behavior change | **PATCH** | `1.13.0` → `1.13.1` |
+| Pure refactor / comment update / no behavior change | **No bump** or bundle with other changes | Skip if nothing user-visible changed |
+| Breaking change (removed API, changed config format) | **MAJOR** | `1.13.0` → `2.0.0` |
+
+**Decision flow:**
+
+1. Does any commit add new user-visible functionality? → **MINOR**
+2. Does any commit fix a bug that users experienced? → **PATCH** (if no MINOR)
+3. Are all changes internal refactors / cleanups? → **PATCH** if bundling, otherwise consider skipping release
+4. Does any commit break backward compatibility? → **MAJOR**
+
 **Update `application-rs/Cargo.toml` (workspace root only):**
 
 ```toml
@@ -152,6 +183,10 @@ git push origin application-api/vX.Y.Z
 - **Problem:** PR fails CI due to `cargo fmt` or `cargo clippy` errors
 - **Fix:** Always run all three checks before creating PR
 
+**Bumping version based only on commit messages**
+- **Problem:** A `fix:` commit might only touch a comment (no bump needed), while a `chore:` commit might add a new API (MINOR bump)
+- **Fix:** Always inspect `git show --stat` and `git diff` to determine actual behavioral impact; commit messages are hints, the diff is the truth
+
 **Tagging before PR merge**
 - **Problem:** Tag points to pre-merge commit
 - **Fix:** Always `git pull origin main` after merge before tagging
@@ -185,6 +220,7 @@ All crates share the workspace version via `version.workspace = true`.
 - Skip `cargo fmt` / `cargo clippy` checks
 - Release from dirty working directory
 - Use wrong tag format (`v1.0.0` instead of `application-api/v1.0.0`)
+- Bump version based only on commit messages instead of inspecting the actual diff
 
 **Always:**
 - Run all Rust checks before PR
