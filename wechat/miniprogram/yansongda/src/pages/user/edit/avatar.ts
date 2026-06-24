@@ -43,7 +43,6 @@ Page({
         avatar: `data:image/jpeg;base64,${String(fileRes.data)}`,
       });
     } catch (e: unknown) {
-      console.log("头像处理失败", e);
       logger.error("头像处理失败", e);
 
       Toast({
