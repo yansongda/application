@@ -169,15 +169,15 @@ export class ItemsRuntime {
     } catch (error) {
     }
 
-    for (const item of items) {
+    for (const item of Array.from(items).sort((a: IItem, b: IItem): number => b.sort - a.sort)) {
       this.add(item);
     }
   }
 
   @Trace
-  private _ids: Set<string> = new Set();
+  private _ids: string[] = [];
 
-  get ids(): Set<string> {
+  get ids(): string[] {
     return this._ids;
   }
 
@@ -192,7 +192,12 @@ export class ItemsRuntime {
   delete(id: string) {
     this.stop(id);
 
-    this._ids.delete(id);
+    const index = this._ids.indexOf(id);
+
+    if (index >= 0) {
+      this._ids.splice(index, 1);
+      this._ids = [...this._ids];
+    }
 
     try {
       this._runtimes.remove(id);
@@ -212,11 +217,11 @@ export class ItemsRuntime {
   }
 
   isEmpty(): boolean {
-    return this._ids.size > 0;
+    return this._ids.length === 0;
   }
 
   clear() {
-    this._ids.forEach((id: string): void => this.delete(id));
+    [...this._ids].forEach((id: string): void => this.delete(id));
   }
 
   add(item: IItem): ItemRuntime {
@@ -226,10 +231,35 @@ export class ItemsRuntime {
 
     try {
       this._runtimes.set(item.id, runtime);
-      this._ids.add(item.id);
+
+      const index = this._ids.indexOf(item.id);
+
+      if (index >= 0) {
+        this._ids.splice(index, 1);
+      }
+
+      this._ids.push(item.id);
+      this._ids = [...this._ids];
     } catch (error) {
     }
 
     return runtime;
+  }
+
+  move(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= this._ids.length ||
+      toIndex >= this._ids.length) {
+      return;
+    }
+
+    const ids = [...this._ids];
+    const movedId = ids.splice(fromIndex, 1)[0];
+
+    if ('undefined' === typeof movedId) {
+      return;
+    }
+
+    ids.splice(toIndex, 0, movedId);
+    this._ids = ids;
   }
 }
