@@ -28,27 +28,10 @@ Page({
         quality: 50,
       });
 
-      let localFilePath = res.tempFilePath;
-      if (
-        localFilePath.startsWith("http://") ||
-        localFilePath.startsWith("https://")
-      ) {
-        const downloadRes: { tempFilePath: string } = await new Promise(
-          (resolve, reject) => {
-            wx.downloadFile({
-              url: localFilePath,
-              success: resolve,
-              fail: reject,
-            });
-          },
-        );
-        localFilePath = downloadRes.tempFilePath;
-      }
-
       const fileRes: WxGetFileSystemManagerReadFileSuccess = await new Promise(
         (resolve, reject) => {
           wx.getFileSystemManager().readFile({
-            filePath: localFilePath,
+            filePath: res.tempFilePath,
             encoding: "base64",
             success: resolve,
             fail: reject,
@@ -60,6 +43,7 @@ Page({
         avatar: `data:image/jpeg;base64,${String(fileRes.data)}`,
       });
     } catch (e: unknown) {
+      console.log("头像处理失败", e);
       logger.error("头像处理失败", e);
 
       Toast({
