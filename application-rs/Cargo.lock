@@ -90,7 +90,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "application-api"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "application-database",
  "application-kernel",
@@ -110,7 +110,7 @@ dependencies = [
 
 [[package]]
 name = "application-database"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "application-kernel",
  "application-util",
@@ -124,7 +124,7 @@ dependencies = [
 
 [[package]]
 name = "application-kernel"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "chrono",
  "config",
@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "application-util"
-version = "1.17.0"
+version = "1.18.0"
 dependencies = [
  "application-kernel",
  "reqwest",

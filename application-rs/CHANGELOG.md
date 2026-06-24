@@ -1,3 +1,13 @@
+## [1.18.0] - 2026-06-25
+
+### Added
+
+- feat(auth): 新增认证错误码：access_token 过期（1004）、refresh_token 无效（1005）、refresh_token 过期（1006）(#140) ([8f9e59f](https://github.com/yansongda/application/commit/8f9e59f))
+
+### Changed
+
+- refactor(auth): 调整 access_token 过期语义，`expired_at` 为空时视为已过期，不再对微信 access_token 做永不过期特殊处理 (#140) ([8f9e59f](https://github.com/yansongda/application/commit/8f9e59f))
+
 ## [1.17.0] - 2026-05-13
 
 ### Added
