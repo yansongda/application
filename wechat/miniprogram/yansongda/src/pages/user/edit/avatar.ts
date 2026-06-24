@@ -1,16 +1,13 @@
 import api from "@api/user";
-import { STORAGE } from "@constant/app";
 import { DEFAULT } from "@constant/user";
 import error from "@utils/error";
 import logger from "@utils/logger";
 import user from "@utils/user";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
-import type { User } from "types/user";
 import type {
   ChooseAvatarButtonTap,
   WxGetFileSystemManagerReadFileSuccess,
-  WxGetStorageSuccess,
 } from "types/wechat";
 
 Page({
@@ -18,13 +15,9 @@ Page({
     avatar: "",
   },
   async onShow() {
-    const storage: WxGetStorageSuccess<User> = await wx.getStorage({
-      key: STORAGE.USER,
-    });
+    const u = await user.detail();
 
-    this.setData({
-      avatar: storage.data.config?.avatar ?? DEFAULT.CONFIG.AVATAR,
-    });
+    this.setData({ avatar: u.config?.avatar ?? DEFAULT.CONFIG.AVATAR });
   },
   async onChooseAvatar(e: ChooseAvatarButtonTap<unknown, unknown>) {
     try {
