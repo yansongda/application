@@ -1,0 +1,83 @@
+<t-message id="t-message" />
+<t-toast id="t-toast" />
+<t-dialog
+  visible="{{dialogVisible}}"
+  title="是否确定删除？"
+  content="删除后数据不可恢复"
+  confirm-btn="{{ { content: '删除', variant: 'base' } }}"
+  cancel-btn="取消"
+  bind:confirm="dialogConfirm"
+  bind:cancel="dialogCancel"
+/>
+
+<view class="page {{isSortMode ? 'page-sort' : ''}}" style="{{isDragging ? 'overflow: hidden;' : ''}}">
+  <view class="loading-state" wx:if="{{isLoading}}">
+    <t-loading size="40px" text="加载中..." />
+  </view>
+
+  <view class="error-state" wx:elif="{{isError}}">
+    <t-empty icon="error-circle-filled" description="加载失败，请重试" />
+    <t-button theme="primary" variant="outline" size="small" bind:tap="retry" style="margin-top: 24rpx;">重试</t-button>
+  </view>
+
+  <block wx:else>
+    <view class="header" wx:if="{{items.length > 0}}">
+      <view class="header-title">总计 {{items.length}} 个账号</view>
+      <view class="header-action">
+        <t-button wx:if="{{!isSortMode}}" size="small" theme="primary" variant="text" bind:tap="enterSortMode">编辑</t-button>
+        <t-button wx:else size="small" theme="primary" variant="text" bind:tap="saveSort">完成</t-button>
+      </view>
+    </view>
+
+    <t-empty wx:if="{{items.length <= 0}}" icon="info-circle-filled" description="暂无数据" />
+
+    <view class="sort-tip" wx:if="{{isSortMode && items.length > 0}}">
+      <text class="sort-tip-text">长按并拖动可调整顺序</text>
+    </view>
+
+    <view class="items items-sort" wx:if="{{isSortMode && items.length > 0}}">
+      <view
+        wx:for="{{ dragItems }}"
+        wx:key="id"
+        class="sort-row"
+      >
+        <view
+          class="sort-item {{draggingIndex === index ? 'sort-item-dragging' : ''}}"
+          style="transform: translateY({{item.translateY}}px); z-index: {{draggingIndex === index ? 99 : 1}};"
+          bindtouchstart="onTouchStart"
+          bindtouchmove="onTouchMove"
+          bindtouchend="onTouchEnd"
+          data-index="{{index}}"
+        >
+          <app-totp-item
+            itemId="{{ item.id }}"
+            period="{{ item.config.period }}"
+            issuer="{{ item.issuer }}"
+            username="{{ item.username }}"
+            code="{{ item.code }}"
+          />
+          <view class="sort-mask" />
+        </view>
+      </view>
+    </view>
+
+    <view class="items" wx:if="{{!isSortMode && items.length > 0}}">
+      <app-totp-item
+        wx:for="{{ items }}"
+        wx:key="id"
+        wx:for-index="index"
+        wx:for-item="item"
+        itemId="{{ item.id }}"
+        period="{{ item.config.period }}"
+        issuer="{{ item.issuer }}"
+        username="{{ item.username }}"
+        code="{{ item.code }}"
+        bind:message="itemMessage"
+        bind:detail="itemDetail"
+        bind:delete="itemDelete" 
+      />
+    </view>
+
+    <t-fab wx:if="{{!isSortMode}}" icon="add" bind:click="create" aria-label="增加" text="增加"></t-fab>
+  </block>
+</view>

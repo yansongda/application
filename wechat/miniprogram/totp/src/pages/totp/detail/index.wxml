@@ -1,0 +1,26 @@
+<t-message id="t-message" />
+<t-toast id="t-toast" />
+<t-dialog
+  visible="{{dialogVisible}}"
+  title="查询最新信息失败"
+  content="请问是否重试？"
+  confirm-btn="{{ { content: '重试', variant: 'base' } }}"
+  cancel-btn="取消"
+  bind:confirm="dialogConfirm"
+  bind:cancel="dialogCancel"
+/>
+
+<view class="page">
+  <view class="t-cell-group-margin">
+    <t-cell-group theme="card">
+      <t-cell title="提供商" note="{{issuer}}" bind:tap="gotoEdit" data-type="issuer" hover arrow></t-cell>
+      <t-cell title="账号" note="{{username}}" bind:tap="gotoEdit" data-type="username" hover arrow></t-cell>
+    </t-cell-group>
+  </view>
+
+  <view class="t-cell-group-margin">
+    <t-cell-group theme="card">
+      <t-cell title="更新周期" note="{{config.period}}s" hover></t-cell>
+    </t-cell-group>
+  </view>
+</view>

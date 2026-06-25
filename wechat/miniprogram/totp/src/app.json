@@ -1,24 +1,24 @@
 {
   "pages": [
-    "pages/index/index",
-    "pages/logs/logs"
+    "pages/totp/index",
+    "pages/totp/detail/index",
+    "pages/totp/edit/issuer",
+    "pages/totp/edit/username"
   ],
   "window": {
-    "navigationBarTextStyle": "black",
-    "navigationStyle": "custom"
+    "navigationBarTextStyle": "black"
   },
   "style": "v2",
-  "rendererOptions": {
-    "skyline": {
-      "defaultDisplayBlock": true,
-      "defaultContentBox": true,
-      "tagNameStyleIsolation": "legacy",
-      "disableABTest": true,
-      "sdkVersionBegin": "3.0.0",
-      "sdkVersionEnd": "15.255.255"
-    }
+  "networkTimeout": {
+    "request": 5000
   },
-  "componentFramework": "glass-easel",
+  "lazyCodeLoading": "requiredComponents",
   "sitemapLocation": "sitemap.json",
-  "lazyCodeLoading": "requiredComponents"
+  "resolveAlias": {
+    "@api/*": "/api/*",
+    "@utils/*": "/utils/*",
+    "@constant/*": "/constant/*",
+    "@models/*": "/models/*",
+    "@components/*": "/components/*"
+  }
 }

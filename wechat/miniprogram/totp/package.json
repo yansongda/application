@@ -6,7 +6,8 @@
   "scripts": {
     "biome:check": "biome check",
     "biome:fix": "biome check --fix",
-    "biome:fix-unsafe": "biome check --fix --unsafe"
+    "biome:fix-unsafe": "biome check --fix --unsafe",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "miniprogram",

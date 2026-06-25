@@ -1,0 +1,20 @@
+<view class="item">
+  <t-swipe-cell>
+    <view class="item-body">
+      <view class="item-body-info">
+        <view class="item-body-info-issuer">{{ issuer }}</view>
+        <view class="item-body-info-username">{{ username }}</view>
+      </view>
+      <view class="item-body-code">{{ code }}</view>
+    </view>
+    <view slot="right" class="item-btn">
+      <view class="btn btn-detail" bind:tap="detail">
+        详情
+      </view>
+      <view class="btn btn-delete" bind:tap="delete">
+        删除
+      </view>
+    </view>
+  </t-swipe-cell>
+  <progress class="item-progress" percent="{{ remainSeconds / period * 100 }}" stroke-width="2" ></progress>
+</view>

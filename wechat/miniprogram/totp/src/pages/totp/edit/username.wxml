@@ -1,0 +1,15 @@
+<t-toast id="t-toast" />
+<t-message id="t-message" />
+
+<view class="page">
+  <form bindsubmit="submit">
+    <view>
+      <t-input name="username" placeholder="请填写账号" value="{{username}}" maxlength="64" align="left"/>
+    </view>
+
+    <view class="operation">
+      <t-button theme="primary" size="large" type="submit" block>修改</t-button>
+      <t-button size="large" bind:tap="cancel" block>取消</t-button>
+    </view>
+  </form>
+</view>

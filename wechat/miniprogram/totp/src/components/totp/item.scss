@@ -1,0 +1,62 @@
+.item {
+  height: 100px;
+  background-color: white;
+
+  .item-body {
+    height: 98px;
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+
+    .item-body-info {
+      flex: 2;
+      display: flex;
+      flex-flow: column nowrap;
+
+      .item-body-info-issuer {
+        flex: 2;
+        text-overflow: ellipsis;
+        font-size: 30px;
+        text-align: center;
+        color: #636363;
+      }
+
+      .item-body-info-username {
+        color: gray;
+        flex: 1;
+        text-overflow: ellipsis;
+        font-size: 12px;
+        text-align: center;
+      }
+    }
+
+    .item-body-code {
+      flex: 3;
+      font-size: 50px;
+      text-align: center;
+    }
+  }
+
+  .item-btn {
+    height: 100%;
+
+    .btn {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      width: 60px;
+      height: 100%;
+      color: white;
+    }
+
+    .btn-detail {
+      background-color: #ed7b2f;
+    }
+
+    .btn-delete {
+      background-color: #e34d59;
+    }
+  }
+}
