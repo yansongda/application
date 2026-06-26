@@ -16,20 +16,21 @@
     "noUnusedParameters": true,
     "strict": true,
     "strictPropertyInitialization": true,
-    "ignoreDeprecations": "6.0",
     "lib": ["esnext"],
     "types": ["miniprogram-api-typings"],
     "baseUrl": ".",
     "outDir": "build",
     "paths": {
-      "tdesign-miniprogram/*": ["node_modules/tdesign-miniprogram/miniprogram_dist/*"],
+      "tdesign-miniprogram/*": [
+        "node_modules/tdesign-miniprogram/miniprogram_dist/*",
+      ],
       "@api/*": ["src/api/*"],
       "@utils/*": ["src/utils/*"],
       "@constant/*": ["src/constant/*"],
       "@models/*": ["src/models/*"],
       "@components/*": ["src/components/*"],
-      "types/*": ["src/types/*"]
-    }
+      "types/*": ["src/types/*"],
+    },
   },
-  "exclude": ["node_modules", "build/**/*"]
+  "exclude": ["node_modules", "build/**/*"],
 }
