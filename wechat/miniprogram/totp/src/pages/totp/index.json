@@ -9,5 +9,5 @@
     "t-icon": "tdesign-miniprogram/icon/icon",
     "app-totp-item": "/components/totp/item"
   },
-  "navigationBarTitleText": "TOTP身份验证器"
+  "navigationBarTitleText": "TOTP安全码"
 }
