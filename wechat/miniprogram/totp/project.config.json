@@ -18,7 +18,7 @@
     "packNpmRelationList": [
       {
         "packageJsonPath": "./package.json",
-        "miniprogramNpmDistDir": "./src/"
+        "miniprogramNpmDistDir": "./src"
       }
     ],
     "ignoreDevUnusedFiles": false,
