@@ -10,7 +10,7 @@ on:
 
 jobs:
   check-backend:
-    name: Backend: Check
+    name: "Backend: Check"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -39,7 +39,7 @@ jobs:
           cargo check --all-features
 
   lint-backend:
-    name: Backend: Lint
+    name: "Backend: Lint"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -72,7 +72,7 @@ jobs:
           cargo clippy -- -D warnings
 
   lint-frontend-yansongda:
-    name: Frontend: Lint (Yansongda)
+    name: "Frontend: Lint (Yansongda)"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -108,7 +108,7 @@ jobs:
           pnpm biome:check
 
   lint-frontend-totp:
-    name: Frontend: Lint (TOTP)
+    name: "Frontend: Lint (TOTP)"
     runs-on: ubuntu-latest
     defaults:
       run:
