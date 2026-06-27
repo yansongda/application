@@ -71,8 +71,26 @@ async fn login_wechat(
     let wechat_response =
         wechat::login(request.code.as_str(), config.third_id.as_str(), app_secret).await?;
 
+    let third_user_config = third_user::ThirdUserConfig {
+        r#type: "openid".to_string(),
+    };
+
+    let user_id = get_user_id(
+        &Platform::Wechat,
+        wechat_response.openid.as_str(),
+        Some(&third_user_config),
+    )
+    .await?;
+
+    third_user::update_config(
+        &Platform::Wechat,
+        &wechat_response.openid,
+        &third_user_config,
+    )
+    .await?;
+
     Ok((
-        get_user_id(&Platform::Wechat, wechat_response.openid.as_str()).await?,
+        user_id,
         access_token::AccessTokenData::from(wechat_response),
     ))
 }
@@ -95,7 +113,12 @@ async fn login_huawei(
     let token_info_response = huawei::token_info(token_response.access_token.as_str()).await?;
 
     Ok((
-        get_user_id(&Platform::Huawei, token_info_response.union_id.as_str()).await?,
+        get_user_id(
+            &Platform::Huawei,
+            token_info_response.union_id.as_str(),
+            None,
+        )
+        .await?,
         access_token::AccessTokenData {
             wechat: None,
             huawei: Some(access_token::HuaweiAccessTokenData {
@@ -111,7 +134,11 @@ async fn login_huawei(
     ))
 }
 
-async fn get_user_id(platform: &Platform, third_id: &str) -> Result<u64> {
+async fn get_user_id(
+    platform: &Platform,
+    third_id: &str,
+    config: Option<&third_user::ThirdUserConfig>,
+) -> Result<u64> {
     let result = third_user::fetch(platform, third_id).await;
 
     if let Ok(user) = result {
@@ -122,7 +149,7 @@ async fn get_user_id(platform: &Platform, third_id: &str) -> Result<u64> {
         Error::ParamsThirdUserNotFound(_) => {
             let user_id = user::insert(None, user::Config::default()).await?;
 
-            third_user::insert(platform, third_id, user_id).await?;
+            third_user::insert(platform, third_id, user_id, config).await?;
 
             Ok(user_id)
         }

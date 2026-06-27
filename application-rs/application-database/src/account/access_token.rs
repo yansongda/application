@@ -51,7 +51,7 @@ pub struct AccessTokenData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WechatAccessTokenData {
     pub open_id: String,
-    pub union_id: String,
+    pub union_id: Option<String>,
 }
 
 impl From<LoginResponse> for WechatAccessTokenData {

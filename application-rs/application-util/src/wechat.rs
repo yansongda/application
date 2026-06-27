@@ -11,14 +11,14 @@ use serde_json::Value;
 #[derive(Debug, Clone)]
 pub struct LoginResponse {
     pub session_key: String,
-    pub unionid: String,
+    pub unionid: Option<String>,
     pub openid: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct RawLoginResponse {
     pub session_key: String,
-    pub unionid: String,
+    pub unionid: Option<String>,
     pub openid: String,
 }
 
@@ -100,7 +100,7 @@ mod tests {
         let resp: LoginResponse = serde_json::from_value(value).expect("should deserialize");
 
         assert_eq!(resp.session_key, "sk");
-        assert_eq!(resp.unionid, "uid");
+        assert_eq!(resp.unionid, Some("uid".to_string()));
         assert_eq!(resp.openid, "oid");
     }
 
@@ -117,5 +117,19 @@ mod tests {
             err.to_string()
                 .contains("第三方错误: 微信 API 响应业务结果出错，请联系管理员: invalid code")
         );
+    }
+
+    #[test]
+    fn deserialize_success_response_without_unionid() {
+        let value = serde_json::json!({
+            "errcode": 0,
+            "session_key": "sk",
+            "openid": "oid"
+        });
+
+        let resp: LoginResponse = serde_json::from_value(value).expect("should deserialize");
+
+        assert_eq!(resp.unionid, None);
+        assert_eq!(resp.openid, "oid");
     }
 }
