@@ -106,3 +106,26 @@ jobs:
       - name: Run pnpm lint
         run: |
           pnpm biome:check
+
+  lint-frontend-totp:
+    name: Lint - Frontend TOTP
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wechat/miniprogram/totp
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Install dependencies
+        run: |
+          deno install
+      - name: Run biome check
+        run: |
+          deno task biome:check
+      - name: Run typecheck
+        run: |
+          deno task typecheck
