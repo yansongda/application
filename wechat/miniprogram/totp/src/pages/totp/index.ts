@@ -26,7 +26,11 @@ Page({
     isDragging: false,
     touchStartY: 0,
   },
+  isCreating: false,
   async onShow() {
+    if (this.isCreating) {
+      return;
+    }
     this.setData({ isLoading: true, isError: false });
     try {
       await ensureAuthenticated();
@@ -85,7 +89,10 @@ Page({
       });
   },
   async create() {
+    this.isCreating = true;
+
     const scan = await wx.scanCode({ scanType: ["qrCode"] }).catch(() => {
+      this.isCreating = false;
       throw new WeixinError(CODE.WEIXIN_QR_CODE);
     });
 
@@ -99,7 +106,10 @@ Page({
           context: this,
         }),
       )
-      .finally(() => this.loadItems());
+      .finally(() => {
+        this.isCreating = false;
+        this.loadItems();
+      });
   },
   async itemDetail(e: ItemDetailEvent) {
     const id = e.detail;

@@ -3,13 +3,17 @@
 
 <view class="page">
   <form bindsubmit="submit">
-    <view>
-      <t-input name="issuer" placeholder="请填写提供商" value="{{issuer}}" maxlength="32" align="left"/>
+    <view class="section">
+      <view class="section-label">提供商名称</view>
+      <view class="input-card">
+        <t-input name="issuer" placeholder="请填写提供商" value="{{issuer}}" maxlength="32" align="left" borderless />
+      </view>
+      <view class="section-hint">例如：Google、Apple、GitHub 等</view>
     </view>
 
-    <view class="operation">
-      <t-button theme="primary" size="large" type="submit" block>修改</t-button>
-      <t-button size="large" bind:tap="cancel" block>取消</t-button>
+    <view class="actions">
+      <t-button theme="primary" size="large" type="submit" block>保存</t-button>
+      <t-button size="large" variant="outline" bind:tap="cancel" block>取消</t-button>
     </view>
   </form>
 </view>
