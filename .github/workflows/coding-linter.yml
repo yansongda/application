@@ -10,20 +10,20 @@ on:
 
 jobs:
   check-backend:
-    name: Check - Backend
+    name: "Backend: Check"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: application-rs
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
       - name: Cache crates
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
@@ -39,21 +39,21 @@ jobs:
           cargo check --all-features
 
   lint-backend:
-    name: Lint - Backend
+    name: "Backend: Lint"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: application-rs
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: rustfmt, clippy
       - name: Cache crates
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
@@ -72,16 +72,16 @@ jobs:
           cargo clippy -- -D warnings
 
   lint-frontend-yansongda:
-    name: Lint - Frontend
+    name: "Frontend: Lint (Yansongda)"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: wechat/miniprogram/yansongda
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: latest
       - name: Install pnpm
@@ -94,7 +94,7 @@ jobs:
         run: |
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
       - name: Setup pnpm cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -106,3 +106,21 @@ jobs:
       - name: Run pnpm lint
         run: |
           pnpm biome:check
+
+  lint-frontend-totp:
+    name: "Frontend: Lint (TOTP)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wechat/miniprogram/totp
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+      - name: Install dependencies
+        run: |
+          deno install
+      - name: Run biome check
+        run: |
+          deno task biome:check

@@ -1,0 +1,26 @@
+{
+  "name": "totp",
+  "version": "1.0.0",
+  "description": "多因子双重认证(MFA)服务,目前支持 TOTP 算法，为您提供简单、可靠、纯粹的双重认证解决方案",
+  "type": "module",
+  "scripts": {
+    "biome:check": "biome check",
+    "biome:fix": "biome check --fix",
+    "biome:fix-unsafe": "biome check --fix --unsafe",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "miniprogram",
+    "yansongda"
+  ],
+  "author": "me@yansongda.cn",
+  "license": "MIT",
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.1",
+    "miniprogram-api-typings": "^5.2.1",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "tdesign-miniprogram": "^1.15.2"
+  }
+}

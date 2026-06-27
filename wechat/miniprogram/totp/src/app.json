@@ -1,0 +1,26 @@
+{
+  "pages": [
+    "pages/totp/index",
+    "pages/totp/detail/index",
+    "pages/totp/edit/issuer",
+    "pages/totp/edit/username"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#f3f3f3",
+    "navigationBarTitleText": "TOTP安全码",
+    "navigationBarTextStyle": "black"
+  },
+  "networkTimeout": {
+    "request": 5000
+  },
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json",
+  "resolveAlias": {
+    "@api/*": "/api/*",
+    "@utils/*": "/utils/*",
+    "@constant/*": "/constant/*",
+    "@models/*": "/models/*",
+    "@components/*": "/components/*"
+  }
+}

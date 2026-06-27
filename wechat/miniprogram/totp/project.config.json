@@ -1,0 +1,53 @@
+{
+  "description": "项目配置文件",
+  "miniprogramRoot": "src/",
+  "compileType": "miniprogram",
+  "setting": {
+    "useCompilerPlugins": ["typescript", "sass"],
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "coverView": false,
+    "postcss": false,
+    "minified": true,
+    "enhance": true,
+    "showShadowRootInWxmlPanel": false,
+    "packNpmManually": true,
+    "packNpmRelationList": [
+      {
+        "packageJsonPath": "./package.json",
+        "miniprogramNpmDistDir": "./src"
+      }
+    ],
+    "ignoreDevUnusedFiles": false,
+    "ignoreUploadUnusedFiles": false,
+    "condition": false,
+    "es6": true,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "swc": false,
+    "disableSWC": true
+  },
+  "simulatorType": "wechat",
+  "simulatorPluginLibVersion": {},
+  "condition": {},
+  "srcMiniprogramRoot": "src/",
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  },
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "appid": "wx0347347c543c3e36",
+  "projectname": "TOTP安全码",
+  "libVersion": "3.7.12"
+}
