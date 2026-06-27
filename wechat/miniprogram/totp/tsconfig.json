@@ -21,9 +21,7 @@
     "baseUrl": ".",
     "outDir": "build",
     "paths": {
-      "tdesign-miniprogram/*": [
-        "node_modules/tdesign-miniprogram/miniprogram_dist/*",
-      ],
+      "tdesign-miniprogram/*": ["src/miniprogram_npm/tdesign-miniprogram/*"],
       "@api/*": ["src/api/*"],
       "@utils/*": ["src/utils/*"],
       "@constant/*": ["src/constant/*"],

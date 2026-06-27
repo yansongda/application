@@ -6,9 +6,11 @@
     "pages/totp/edit/username"
   ],
   "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#f3f3f3",
+    "navigationBarTitleText": "TOTP安全码",
     "navigationBarTextStyle": "black"
   },
-  "style": "v2",
   "networkTimeout": {
     "request": 5000
   },

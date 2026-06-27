@@ -1,5 +1,5 @@
 {
-  "name": "TOTP安全码",
+  "name": "totp",
   "version": "1.0.0",
   "description": "多因子双重认证(MFA)服务,目前支持 TOTP 算法，为您提供简单、可靠、纯粹的双重认证解决方案",
   "type": "module",
