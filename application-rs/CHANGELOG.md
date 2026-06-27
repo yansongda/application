@@ -1,3 +1,9 @@
+## [1.18.1] - 2026-06-28
+
+### Fixed
+
+- fix(wechat): 微信登录 `union_id` 字段改为可选类型，适配部分用户无 `union_id` 的情况 (#145) ([c47ffcf](https://github.com/yansongda/application/commit/c47ffcf))
+
 ## [1.18.0] - 2026-06-25
 
 ### Added
