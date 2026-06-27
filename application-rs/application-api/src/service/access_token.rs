@@ -82,13 +82,6 @@ async fn login_wechat(
     )
     .await?;
 
-    third_user::update_config(
-        &Platform::Wechat,
-        &wechat_response.openid,
-        &third_user_config,
-    )
-    .await?;
-
     Ok((
         user_id,
         access_token::AccessTokenData::from(wechat_response),

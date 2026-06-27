@@ -1,5 +1,5 @@
 use crate::account::Platform;
-use crate::{Pool, insert, query_optional, update};
+use crate::{Pool, insert, query_optional};
 use application_kernel::result::Error;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
@@ -51,15 +51,4 @@ pub async fn insert(
     let result = insert!(pool, sql, platform, third_id, user_id, config.map(Json));
 
     Ok(result.last_insert_id())
-}
-
-pub async fn update_config(
-    platform: &Platform,
-    third_id: &str,
-    config: &ThirdUserConfig,
-) -> application_kernel::result::Result<()> {
-    let sql = "update account.third_user set config = ? where platform = ? and third_id = ?";
-    let pool = Pool::mysql("account")?;
-    let _ = update!(pool, sql, Json(config), platform, third_id);
-    Ok(())
 }
