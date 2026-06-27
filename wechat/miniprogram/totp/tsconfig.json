@@ -20,6 +20,7 @@
     "types": ["miniprogram-api-typings"],
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
+    "skipLibCheck": true,
     "paths": {
       "tdesign-miniprogram/*": ["src/miniprogram_npm/tdesign-miniprogram/*"],
       "@api/*": ["src/api/*"],
@@ -30,5 +31,5 @@
       "types/*": ["src/types/*"],
     },
   },
-  "exclude": ["node_modules", "build/**/*", "src/miniprogram_npm/**/*"],
+  "exclude": ["node_modules", "build/**/*"],
 }
