@@ -18,6 +18,7 @@
     "strictPropertyInitialization": true,
     "lib": ["esnext"],
     "types": ["miniprogram-api-typings"],
+    "baseUrl": ".",
     "paths": {
       "tdesign-miniprogram/*": ["src/miniprogram_npm/tdesign-miniprogram/*"],
       "@api/*": ["src/api/*"],
