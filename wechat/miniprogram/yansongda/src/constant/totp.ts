@@ -5,6 +5,7 @@ const PATH = {
   EDIT_ISSUER: "/api/v1/totp/edit/issuer",
   EDIT_USERNAME: "/api/v1/totp/edit/username",
   DELETE: "/api/v1/totp/delete",
+  SORT: "/api/v1/totp/sort",
 };
 
 export { PATH };

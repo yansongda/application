@@ -4,6 +4,7 @@ import { HttpError } from "@models/error";
 import error from "@utils/error";
 import http from "@utils/http";
 import logger from "@utils/logger";
+import type { RequestData } from "types/http";
 import type {
   CreateRequest,
   DeleteRequest,
@@ -88,7 +89,7 @@ const deleteTotp = async (id: string) => {
 
 const sort = async (items: SortRequest["items"]) => {
   try {
-    return await http.post<null>("/api/v1/totp/sort", { items } as SortRequest);
+    return await http.post<null>(PATH.SORT, { items } as RequestData);
   } catch (e: unknown) {
     logger.error("排序 TOTP 失败", e);
 
