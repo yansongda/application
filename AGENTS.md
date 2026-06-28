@@ -21,7 +21,7 @@ yansongda-application/
 │   ├── application-util/           # 第三方 HTTP 对接（微信/华为）
 │   └── database/                   # SQL 迁移脚本
 ├── wechat/miniprogram/
-│   ├── yansongda/                  # 主微信小程序（pnpm）
+│   ├── yansongda/                  # 主微信小程序（Deno）
 │   └── totp/                       # TOTP 独立微信小程序（Deno）
 └── huawei/atomicservice/MFA/       # 华为元服务（ohpm / Hvigor）
     └── entry/src/main/ets/         # ArkTS 业务代码
@@ -59,7 +59,7 @@ yansongda-application/
 ## CONVENTIONS
 
 - 跨前后端改动时，分别遵循对应目录下的 `AGENTS.md`，不要用一端规则约束另一端。
-- 必须提交的锁文件：`Cargo.lock`、`pnpm-lock.yaml`（yansongda）、`deno.lock`（totp）、`oh-package-lock.json5`（华为）。
+- 必须提交的锁文件：`Cargo.lock`、`deno.lock`（yansongda / totp）、`oh-package-lock.json5`（华为）。
 - 禁止提交的敏感内容：`config.toml`、`*.private.*`、密钥、Token、密码、生产连接串。
 - 禁止提交的构建/IDE 目录：`target/`、`node_modules/`、`miniprogram_npm/`、`oh_modules/`、`.idea/`、`.vscode/`。
 - 影响公共 API / 配置 / 数据结构时，需说明兼容策略与迁移方式。
@@ -75,7 +75,7 @@ yansongda-application/
 
 ## UNIQUE STYLES
 
-- **多包管理器并存**：后端 cargo，微信主小程序 pnpm，TOTP 小程序 Deno，华为 ohpm。
+- **多包管理器并存**：后端 cargo，微信主小程序 Deno，TOTP 小程序 Deno，华为 ohpm。
 - **Rust workspace 使用较新的工具链特性**，依赖使用 `~` 约束。
 - **无 ORM 的数据库层**：通过自定义宏（`query_optional!` / `insert!` / `update!` / `delete!`）统一记录 SQL、耗时和参数。
 - **微信/华为前端共享同一后端**，但登录方式不同：微信用 `wx.login` code，华为用 HuaweiID authorizationCode。
@@ -92,8 +92,9 @@ cargo test --all-features
 cargo build --release
 
 # 微信主小程序（在 wechat/miniprogram/yansongda/ 下执行）
-pnpm i
-pnpm biome:check
+deno install
+deno task biome:check
+deno task typecheck
 
 # TOTP 微信小程序（在 wechat/miniprogram/totp/ 下执行）
 deno install
@@ -106,7 +107,7 @@ deno task typecheck
 ## NOTES
 
 - `application-rs/AGENTS.md` 中已修正：移除不存在的 `application-macro/` 目录；CI 不运行 `cargo test`。
-- `wechat/miniprogram/yansongda/` 当前缺失 `pnpm-lock.yaml`（AGENTS.md 要求提交），请检查是否被 gitignore 或未生成。
+- `wechat/miniprogram/yansongda/` 已迁移到 Deno，锁文件为 `deno.lock`。
 - 华为 `build-profile.json5` 包含本地签名证书路径与明文密码，仅用于本地开发，禁止用于生产。
 - 后端 `middleware.rs` 与 `application-util/src/http.rs` 当前会记录完整 headers，后续需脱敏 `Authorization` 等敏感头。
 - 三个前端均无实际业务测试；Rust 后端仅有少量单元测试，CI 不执行测试。

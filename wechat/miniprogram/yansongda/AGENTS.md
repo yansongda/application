@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-该目录是微信小程序前端，使用 TypeScript 与微信小程序原生目录结构，包管理器固定为 `pnpm`。
+该目录是微信小程序前端，使用 TypeScript 与微信小程序原生目录结构。**包管理器固定为 Deno**（非 pnpm/npm/yarn）。
 
 小程序工程根目录为 `wechat/miniprogram/yansongda/`，其中真正的小程序源码位于 `src/`（由 `project.config.json` 中 `miniprogramRoot: "src/"` 指定）。
 
@@ -11,8 +11,8 @@
 ```
 wechat/miniprogram/yansongda/
   src/                         # 小程序业务代码（miniprogramRoot）
-  package.json                 # 前端脚本与依赖
-  pnpm-lock.yaml               # pnpm 锁文件（必须提交）
+  package.json                 # 脚本定义与依赖声明
+  deno.lock                    # Deno 锁文件（必须提交）
   biome.json                   # 格式化与 lint 配置
   tsconfig.json                # TypeScript 配置
   project.config.json          # 微信开发者工具配置
@@ -43,19 +43,28 @@ wechat/miniprogram/yansongda/
 - `@constant/*`  → `src/constant/*`
 - `@models/*`    → `src/models/*`
 - `@components/*`→ `src/components/*`
-- `tdesign-miniprogram/*` → `src/miniprogram_npm/tdesign-miniprogram/*`
+- `types/*`      → `src/types/*`
+- `tdesign-miniprogram/*` → `src/miniprogram_npm/tdesign-miniprogram/*`（运行时）或 `node_modules/tdesign-miniprogram/miniprogram_dist/*`（类型检查）
 
 新增源码目录时，如需暴露给业务层 import，请同步更新 `tsconfig.json` 的 `paths`。
 
+## 包管理与依赖
+
+- **包管理器**：Deno（不是 pnpm）
+- **锁文件**：`deno.lock`（必须提交）
+- **安装依赖**：`deno install`
+- **依赖解析**：Deno 通过 `package.json` 的 `dependencies` / `devDependencies` 自动创建 `node_modules/` 并保持 `deno.lock` 同步
+
 ## 构建 / 检查命令
 
-所有命令在 `wechat/miniprogram/yansongda/` 目录下执行，必须使用 `pnpm`：
+所有命令在 `wechat/miniprogram/yansongda/` 目录下执行，使用 `deno task`：
 
 ```bash
-pnpm i
-pnpm biome:check
-pnpm biome:fix
-pnpm biome:fix-unsafe
+deno install                    # 安装依赖（首次或依赖变更后）
+deno task biome:check           # 格式化与 lint 检查
+deno task biome:fix             # 自动修复
+deno task biome:fix-unsafe      # 自动修复（含不安全修复）
+deno task typecheck             # TypeScript 类型检查（tsc --noEmit）
 ```
 
 ## 代码风格规范
@@ -63,7 +72,7 @@ pnpm biome:fix-unsafe
 - 使用 `biome` 做格式化与 lint，配置文件为 `wechat/miniprogram/yansongda/biome.json`
 - `biome` 覆盖范围以 `biome.json` 中的 `files.includes` 为准，并排除 `src/miniprogram_npm/**/*`
 - 默认使用空格缩进，JavaScript/TypeScript 字符串使用双引号
-- 提交前优先运行 `pnpm biome:check`，需要自动修复时运行 `pnpm biome:fix`
+- 提交前优先运行 `deno task biome:check`，需要自动修复时运行 `deno task biome:fix`
 
 ## 开发约束
 
@@ -74,9 +83,9 @@ pnpm biome:fix-unsafe
 
 ## CI 与提交流程
 
-- 前端 CI 检查为：`pnpm i && pnpm biome:check`
+- 前端 CI 检查为：`deno install && deno task biome:check && deno task typecheck`
 - 禁止提交：`node_modules/`、`src/miniprogram_npm/`、`project.private.config.json`、`.idea/`、`.vscode/`
-- 必须提交：`pnpm-lock.yaml`
+- 必须提交：`deno.lock`
 
 ## 联动开发说明
 
@@ -85,5 +94,5 @@ pnpm biome:fix-unsafe
 
 ## NOTES
 
-- 当前目录下未见 `pnpm-lock.yaml`，但 AGENTS.md 要求必须提交；请确认是否已生成并纳入版本控制。
 - 主小程序与 `totp` 小程序共享大量工具/类型/模型代码，但当前无正式共享包，分别独立维护。
+- 当前 CI 已接入 `deno task biome:check` 与 `deno task typecheck`。

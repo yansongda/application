@@ -80,32 +80,17 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v7
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: latest
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: latest
-          run_install: false
-      - name: Get pnpm store directory
-        shell: bash
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+      - name: Install dependencies
         run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-      - name: Setup pnpm cache
-        uses: actions/cache@v6
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-      - name: Run pnpm install
+          deno install
+      - name: Run biome check
         run: |
-          pnpm i
-      - name: Run pnpm lint
+          deno task biome:check
+      - name: Run type check
         run: |
-          pnpm biome:check
+          deno task typecheck
 
   lint-frontend-totp:
     name: "Frontend: Lint (TOTP)"
@@ -124,3 +109,6 @@ jobs:
       - name: Run biome check
         run: |
           deno task biome:check
+      - name: Run type check
+        run: |
+          deno task typecheck
