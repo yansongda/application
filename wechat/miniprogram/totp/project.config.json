@@ -22,7 +22,7 @@
       }
     ],
     "ignoreDevUnusedFiles": false,
-    "ignoreUploadUnusedFiles": false,
+    "ignoreUploadUnusedFiles": true,
     "condition": false,
     "es6": true,
     "compileWorklet": false,
