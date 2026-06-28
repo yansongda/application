@@ -32,10 +32,13 @@ jobs:
         working-directory: application-rs
     permissions:
       packages: write
+    outputs:
+      tag: ${{ steps.recognize-tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
       - name: Recognize tag
+        id: recognize-tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="application-api-$GITHUB_REF_NAME-$GITHUB_SHA"
@@ -44,25 +47,62 @@ jobs:
           fi
 
           echo "Recognized tag: $tag"
-          echo "tag=$tag" >> $GITHUB_ENV
+          echo "tag=$tag" >> $GITHUB_OUTPUT
       - name: Build the docker image
         run: |
           docker build -t app -f Dockerfile-application-api .
-      - name: Push the image to Aliyun registry
+      - name: Save the docker image
         run: |
-          docker tag app $ALIYUN_IMAGE_REPOSITORY:$tag
-          echo $ALIYUN_IMAGE_TOKEN | docker login --username=yansongda registry.cn-shenzhen.aliyuncs.com --password-stdin
-          docker push $ALIYUN_IMAGE_REPOSITORY:$tag
-          docker logout
-      - name: Push the image to Docker registry
+          docker save app | gzip > app.tar.gz
+      - name: Upload the docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: app.tar.gz
+          retention-days: 1
+
+  push-application-api:
+    name: Pushing [application-api] Image to ${{ matrix.registry }}
+    needs: build-application-api
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        registry: [aliyun, dockerhub, github]
+    steps:
+      - name: Download the docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+      - name: Load the docker image
         run: |
-          docker tag app $DOCKERHUB_IMAGE_REPOSITORY:$tag
-          echo $DOCKERHUB_TOKEN | docker login --username=yansongda --password-stdin
-          docker push $DOCKERHUB_IMAGE_REPOSITORY:$tag
-          docker logout
-      - name: Push the image to Github registry
-        run: |
-          docker tag app $GITHUB_IMAGE_REPOSITORY:$tag
-          echo $GITHUB_TOKEN | docker login --username=${{ github.actor }} ghcr.io --password-stdin
-          docker push $GITHUB_IMAGE_REPOSITORY:$tag
-          docker logout
+          docker load -i app.tar.gz
+      - name: Push the image to ${{ matrix.registry }} registry
+        env:
+          TAG: ${{ needs.build-application-api.outputs.tag }}
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 10
+          command: |
+            case "${{ matrix.registry }}" in
+              aliyun)
+                docker tag app $ALIYUN_IMAGE_REPOSITORY:$TAG
+                echo $ALIYUN_IMAGE_TOKEN | docker login --username=yansongda registry.cn-shenzhen.aliyuncs.com --password-stdin
+                docker push $ALIYUN_IMAGE_REPOSITORY:$TAG
+                ;;
+              dockerhub)
+                docker tag app $DOCKERHUB_IMAGE_REPOSITORY:$TAG
+                echo $DOCKERHUB_TOKEN | docker login --username=yansongda --password-stdin
+                docker push $DOCKERHUB_IMAGE_REPOSITORY:$TAG
+                ;;
+              github)
+                docker tag app $GITHUB_IMAGE_REPOSITORY:$TAG
+                echo $GITHUB_TOKEN | docker login --username=${{ github.actor }} ghcr.io --password-stdin
+                docker push $GITHUB_IMAGE_REPOSITORY:$TAG
+                ;;
+            esac
+            docker logout
