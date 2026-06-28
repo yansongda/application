@@ -109,3 +109,6 @@ jobs:
       - name: Run biome check
         run: |
           deno task biome:check
+      - name: Run type check
+        run: |
+          deno task typecheck
