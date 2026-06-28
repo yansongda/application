@@ -71,6 +71,35 @@ jobs:
         run: |
           cargo clippy -- -D warnings
 
+  test-backend:
+    name: "Backend: Test"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: application-rs
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Cache crates
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Run cargo test
+        run: |
+          cargo test --all-features
+
   lint-frontend-yansongda:
     name: "Frontend: Lint (Yansongda)"
     runs-on: ubuntu-latest
