@@ -6,7 +6,8 @@
   "scripts": {
     "biome:check": "biome check",
     "biome:fix": "biome check --fix",
-    "biome:fix-unsafe": "biome check --fix --unsafe"
+    "biome:fix-unsafe": "biome check --fix --unsafe",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "miniprogram",
@@ -15,7 +16,7 @@
   "author": "me@yansongda.cn",
   "license": "MIT",
   "devDependencies": {
-    "@biomejs/biome": "2.4.15",
+    "@biomejs/biome": "^2.5.1",
     "miniprogram-api-typings": "^5.2.1",
     "typescript": "^6.0.3"
   },
