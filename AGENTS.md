@@ -8,7 +8,7 @@
 
 前后端同仓库维护的 MFA（多因子认证）服务 monorepo。Rust 后端提供 HTTP API，微信/华为前端分别对接微信登录与华为帐号登录，共享同一套后端服务。
 
-核心栈：Rust 2024 / Salvo 0.93 / SQLx 0.8 / MySQL；微信原生小程序（TypeScript）；华为元服务（ArkTS/ETS）。
+核心栈：Rust / Salvo / SQLx / MySQL；微信原生小程序（TypeScript）；华为元服务（ArkTS/ETS）。
 
 ## STRUCTURE
 
@@ -76,7 +76,7 @@ yansongda-application/
 ## UNIQUE STYLES
 
 - **多包管理器并存**：后端 cargo，微信主小程序 pnpm，TOTP 小程序 Deno，华为 ohpm。
-- **Rust edition 2024 + resolver 3 + rust-version 1.90.0**，依赖使用 `~` 约束。
+- **Rust workspace 使用较新的工具链特性**，依赖使用 `~` 约束。
 - **无 ORM 的数据库层**：通过自定义宏（`query_optional!` / `insert!` / `update!` / `delete!`）统一记录 SQL、耗时和参数。
 - **微信/华为前端共享同一后端**，但登录方式不同：微信用 `wx.login` code，华为用 HuaweiID authorizationCode。
 - **后端无 JWT**：access_token / refresh_token 均为 opaque UUID v7，数据库验证。
@@ -105,7 +105,7 @@ deno task typecheck
 
 ## NOTES
 
-- `application-rs/AGENTS.md` 中仍有部分漂移：Salvo 版本已升级到 `~0.93.0`；`application-macro/` 目录不存在；CI 不运行 `cargo test`。
+- `application-rs/AGENTS.md` 中已修正：移除不存在的 `application-macro/` 目录；CI 不运行 `cargo test`。
 - `wechat/miniprogram/yansongda/` 当前缺失 `pnpm-lock.yaml`（AGENTS.md 要求提交），请检查是否被 gitignore 或未生成。
 - 华为 `build-profile.json5` 包含本地签名证书路径与明文密码，仅用于本地开发，禁止用于生产。
 - 后端 `middleware.rs` 与 `application-util/src/http.rs` 当前会记录完整 headers，后续需脱敏 `Authorization` 等敏感头。

@@ -3,7 +3,7 @@
 ## 项目概述
 
 Rust 后端 workspace，提供多因子认证（MFA）服务 API。
-Rust edition 2024，最低版本 1.90.0。Web 框架：Salvo ~0.93.0。数据库：MySQL，通过 SQLx 0.8（原生 SQL）。
+使用 Salvo Web 框架、SQLx 原生 SQL 访问 MySQL。
 
 ## 仓库结构
 
@@ -155,6 +155,5 @@ response.rs  Response<D>、ApiErr、Scribe 实现
 ## NOTES
 
 - `application-macro/` 目录已不存在，本文件已移除该条目。
-- Salvo 版本已从 0.88 升级到 `~0.93.0`。
 - `middleware.rs` 与 `application-util/src/http.rs` 当前会记录完整 headers，后续需脱敏 `Authorization` 等敏感头。
 - 测试覆盖率低，CI 仅执行 `cargo check` / `cargo fmt` / `cargo clippy`，不执行 `cargo test`。
