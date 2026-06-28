@@ -23,7 +23,10 @@
     "skipLibCheck": true,
     "outDir": "build",
     "paths": {
-      "tdesign-miniprogram/*": ["src/miniprogram_npm/tdesign-miniprogram/*"],
+      "tdesign-miniprogram/*": [
+        "src/miniprogram_npm/tdesign-miniprogram/*",
+        "node_modules/tdesign-miniprogram/miniprogram_dist/*"
+      ],
       "@api/*": ["src/api/*"],
       "@utils/*": ["src/utils/*"],
       "@constant/*": ["src/constant/*"],

@@ -44,7 +44,7 @@ wechat/miniprogram/yansongda/
 - `@models/*`    → `src/models/*`
 - `@components/*`→ `src/components/*`
 - `types/*`      → `src/types/*`
-- `tdesign-miniprogram/*` → `src/miniprogram_npm/tdesign-miniprogram/*`
+- `tdesign-miniprogram/*` → `src/miniprogram_npm/tdesign-miniprogram/*`（运行时）或 `node_modules/tdesign-miniprogram/miniprogram_dist/*`（类型检查）
 
 新增源码目录时，如需暴露给业务层 import，请同步更新 `tsconfig.json` 的 `paths`。
 
