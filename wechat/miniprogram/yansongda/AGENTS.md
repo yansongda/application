@@ -82,3 +82,8 @@ pnpm biome:fix-unsafe
 
 - 涉及后端接口联动时，同时参考 `application-rs/AGENTS.md`
 - 仅修改微信前端时，不需要遵循 Rust 后端的代码风格和构建命令
+
+## NOTES
+
+- 当前目录下未见 `pnpm-lock.yaml`，但 AGENTS.md 要求必须提交；请确认是否已生成并纳入版本控制。
+- 主小程序与 `totp` 小程序共享大量工具/类型/模型代码，但当前无正式共享包，分别独立维护。

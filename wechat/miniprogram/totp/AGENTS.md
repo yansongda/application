@@ -71,3 +71,8 @@ deno task typecheck             # TypeScript 类型检查（tsc --noEmit）
 
 - 涉及后端接口联动时，同时参考 `application-rs/AGENTS.md`
 - 仅修改微信前端时，不需要遵循 Rust 后端的代码风格和构建命令
+
+## NOTES
+
+- 与 `yansongda` 主小程序共享 `utils/error.ts`、`utils/logger.ts`、`utils/string.ts`、`models/error.ts`、`types/http.d.ts` 等代码，但当前无正式共享包，分别独立维护。
+- 当前 CI 仅执行 `deno task biome:check`；`deno task typecheck` 尚未接入 CI，提交前建议本地手动执行。

@@ -3,10 +3,7 @@
   "miniprogramRoot": "src/",
   "compileType": "miniprogram",
   "setting": {
-    "useCompilerPlugins": [
-      "typescript",
-      "sass"
-    ],
+    "useCompilerPlugins": ["typescript", "sass"],
     "babelSetting": {
       "ignore": [],
       "disablePlugins": [],
@@ -25,7 +22,7 @@
       }
     ],
     "ignoreDevUnusedFiles": false,
-    "ignoreUploadUnusedFiles": false,
+    "ignoreUploadUnusedFiles": true,
     "condition": false,
     "es6": true,
     "compileWorklet": false,
