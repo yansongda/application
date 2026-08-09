@@ -11,7 +11,9 @@ use tracing::error;
 pub async fn all(access_token: &access_token::AccessToken) -> Result<Vec<DetailResponse>> {
     let totp = totp::all(access_token.user_id).await?;
 
-    totp.into_iter().map(|t| t.try_into()).collect()
+    totp.into_iter()
+        .map(std::convert::TryInto::try_into)
+        .collect()
 }
 
 pub async fn sort(

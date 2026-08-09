@@ -13,7 +13,7 @@ pub async fn login(
     let (user_id, access_token_data) = match platform {
         Platform::Wechat => login_wechat(request).await,
         Platform::Huawei => login_huawei(request).await,
-        _ => Err(ErrorCode::ParamsLoginPlatformUnsupported),
+        Platform::Unsupported => Err(ErrorCode::ParamsLoginPlatformUnsupported),
     }?;
 
     let access_token = access_token::update_or_insert(
@@ -134,18 +134,15 @@ async fn get_user_id(
 ) -> Result<u64> {
     let result = third_user::fetch(platform, third_id).await;
 
-    if let Ok(user) = result {
-        return Ok(user.user_id);
-    }
-
-    match result.unwrap_err() {
-        ErrorCode::ParamsThirdUserNotFound => {
+    match result {
+        Ok(user) => Ok(user.user_id),
+        Err(ErrorCode::ParamsThirdUserNotFound) => {
             let user_id = user::insert(None, user::Config::default()).await?;
 
             third_user::insert(platform, third_id, user_id, config).await?;
 
             Ok(user_id)
         }
-        e => Err(e),
+        Err(e) => Err(e),
     }
 }
