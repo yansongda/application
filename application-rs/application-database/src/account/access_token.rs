@@ -8,7 +8,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use sqlx::types::Json;
-use uuid::Uuid;
+use ulid::Ulid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct AccessToken {
@@ -142,7 +142,7 @@ pub async fn insert(
     data: AccessTokenData,
 ) -> Result<AccessToken> {
     let sql = "insert into account.access_token (user_id, access_token, data, platform, third_id, expired_at) values (?, ?, ?, ?, ?, ?)";
-    let access_token = Uuid::now_v7().to_string();
+    let access_token = Ulid::generate().to_string();
     let expired_at = Some(G_CONFIG.access_token.get_expired_at());
 
     let pool_ref = Pool::mysql("account")?;
@@ -174,7 +174,7 @@ pub async fn insert(
 pub async fn update(mut access_token: AccessToken, data: AccessTokenData) -> Result<AccessToken> {
     let sql =
         "update account.access_token set access_token = ?, data = ?, expired_at = ? where id = ?";
-    let access_token_value = Uuid::now_v7().to_string();
+    let access_token_value = Ulid::generate().to_string();
     let expired_at = Some(G_CONFIG.access_token.get_expired_at());
 
     let pool_ref = Pool::mysql("account")?;

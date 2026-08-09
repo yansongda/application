@@ -21,12 +21,12 @@ tracing-subscriber = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+ulid = { workspace = true }
+
 tokio = { version = "1.52.1", features = ["full"] }
 salvo = { version = "0.93.0", features = ["cors", "request-id", "logging", "catch-panic", "timeout", "compression"] }
 futures-util = { version = "0.3.31" }
 bytes = { version = "1.11" }
-
-ulid = { workspace = true }
 
 murmurs = { version = "1.0.5" }
 base62 = { version = "2.2.0" }
