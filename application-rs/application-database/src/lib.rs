@@ -52,6 +52,7 @@ impl Pool {
     }
 
     fn connect_mysql(config: &Database) -> MySqlPool {
+        #[allow(clippy::expect_used)]
         let connection_options =
             MySqlConnectOptions::from_str(config.url.as_str()).expect("数据库 URL 格式无效");
 

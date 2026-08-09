@@ -39,7 +39,7 @@ impl Totp {
     pub fn generate_code(&self) -> Result<String> {
         let config = &self.config;
 
-        let secret = Secret::Encoded(config.secret.to_owned())
+        let secret = Secret::Encoded(config.secret.clone())
             .to_bytes()
             .map_err(|e| {
                 error!("TOTP Secret 解码失败: {:?}", e);
@@ -52,8 +52,8 @@ impl Totp {
             1,
             config.period,
             secret,
-            self.issuer.to_owned(),
-            self.username.to_owned(),
+            self.issuer.clone(),
+            self.username.clone(),
         );
 
         totp.generate_current().map_err(|e| {

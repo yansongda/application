@@ -30,7 +30,7 @@ impl From<&Platform> for &str {
         match v {
             Platform::Wechat => "wechat",
             Platform::Huawei => "huawei",
-            _ => "unsupported",
+            Platform::Unsupported => "unsupported",
         }
     }
 }
