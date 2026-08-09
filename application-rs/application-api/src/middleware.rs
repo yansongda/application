@@ -65,7 +65,7 @@ pub async fn authorization(
         Err(_) => abort!(ErrorCode::AuthorizationAccessTokenInvalid),
     };
 
-    depot.inject(access_token);
+    depot.insert_typed(access_token);
 
     ctrl.call_next(request, depot, response).await;
 }

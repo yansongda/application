@@ -12,7 +12,7 @@ use salvo::{Depot, Request, handler};
 #[handler]
 pub async fn detail(depot: &mut Depot) -> Resp<DetailResponse> {
     let access_token = depot
-        .obtain::<AccessToken>()
+        .get_typed::<AccessToken>()
         .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let user = service::user::detail(access_token.user_id).await?;
@@ -23,7 +23,7 @@ pub async fn detail(depot: &mut Depot) -> Resp<DetailResponse> {
 #[handler]
 pub async fn edit_avatar(request: &mut Request, depot: &mut Depot) -> Resp<()> {
     let access_token = depot
-        .obtain::<AccessToken>()
+        .get_typed::<AccessToken>()
         .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let params = request.parse_json::<EditAvatarRequest>().await?;
@@ -36,7 +36,7 @@ pub async fn edit_avatar(request: &mut Request, depot: &mut Depot) -> Resp<()> {
 #[handler]
 pub async fn edit_nickname(request: &mut Request, depot: &mut Depot) -> Resp<()> {
     let access_token = depot
-        .obtain::<AccessToken>()
+        .get_typed::<AccessToken>()
         .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let params = request.parse_json::<EditNicknameRequest>().await?;
@@ -49,7 +49,7 @@ pub async fn edit_nickname(request: &mut Request, depot: &mut Depot) -> Resp<()>
 #[handler]
 pub async fn edit_slogan(request: &mut Request, depot: &mut Depot) -> Resp<()> {
     let access_token = depot
-        .obtain::<AccessToken>()
+        .get_typed::<AccessToken>()
         .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let params = request.parse_json::<EditSloganRequest>().await?;
@@ -62,7 +62,7 @@ pub async fn edit_slogan(request: &mut Request, depot: &mut Depot) -> Resp<()> {
 #[handler]
 pub async fn edit_phone(request: &mut Request, depot: &mut Depot) -> Resp<()> {
     let access_token = depot
-        .obtain::<AccessToken>()
+        .get_typed::<AccessToken>()
         .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let params = request.parse_json::<EditPhoneRequest>().await?;
@@ -75,7 +75,7 @@ pub async fn edit_phone(request: &mut Request, depot: &mut Depot) -> Resp<()> {
 #[handler]
 pub async fn delete(depot: &mut Depot) -> Resp<()> {
     let access_token = depot
-        .obtain::<AccessToken>()
+        .get_typed::<AccessToken>()
         .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     service::user::delete(access_token).await?;
