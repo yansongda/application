@@ -29,7 +29,7 @@ impl<'de> Deserialize<'de> for LoginResponse {
     {
         let value = Value::deserialize(deserializer)?;
 
-        if let Some(errcode) = value.get("errcode").and_then(|c| c.as_i64()) {
+        if let Some(errcode) = value.get("errcode").and_then(serde_json::Value::as_i64) {
             if errcode == 0 {
                 return serde_json::from_value::<RawLoginResponse>(value)
                     .map(|raw| LoginResponse {
@@ -38,14 +38,14 @@ impl<'de> Deserialize<'de> for LoginResponse {
                         openid: raw.openid,
                     })
                     .map_err(de::Error::custom);
-            } else {
-                let err: LoginResponseError =
-                    serde_json::from_value(value).map_err(de::Error::custom)?;
-                return Err(de::Error::custom(format!(
-                    "第三方错误: 微信 API 响应业务结果出错，请联系管理员: {}",
-                    err.errmsg
-                )));
             }
+
+            let err: LoginResponseError =
+                serde_json::from_value(value).map_err(de::Error::custom)?;
+            return Err(de::Error::custom(format!(
+                "第三方错误: 微信 API 响应业务结果出错，请联系管理员: {}",
+                err.errmsg
+            )));
         }
 
         serde_json::from_value::<RawLoginResponse>(value)
@@ -86,6 +86,8 @@ pub async fn login(code: &str, app_id: &str, app_secret: &str) -> Result<LoginRe
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::all)]
+
     use super::LoginResponse;
 
     #[test]

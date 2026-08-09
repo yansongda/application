@@ -36,7 +36,7 @@ impl<'de> Deserialize<'de> for TokenResponse {
         let value = Value::deserialize(deserializer)?;
 
         // 检查 error 字段（数字类型）
-        if let Some(error) = value.get("error").and_then(|e| e.as_i64())
+        if let Some(error) = value.get("error").and_then(serde_json::Value::as_i64)
             && error != 0
         {
             let err: TokenResponseError =
@@ -176,6 +176,8 @@ pub async fn token_info(access_token: &str) -> Result<TokenInfoResponse> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::all)]
+
     use super::{TokenInfoResponse, TokenResponse};
 
     #[test]

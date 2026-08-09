@@ -79,6 +79,8 @@ impl From<ParseError> for AppErr {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::all)]
+
     use super::*;
     use serde_json::json;
 

@@ -150,6 +150,8 @@ macro_rules! delete {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::all)]
+
     #[test]
     fn test_insert_macro_sql_validation() {
         let valid_sql = "INSERT INTO users (name) VALUES (?)";
