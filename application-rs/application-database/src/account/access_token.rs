@@ -2,13 +2,13 @@ use crate::Pool;
 use crate::account::Platform;
 use crate::{insert, query_optional, update};
 use application_kernel::config::G_CONFIG;
-use application_kernel::result::{Error, Result};
+use application_kernel::result::{ErrorCode, Result};
 use application_util::wechat::LoginResponse;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use sqlx::types::Json;
-use uuid::Uuid;
+use ulid::Ulid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct AccessToken {
@@ -86,41 +86,41 @@ pub struct HuaweiAccessTokenData {
 
 pub async fn fetch(access_token: &str) -> Result<AccessToken> {
     let sql = "select * from account.access_token where access_token = ? limit 1";
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
-    let result: Option<AccessToken> = query_optional!(pool, sql, access_token);
+    let result: Option<AccessToken> = query_optional!(pool_ref, sql, access_token);
 
     if let Some(data) = result {
         return Ok(data);
     }
 
-    Err(Error::ParamsAccessTokenNotFound(None))
+    Err(ErrorCode::ParamsAccessTokenNotFound)
 }
 
 pub async fn fetch_by_id(id: u64) -> Result<AccessToken> {
     let sql = "select * from account.access_token where id = ? limit 1";
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
-    let result: Option<AccessToken> = query_optional!(pool, sql, id);
+    let result: Option<AccessToken> = query_optional!(pool_ref, sql, id);
 
     if let Some(data) = result {
         return Ok(data);
     }
 
-    Err(Error::ParamsAccessTokenNotFound(None))
+    Err(ErrorCode::ParamsAccessTokenNotFound)
 }
 
 pub async fn fetch_by_user_id(platform: &Platform, user_id: u64) -> Result<AccessToken> {
     let sql = "select * from account.access_token where user_id = ? and platform = ? limit 1";
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
-    let result: Option<AccessToken> = query_optional!(pool, sql, user_id, platform);
+    let result: Option<AccessToken> = query_optional!(pool_ref, sql, user_id, platform);
 
     if let Some(data) = result {
         return Ok(data);
     }
 
-    Err(Error::ParamsAccessTokenNotFound(None))
+    Err(ErrorCode::ParamsAccessTokenNotFound)
 }
 
 pub async fn update_or_insert(
@@ -142,13 +142,13 @@ pub async fn insert(
     data: AccessTokenData,
 ) -> Result<AccessToken> {
     let sql = "insert into account.access_token (user_id, access_token, data, platform, third_id, expired_at) values (?, ?, ?, ?, ?, ?)";
-    let access_token = Uuid::now_v7().to_string();
+    let access_token = Ulid::generate().to_string();
     let expired_at = Some(G_CONFIG.access_token.get_expired_at());
 
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
     let result = insert!(
-        pool,
+        pool_ref,
         sql,
         user_id,
         &access_token,
@@ -174,13 +174,13 @@ pub async fn insert(
 pub async fn update(mut access_token: AccessToken, data: AccessTokenData) -> Result<AccessToken> {
     let sql =
         "update account.access_token set access_token = ?, data = ?, expired_at = ? where id = ?";
-    let access_token_value = Uuid::now_v7().to_string();
+    let access_token_value = Ulid::generate().to_string();
     let expired_at = Some(G_CONFIG.access_token.get_expired_at());
 
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
     let _ = update!(
-        pool,
+        pool_ref,
         sql,
         &access_token_value,
         Json(&data),

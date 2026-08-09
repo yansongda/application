@@ -1,25 +1,8 @@
 use crate::middleware::authorization;
 use crate::v1;
-use salvo::prelude::StatusCode;
-use salvo::{Depot, FlowCtrl, Request, Response, Router, handler};
-
-#[handler]
-pub fn catcher(_req: &Request, _depot: &Depot, res: &mut Response, ctrl: &mut FlowCtrl) {
-    let (code, msg) = match res.status_code {
-        Some(StatusCode::NOT_FOUND) => (404, "Not Found"),
-        Some(StatusCode::METHOD_NOT_ALLOWED) => (405, "Method Not Allowed"),
-        _ => return,
-    };
-
-    // Use Response's Scribe implementation to ensure request_id is injected
-    res.render(crate::response::Response::<String>::new(
-        Some(code),
-        Some(msg.to_string()),
-        None,
-    ));
-
-    ctrl.skip_rest();
-}
+use application_kernel::prometheus::gather_metrics;
+use salvo::writing::Text;
+use salvo::{Router, handler};
 
 pub fn health() -> Router {
     #[handler]
@@ -28,6 +11,15 @@ pub fn health() -> Router {
     }
 
     Router::with_path("/health").get(success)
+}
+
+pub fn metrics() -> Router {
+    #[handler]
+    async fn metrics() -> Text<String> {
+        Text::Plain(gather_metrics())
+    }
+
+    Router::with_path("/metrics").get(metrics)
 }
 
 pub fn api_v1() -> Router {

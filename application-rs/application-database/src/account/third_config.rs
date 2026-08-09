@@ -1,7 +1,7 @@
 use crate::account::Platform;
 use crate::{Pool, query_optional};
 
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -40,13 +40,13 @@ pub async fn fetch(
     third_id: &str,
 ) -> application_kernel::result::Result<ThirdConfig> {
     let sql = "select * from account.third_config where platform = ? and third_id = ? limit 1";
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
-    let result: Option<ThirdConfig> = query_optional!(pool, sql, platform, third_id);
+    let result: Option<ThirdConfig> = query_optional!(pool_ref, sql, platform, third_id);
 
     if let Some(config) = result {
         return Ok(config);
     }
 
-    Err(Error::ParamsThirdConfigNotFound(None))
+    Err(ErrorCode::ParamsThirdConfigNotFound)
 }

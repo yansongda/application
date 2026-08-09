@@ -13,7 +13,8 @@ chrono = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
 
-sqlx = { version = "~0.8.0", features = [ "runtime-tokio", "tls-rustls", "mysql", "chrono" ] }
+ulid = { workspace = true }
 
-uuid = { version = "1.18.1", features = ["v7"] }
-totp-rs = { version = "~5.7.0", features = ["otpauth"] }
+sqlx = { version = "0.8.0", features = [ "runtime-tokio", "tls-rustls", "mysql", "chrono" ] }
+
+totp-rs = { version = "5.7.0", features = ["otpauth"] }

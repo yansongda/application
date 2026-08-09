@@ -2,11 +2,11 @@ use crate::account::access_token;
 use crate::account::access_token::AccessToken;
 use crate::{Pool, insert, query_optional, update};
 use application_kernel::config::G_CONFIG;
-use application_kernel::result::{Error, Result};
+use application_kernel::result::{ErrorCode, Result};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use uuid::Uuid;
+use ulid::Ulid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct RefreshToken {
@@ -37,37 +37,37 @@ pub async fn update_or_insert(access_token_id: u64) -> Result<RefreshToken> {
 
 pub async fn fetch(refresh_token: &str) -> Result<RefreshToken> {
     let sql = "select * from account.refresh_token where refresh_token = ? limit 1";
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
-    let result: Option<RefreshToken> = query_optional!(pool, sql, refresh_token);
+    let result: Option<RefreshToken> = query_optional!(pool_ref, sql, refresh_token);
 
     if let Some(data) = result {
         return Ok(data);
     }
 
-    Err(Error::ParamsRefreshTokenNotFound(None))
+    Err(ErrorCode::ParamsRefreshTokenNotFound)
 }
 
 pub async fn fetch_by_access_token_id(access_token_id: u64) -> Result<RefreshToken> {
     let sql = "select * from account.refresh_token where access_token_id = ? limit 1";
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
-    let result: Option<RefreshToken> = query_optional!(pool, sql, access_token_id);
+    let result: Option<RefreshToken> = query_optional!(pool_ref, sql, access_token_id);
 
     if let Some(data) = result {
         return Ok(data);
     }
 
-    Err(Error::ParamsRefreshTokenNotFound(None))
+    Err(ErrorCode::ParamsRefreshTokenNotFound)
 }
 
 pub async fn insert(access_token_id: u64) -> Result<RefreshToken> {
     let sql = "insert into account.refresh_token (access_token_id, refresh_token, expired_at) values (?, ?, ?)";
-    let refresh_token = Uuid::now_v7().to_string();
+    let refresh_token = Ulid::generate().to_string();
     let expired_at = G_CONFIG.access_token.get_refresh_expired_at();
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
-    let result = insert!(pool, sql, access_token_id, &refresh_token, expired_at);
+    let result = insert!(pool_ref, sql, access_token_id, &refresh_token, expired_at);
 
     Ok(RefreshToken {
         id: result.last_insert_id(),
@@ -81,12 +81,12 @@ pub async fn insert(access_token_id: u64) -> Result<RefreshToken> {
 
 pub async fn update(mut refresh_token: RefreshToken) -> Result<RefreshToken> {
     let sql = "update account.refresh_token set refresh_token = ?, expired_at = ? where id = ?";
-    let refresh_token_value = Uuid::now_v7().to_string();
+    let refresh_token_value = Ulid::generate().to_string();
     let expired_at = G_CONFIG.access_token.get_refresh_expired_at();
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
     let _ = update!(
-        pool,
+        pool_ref,
         sql,
         &refresh_token_value,
         expired_at,

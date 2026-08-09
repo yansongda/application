@@ -1,6 +1,6 @@
 use crate::account::Platform;
 use crate::{Pool, insert, query_optional};
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -27,15 +27,15 @@ pub async fn fetch(
     third_id: &str,
 ) -> application_kernel::result::Result<ThirdUser> {
     let sql = "select * from account.third_user where platform = ? and third_id = ? limit 1";
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
-    let result: Option<ThirdUser> = query_optional!(pool, sql, platform, third_id);
+    let result: Option<ThirdUser> = query_optional!(pool_ref, sql, platform, third_id);
 
     if let Some(third_user) = result {
         return Ok(third_user);
     }
 
-    Err(Error::ParamsThirdUserNotFound(None))
+    Err(ErrorCode::ParamsThirdUserNotFound)
 }
 
 pub async fn insert(
@@ -46,9 +46,9 @@ pub async fn insert(
 ) -> application_kernel::result::Result<u64> {
     let sql =
         "insert into account.third_user (platform, third_id, user_id, config) values (?, ?, ?, ?)";
-    let pool = Pool::mysql("account")?;
+    let pool_ref = Pool::mysql("account")?;
 
-    let result = insert!(pool, sql, platform, third_id, user_id, config.map(Json));
+    let result = insert!(pool_ref, sql, platform, third_id, user_id, config.map(Json));
 
     Ok(result.last_insert_id())
 }

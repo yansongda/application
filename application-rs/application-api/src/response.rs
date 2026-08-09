@@ -1,85 +1,79 @@
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 use salvo::http::ParseError;
 use salvo::{Scribe, writing::Json};
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::warn;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Response<D: Serialize> {
-    pub code: u16,
+    pub code: i32,
     pub message: String,
-    pub request_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<D>,
 }
 
 impl<D: Serialize> Response<D> {
-    pub fn new(code: Option<u16>, message: Option<String>, data: Option<D>) -> Self {
+    pub(crate) fn new(code: Option<i32>, message: Option<String>, data: Option<D>) -> Self {
         Response {
             code: code.unwrap_or(0),
             message: message.unwrap_or_else(|| "success".to_string()),
-            // request_id is populated automatically in Scribe::render() from response headers
-            request_id: String::new(),
+            request_id: None,
             data,
         }
     }
 
     pub fn success(data: D) -> Self {
-        Response::new(None, None, Some(data))
+        Self::new(
+            Some(ErrorCode::Success.code()),
+            Some(ErrorCode::Success.message().to_string()),
+            Some(data),
+        )
     }
 
-    pub fn error(err: ApiErr) -> Self {
-        let (code, message) = err.0.get_code_message();
-
-        Response::new(Some(code), Some(message.to_string()), None)
+    pub fn error(code: ErrorCode) -> Self {
+        Self::new(Some(code.code()), Some(code.message().to_string()), None)
     }
 }
 
-/// Extracts the `request_id` from the `x-request-id` response header.
-///
-/// The `x-request-id` header is expected to be set by Salvo's `RequestId`
-/// middleware. If the header is missing or cannot be parsed as a valid
-/// string, this function returns `"unknown"` as a fallback.
-fn extract_request_id(res: &salvo::Response) -> String {
+fn extract_request_id(res: &salvo::Response) -> Option<String> {
     res.headers()
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string()
+        .map(std::string::ToString::to_string)
 }
 
 impl<D: Serialize + Send> Scribe for Response<D> {
     fn render(mut self, res: &mut salvo::Response) {
-        // Inject request_id from response headers (set by RequestId middleware)
         self.request_id = extract_request_id(res);
         res.render(Json(self));
     }
 }
 
-pub type Result<D> = std::result::Result<D, ApiErr>;
+pub type Result<D> = std::result::Result<D, AppErr>;
 pub type Resp<D> = Result<Response<D>>;
 
-pub struct ApiErr(pub Error);
+pub struct AppErr(pub ErrorCode);
 
-impl Scribe for ApiErr {
+impl Scribe for AppErr {
     fn render(self, res: &mut salvo::Response) {
-        let mut response = Response::<String>::error(self);
-        // Inject request_id using the shared helper function
+        let mut response = Response::<String>::error(self.0);
         response.request_id = extract_request_id(res);
         res.render(Json(response));
     }
 }
 
-impl From<Error> for ApiErr {
-    fn from(r: Error) -> Self {
-        ApiErr(r)
+impl From<ErrorCode> for AppErr {
+    fn from(e: ErrorCode) -> Self {
+        AppErr(e)
     }
 }
 
-impl From<ParseError> for ApiErr {
-    fn from(r: ParseError) -> Self {
-        info!("解析 Json 请求失败: {:?}", r);
-
-        ApiErr::from(Error::ParamsJsonInvalid(None))
+impl From<ParseError> for AppErr {
+    fn from(err: ParseError) -> Self {
+        warn!("解析 Json 请求失败: {:?}", err);
+        AppErr(ErrorCode::ParamsJsonInvalid)
     }
 }
 
@@ -91,7 +85,7 @@ mod tests {
     #[test]
     fn test_response_success_serialization() {
         let mut response = Response::success("test data");
-        response.request_id = "test-request-id-123".to_string();
+        response.request_id = Some("test-request-id-123".to_string());
         let json = serde_json::to_value(&response).unwrap();
 
         assert_eq!(json["code"], 0);
@@ -103,7 +97,7 @@ mod tests {
     #[test]
     fn test_response_new_with_request_id() {
         let mut response = Response::<String>::new(Some(404), Some("Not Found".to_string()), None);
-        response.request_id = "test-request-id-456".to_string();
+        response.request_id = Some("test-request-id-456".to_string());
         let json = serde_json::to_value(&response).unwrap();
 
         assert_eq!(json["code"], 404);
@@ -119,16 +113,14 @@ mod tests {
             "name": "test"
         });
         let mut response = Response::success(data.clone());
-        response.request_id = "req-123".to_string();
+        response.request_id = Some("req-123".to_string());
         let json = serde_json::to_value(&response).unwrap();
 
-        // Verify the response structure matches the required format
         assert!(json.get("code").is_some());
         assert!(json.get("message").is_some());
         assert!(json.get("request_id").is_some());
         assert!(json.get("data").is_some());
 
-        // Verify the order doesn't matter but all fields are present
         let keys: Vec<&str> = json
             .as_object()
             .unwrap()
@@ -144,20 +136,12 @@ mod tests {
 
     #[test]
     fn test_json_format_example() {
-        // Test that the response format matches the issue requirement
         let data = json!({"user_id": 1, "username": "test"});
         let mut response = Response::success(data);
-        response.request_id = "xxxxx".to_string();
+        response.request_id = Some("xxxxx".to_string());
         let json_str = serde_json::to_string(&response).unwrap();
         let json_value: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
-        // Verify it matches the expected structure:
-        // {
-        //     "code": 0,
-        //     "message": "success",
-        //     "request_id": "xxxxx",
-        //     "data": xxx
-        // }
         assert_eq!(json_value["code"], 0);
         assert_eq!(json_value["message"], "success");
         assert_eq!(json_value["request_id"], "xxxxx");
@@ -165,7 +149,6 @@ mod tests {
         assert_eq!(json_value["data"]["user_id"], 1);
         assert_eq!(json_value["data"]["username"], "test");
 
-        // Print for manual verification (only in debug builds)
         #[cfg(debug_assertions)]
         {
             println!("\nActual JSON output:");
@@ -175,8 +158,7 @@ mod tests {
 
     #[test]
     fn test_error_response_access_token_expired_code_1004() {
-        let response =
-            Response::<String>::error(ApiErr(Error::AuthorizationAccessTokenExpired(None)));
+        let response = Response::<String>::error(ErrorCode::AuthorizationAccessTokenExpired);
         let json = serde_json::to_value(&response).unwrap();
 
         assert_eq!(json["code"], 1004);
@@ -186,8 +168,7 @@ mod tests {
 
     #[test]
     fn test_error_response_refresh_token_invalid_code_1005() {
-        let response =
-            Response::<String>::error(ApiErr(Error::AuthorizationRefreshTokenInvalid(None)));
+        let response = Response::<String>::error(ErrorCode::AuthorizationRefreshTokenInvalid);
         let json = serde_json::to_value(&response).unwrap();
 
         assert_eq!(json["code"], 1005);
@@ -197,8 +178,7 @@ mod tests {
 
     #[test]
     fn test_error_response_refresh_token_expired_code_1006() {
-        let response =
-            Response::<String>::error(ApiErr(Error::AuthorizationRefreshTokenExpired(None)));
+        let response = Response::<String>::error(ErrorCode::AuthorizationRefreshTokenExpired);
         let json = serde_json::to_value(&response).unwrap();
 
         assert_eq!(json["code"], 1006);
@@ -208,14 +188,14 @@ mod tests {
 
     #[test]
     fn test_error_response_auth_codes_are_distinguishable() {
-        let cases: Vec<(Error, u16)> = vec![
-            (Error::AuthorizationAccessTokenExpired(None), 1004),
-            (Error::AuthorizationRefreshTokenInvalid(None), 1005),
-            (Error::AuthorizationRefreshTokenExpired(None), 1006),
+        let cases: Vec<(ErrorCode, i32)> = vec![
+            (ErrorCode::AuthorizationAccessTokenExpired, 1004),
+            (ErrorCode::AuthorizationRefreshTokenInvalid, 1005),
+            (ErrorCode::AuthorizationRefreshTokenExpired, 1006),
         ];
 
         for (err, expected_code) in cases {
-            let response = Response::<String>::error(ApiErr(err));
+            let response = Response::<String>::error(err);
             let json = serde_json::to_value(&response).unwrap();
             assert_eq!(json["code"], expected_code);
             assert!(json["data"].is_null());
@@ -223,13 +203,41 @@ mod tests {
     }
 
     #[test]
-    fn test_error_response_access_token_expired_with_custom_message() {
-        let response = Response::<String>::error(ApiErr(Error::AuthorizationAccessTokenExpired(
-            Some("token已失效请重新登录".to_string()),
-        )));
+    fn test_error_response_access_token_expired_message() {
+        let response = Response::<String>::error(ErrorCode::AuthorizationAccessTokenExpired);
         let json = serde_json::to_value(&response).unwrap();
 
         assert_eq!(json["code"], 1004);
-        assert_eq!(json["message"], "token已失效请重新登录");
+        assert_eq!(json["message"], "认证失败: 认证信息已过期,请重新登录");
+    }
+
+    #[test]
+    fn test_app_err_from_error_code() {
+        let err: AppErr = ErrorCode::AuthorizationHeaderMissing.into();
+
+        assert_eq!(err.0, ErrorCode::AuthorizationHeaderMissing);
+        assert_eq!(err.0.code(), 1000);
+        assert_eq!(err.0.message(), "认证失败: 缺少认证信息,请重新登录");
+    }
+
+    #[test]
+    fn test_app_err_error_code_matches() {
+        let cases = [
+            ErrorCode::Success,
+            ErrorCode::AuthorizationAccessTokenInvalid,
+            ErrorCode::ParamsJsonInvalid,
+            ErrorCode::ThirdHttpResponse,
+            ErrorCode::InternalDatabaseQuery,
+        ];
+
+        for code in cases {
+            let err = AppErr::from(code);
+
+            assert_eq!(err.0, code);
+
+            let resp = Response::<()>::error(err.0);
+            assert_eq!(resp.code, code.code());
+            assert_eq!(resp.message, code.message());
+        }
     }
 }

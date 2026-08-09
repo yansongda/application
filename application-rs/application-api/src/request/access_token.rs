@@ -1,6 +1,6 @@
 use crate::request::Validator;
 use application_database::account::Platform;
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -23,12 +23,12 @@ impl Validator for LoginRequest {
         let platform = self
             .platform
             .filter(|p| *p != Platform::Unsupported)
-            .ok_or(Error::ParamsLoginPlatformUnsupported(None))?;
+            .ok_or(ErrorCode::ParamsLoginPlatformUnsupported)?;
 
         let third_id = self
             .third_id
             .as_deref()
-            .ok_or(Error::ParamsLoginPlatformThirdIdFormatInvalid(None))?;
+            .ok_or(ErrorCode::ParamsLoginPlatformThirdIdFormatInvalid)?;
 
         if let Some(code) = &self.code
             && code.chars().count() > 8
@@ -40,7 +40,7 @@ impl Validator for LoginRequest {
             });
         }
 
-        Err(Error::ParamsLoginCodeFormatInvalid(None))
+        Err(ErrorCode::ParamsLoginCodeFormatInvalid)
     }
 }
 
@@ -71,12 +71,12 @@ impl Validator for LoginRefreshRequest {
         let platform = self
             .platform
             .filter(|p| *p != Platform::Unsupported)
-            .ok_or(Error::ParamsLoginPlatformUnsupported(None))?;
+            .ok_or(ErrorCode::ParamsLoginPlatformUnsupported)?;
 
         let third_id = self
             .third_id
             .as_deref()
-            .ok_or(Error::ParamsLoginPlatformThirdIdFormatInvalid(None))?;
+            .ok_or(ErrorCode::ParamsLoginPlatformThirdIdFormatInvalid)?;
 
         if let Some(refresh_token) = &self.refresh_token
             && refresh_token.chars().count() > 8
@@ -88,7 +88,7 @@ impl Validator for LoginRefreshRequest {
             });
         }
 
-        Err(Error::ParamsLoginCodeFormatInvalid(None))
+        Err(ErrorCode::ParamsLoginCodeFormatInvalid)
     }
 }
 

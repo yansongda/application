@@ -1,7 +1,7 @@
 use reqwest::{Client, Method, Request, RequestBuilder, Url};
 
 use crate::http;
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 use application_kernel::result::Result;
 use serde::{Deserialize, Deserializer, de};
 use serde_json::Value;
@@ -81,7 +81,7 @@ pub async fn token(code: &str, app_id: &str, client_secret: &str) -> Result<Toke
             Method::POST,
             Url::parse("https://oauth-login.cloud.huawei.com/oauth2/v3/token").map_err(|e| {
                 error!("URL 解析失败: {:?}", e);
-                Error::ThirdHttpRequest(Some("URL 格式无效".to_string()))
+                ErrorCode::ThirdHttpRequest
             })?,
         ),
     )
@@ -89,7 +89,7 @@ pub async fn token(code: &str, app_id: &str, client_secret: &str) -> Result<Toke
 
     http::request::<TokenResponse>(builder.build().map_err(|e| {
         error!("请求构建失败: {:?}", e);
-        Error::ThirdHttpRequest(Some("请求构建失败".to_string()))
+        ErrorCode::ThirdHttpRequest
     })?)
     .await
     .map(|response| response.inner)
@@ -160,7 +160,7 @@ pub async fn token_info(access_token: &str) -> Result<TokenInfoResponse> {
             Method::POST,
             Url::parse("https://oauth-api.cloud.huawei.com/rest.php?nsp_fmt=JSON&nsp_svc=huawei.oauth2.user.getTokenInfo").map_err(|e| {
                 error!("URL 解析失败: {:?}", e);
-                Error::ThirdHttpRequest(Some("URL 格式无效".to_string()))
+                ErrorCode::ThirdHttpRequest
             })?,
         ),
     )
@@ -168,7 +168,7 @@ pub async fn token_info(access_token: &str) -> Result<TokenInfoResponse> {
 
     http::request::<TokenInfoResponse>(builder.build().map_err(|e| {
         error!("请求构建失败: {:?}", e);
-        Error::ThirdHttpRequest(Some("请求构建失败".to_string()))
+        ErrorCode::ThirdHttpRequest
     })?)
     .await
     .map(|response| response.inner)

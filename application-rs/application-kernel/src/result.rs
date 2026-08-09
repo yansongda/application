@@ -1,201 +1,136 @@
+use serde::Serialize;
 use std::fmt::{Debug, Display, Formatter};
 
-pub type Result<D> = std::result::Result<D, Error>;
+pub type Result<D> = std::result::Result<D, ErrorCode>;
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
-pub enum Error {
-    AuthorizationHeaderMissing(Option<String>),
-    AuthorizationAccessTokenInvalid(Option<String>),
-    AuthorizationInvalidFormat(Option<String>),
-    AuthorizationPermissionUngranted(Option<String>),
-    AuthorizationAccessTokenExpired(Option<String>),
-    AuthorizationRefreshTokenInvalid(Option<String>),
-    AuthorizationRefreshTokenExpired(Option<String>),
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum ErrorCode {
+    Success = 0,
 
-    ParamsJsonInvalid(Option<String>),
-    ParamsLoginPlatformUnsupported(Option<String>),
-    ParamsLoginCodeFormatInvalid(Option<String>),
-    ParamsThirdUserNotFound(Option<String>),
-    ParamsAccessTokenNotFound(Option<String>),
-    ParamsUserNotFound(Option<String>),
-    ParamsUserNicknameLengthInvalid(Option<String>),
-    ParamsUserPhoneFormatInvalid(Option<String>),
-    ParamsTotpNotFound(Option<String>),
-    ParamsTotpParseFailed(Option<String>),
-    ParamsTotpIdEmpty(Option<String>),
-    ParamsTotpIssuerMaxLengthReached(Option<String>),
-    ParamsTotpUriFormatInvalid(Option<String>),
-    ParamsTotpUsernameFormatInvalid(Option<String>),
-    ParamsShortlinkNotFound(Option<String>),
-    ParamsShortlinkEmpty(Option<String>),
-    ParamsShortlinkFormatInvalid(Option<String>),
-    ParamsUserSloganLengthInvalid(Option<String>),
-    ParamsUserAvatarLengthInvalid(Option<String>),
-    ParamsThirdConfigNotFound(Option<String>),
-    ParamsLoginPlatformThirdIdFormatInvalid(Option<String>),
-    ParamsRefreshTokenNotFound(Option<String>),
+    // 1000 系列：授权认证错误
+    AuthorizationHeaderMissing = 1000,
+    AuthorizationAccessTokenInvalid = 1001,
+    AuthorizationInvalidFormat = 1002,
+    AuthorizationPermissionUngranted = 1003,
+    AuthorizationAccessTokenExpired = 1004,
+    AuthorizationRefreshTokenInvalid = 1005,
+    AuthorizationRefreshTokenExpired = 1006,
 
-    ThirdHttpRequest(Option<String>),
-    ThirdHttpResponse(Option<String>),
-    ThirdHttpResponseParse(Option<String>),
-    ThirdHttpResponseResult(Option<String>),
+    // 2000 系列：参数校验错误
+    ParamsJsonInvalid = 2000,
+    ParamsLoginPlatformUnsupported = 2001,
+    ParamsLoginCodeFormatInvalid = 2002,
+    ParamsThirdUserNotFound = 2003,
+    ParamsAccessTokenNotFound = 2004,
+    ParamsUserNotFound = 2005,
+    ParamsUserNicknameLengthInvalid = 2006,
+    ParamsUserPhoneFormatInvalid = 2007,
+    ParamsTotpNotFound = 2008,
+    ParamsTotpParseFailed = 2009,
+    ParamsTotpIdEmpty = 2010,
+    ParamsTotpIssuerMaxLengthReached = 2011,
+    ParamsTotpUriFormatInvalid = 2012,
+    ParamsTotpUsernameFormatInvalid = 2013,
+    ParamsShortlinkNotFound = 2014,
+    ParamsShortlinkEmpty = 2015,
+    ParamsShortlinkFormatInvalid = 2016,
+    ParamsUserSloganLengthInvalid = 2017,
+    ParamsUserAvatarLengthInvalid = 2018,
+    ParamsThirdConfigNotFound = 2019,
+    ParamsLoginPlatformThirdIdFormatInvalid = 2020,
+    ParamsRefreshTokenNotFound = 2021,
 
-    InternalReadBodyFailed(Option<String>),
-    InternalDatabaseAcquire(Option<String>),
-    InternalDatabaseQuery(Option<String>),
-    InternalDatabaseInsert(Option<String>),
-    InternalDatabaseUpdate(Option<String>),
-    InternalDatabaseDelete(Option<String>),
-    InternalDataToAccessTokenError(Option<String>),
-    InternalDatabaseDataInvalid(Option<String>),
+    // 9800 系列：第三方服务错误
+    ThirdHttpRequest = 9800,
+    ThirdHttpResponse = 9801,
+    ThirdHttpResponseParse = 9802,
+    ThirdHttpResponseResult = 9803,
+
+    // 9900 系列：内部/数据库错误
+    InternalReadBodyFailed = 9900,
+    InternalDatabaseAcquire = 9901,
+    InternalDatabaseQuery = 9902,
+    InternalDatabaseInsert = 9903,
+    InternalDatabaseUpdate = 9904,
+    InternalDatabaseDelete = 9905,
+    InternalDataToAccessTokenError = 9906,
+    InternalDatabaseDataInvalid = 9907,
+
+    // 新增变体用于 catcher 中间件
+    StatusNotFound = 404,
+    StatusMethodNotAllowed = 405,
+    UnknownError = 9999,
 }
 
-impl Error {
-    pub fn get_code_message(&self) -> (u16, String) {
-        macro_rules! msg {
-            ($opt:expr, $default:expr) => {
-                $opt.clone().unwrap_or_else(|| $default.to_owned())
-            };
-        }
-
+impl ErrorCode {
+    pub fn message(&self) -> &'static str {
         match self {
-            Self::AuthorizationHeaderMissing(m) => {
-                (1000, msg!(m, "认证失败: 缺少认证信息,请重新登录"))
+            Self::Success => "success",
+            Self::AuthorizationHeaderMissing => "认证失败: 缺少认证信息,请重新登录",
+            Self::AuthorizationAccessTokenInvalid => "认证失败: 认证信息不正确,请重新登录",
+            Self::AuthorizationInvalidFormat => "认证失败: 认证信息格式不正确,请重新登录",
+            Self::AuthorizationPermissionUngranted => "认证失败: 未授权,请勿越权使用",
+            Self::AuthorizationAccessTokenExpired => "认证失败: 认证信息已过期,请重新登录",
+            Self::AuthorizationRefreshTokenInvalid => "认证失败: 认证信息不正确,请重新登录",
+            Self::AuthorizationRefreshTokenExpired => "认证失败: 认证信息已过期,请重新登录",
+            Self::ParamsJsonInvalid => "参数错误: Json 解析失败,请确认您的参数是否符合规范",
+            Self::ParamsLoginPlatformUnsupported => "参数错误: platform 参数值不支持",
+            Self::ParamsLoginCodeFormatInvalid => "参数错误: 登录秘钥格式错误",
+            Self::ParamsThirdUserNotFound => "参数错误: 第三方平台关联用户未找到",
+            Self::ParamsAccessTokenNotFound => "参数错误: Access Token 未找到",
+            Self::ParamsUserNotFound => "参数错误: 用户未找到",
+            Self::ParamsUserNicknameLengthInvalid => "参数错误: 昵称长度应为 1~16 之间,请正确填写",
+            Self::ParamsUserPhoneFormatInvalid => "参数错误: 手机号码格式不正确,请正确填写",
+            Self::ParamsTotpNotFound => "参数错误: TOTP 信息未找到",
+            Self::ParamsTotpParseFailed => {
+                "参数错误: TOTP 链接解析失败, 请确认是否是正确的 TOTP 链接"
             }
-            Self::AuthorizationAccessTokenInvalid(m) => {
-                (1001, msg!(m, "认证失败: 认证信息不正确,请重新登录"))
+            Self::ParamsTotpIdEmpty => "参数错误: 详情 id 不能为空",
+            Self::ParamsTotpIssuerMaxLengthReached => "参数错误: TOTP 链接不能为空",
+            Self::ParamsTotpUriFormatInvalid => "参数错误: TOTP 链接格式不正确",
+            Self::ParamsTotpUsernameFormatInvalid => "参数错误: TOTP 用户名格式不正确",
+            Self::ParamsShortlinkNotFound => "参数错误: 短连接未找到",
+            Self::ParamsShortlinkEmpty => "参数错误: URL 不能为空",
+            Self::ParamsShortlinkFormatInvalid => "参数错误: URL 格式不正确",
+            Self::ParamsUserSloganLengthInvalid => "参数错误: Slogan 长度应大于 3,请正确填写",
+            Self::ParamsUserAvatarLengthInvalid => "参数错误: 头像格式不正确,请正确填写",
+            Self::ParamsThirdConfigNotFound => "参数错误: 您访问的平台暂不支持,请重试或联系管理员",
+            Self::ParamsLoginPlatformThirdIdFormatInvalid => {
+                "参数错误: 您访问的平台暂不支持,请重试或联系管理员"
             }
-            Self::AuthorizationInvalidFormat(m) => {
-                (1002, msg!(m, "认证失败: 认证信息格式不正确,请重新登录"))
+            Self::ParamsRefreshTokenNotFound => "参数错误: Refresh Token 未找到",
+            Self::ThirdHttpRequest => "第三方错误: 第三方 API 请求出错,请联系管理员",
+            Self::ThirdHttpResponse => "第三方错误: 第三方 API 响应出错,请联系管理员",
+            Self::ThirdHttpResponseParse => "第三方错误: 第三方 API 响应解析出错,请联系管理员",
+            Self::ThirdHttpResponseResult => "第三方错误: 第三方 API 业务结果出错,请联系管理员",
+            Self::InternalReadBodyFailed => "内部错误: 读取 Body 体失败,请联系管理员",
+            Self::InternalDatabaseAcquire => "内部错误: 数据库连接出现了一些问题,请联系管理员",
+            Self::InternalDatabaseQuery => "内部错误: 查询数据出现了一些问题,请联系管理员",
+            Self::InternalDatabaseInsert => "内部错误: 保存数据出现了一些问题,请联系管理员",
+            Self::InternalDatabaseUpdate => "内部错误: 更新数据出现了一些问题,请联系管理员",
+            Self::InternalDatabaseDelete => "内部错误: 删除数据出现了一些问题,请联系管理员",
+            Self::InternalDataToAccessTokenError => {
+                "内部错误: 生成 access_token 令牌有误,请联系管理员"
             }
-            Self::AuthorizationPermissionUngranted(m) => {
-                (1003, msg!(m, "认证失败: 未授权,请勿越权使用"))
-            }
-            Self::AuthorizationAccessTokenExpired(m) => {
-                (1004, msg!(m, "认证失败: 认证信息已过期,请重新登录"))
-            }
-            Self::AuthorizationRefreshTokenInvalid(m) => {
-                (1005, msg!(m, "认证失败: 认证信息不正确,请重新登录"))
-            }
-            Self::AuthorizationRefreshTokenExpired(m) => {
-                (1006, msg!(m, "认证失败: 认证信息已过期,请重新登录"))
-            }
-
-            Self::ParamsJsonInvalid(m) => (
-                2000,
-                msg!(m, "参数错误: Json 解析失败,请确认您的参数是否符合规范"),
-            ),
-            Self::ParamsLoginPlatformUnsupported(m) => {
-                (2001, msg!(m, "参数错误: platform 参数值不支持"))
-            }
-            Self::ParamsLoginCodeFormatInvalid(m) => (2002, msg!(m, "参数错误: 登录秘钥格式错误")),
-            Self::ParamsThirdUserNotFound(m) => {
-                (2003, msg!(m, "参数错误: 第三方平台关联用户未找到"))
-            }
-            Self::ParamsAccessTokenNotFound(m) => (2004, msg!(m, "参数错误: Access Token 未找到")),
-            Self::ParamsUserNotFound(m) => (2005, msg!(m, "参数错误: 用户未找到")),
-            Self::ParamsUserNicknameLengthInvalid(m) => {
-                (2006, msg!(m, "参数错误: 昵称长度应为 1~16 之间,请正确填写"))
-            }
-            Self::ParamsUserPhoneFormatInvalid(m) => {
-                (2007, msg!(m, "参数错误: 手机号码格式不正确,请正确填写"))
-            }
-            Self::ParamsTotpNotFound(m) => (2008, msg!(m, "参数错误: TOTP 信息未找到")),
-            Self::ParamsTotpParseFailed(m) => (
-                2009,
-                msg!(
-                    m,
-                    "参数错误: TOTP 链接解析失败, 请确认是否是正确的 TOTP 链接"
-                ),
-            ),
-            Self::ParamsTotpIdEmpty(m) => (2010, msg!(m, "参数错误: 详情 id 不能为空")),
-            Self::ParamsTotpIssuerMaxLengthReached(m) => {
-                (2011, msg!(m, "参数错误: TOTP 链接不能为空"))
-            }
-            Self::ParamsTotpUriFormatInvalid(m) => (2012, msg!(m, "参数错误: TOTP 链接格式不正确")),
-            Self::ParamsTotpUsernameFormatInvalid(m) => {
-                (2013, msg!(m, "参数错误: TOTP 用户名格式不正确"))
-            }
-            Self::ParamsShortlinkNotFound(m) => (2014, msg!(m, "参数错误: 短连接未找到")),
-            Self::ParamsShortlinkEmpty(m) => (2015, msg!(m, "参数错误: URL 不能为空")),
-            Self::ParamsShortlinkFormatInvalid(m) => (2016, msg!(m, "参数错误: URL 格式不正确")),
-            Self::ParamsUserSloganLengthInvalid(m) => {
-                (2017, msg!(m, "参数错误: Slogan 长度应大于 3,请正确填写"))
-            }
-            Self::ParamsUserAvatarLengthInvalid(m) => {
-                (2018, msg!(m, "参数错误: 头像格式不正确,请正确填写"))
-            }
-            Self::ParamsThirdConfigNotFound(m) => (
-                2019,
-                msg!(m, "参数错误: 您访问的平台暂不支持,请重试或联系管理员"),
-            ),
-            Self::ParamsLoginPlatformThirdIdFormatInvalid(m) => (
-                2020,
-                msg!(m, "参数错误: 您访问的平台暂不支持,请重试或联系管理员"),
-            ),
-            Self::ParamsRefreshTokenNotFound(m) => {
-                (2021, msg!(m, "参数错误: Refresh Token 未找到"))
-            }
-
-            Self::ThirdHttpRequest(m) => (
-                9800,
-                msg!(m, "第三方错误: 第三方 API 请求出错,请联系管理员"),
-            ),
-            Self::ThirdHttpResponse(m) => (
-                9801,
-                msg!(m, "第三方错误: 第三方 API 响应出错,请联系管理员"),
-            ),
-            Self::ThirdHttpResponseParse(m) => (
-                9802,
-                msg!(m, "第三方错误: 第三方 API 响应解析出错,请联系管理员"),
-            ),
-            Self::ThirdHttpResponseResult(m) => (
-                9803,
-                msg!(m, "第三方错误: 第三方 API 业务结果出错,请联系管理员"),
-            ),
-
-            Self::InternalReadBodyFailed(m) => {
-                (9900, msg!(m, "内部错误: 读取 Body 体失败,请联系管理员"))
-            }
-            Self::InternalDatabaseAcquire(m) => (
-                9901,
-                msg!(m, "内部错误: 数据库连接出现了一些问题,请联系管理员"),
-            ),
-            Self::InternalDatabaseQuery(m) => (
-                9902,
-                msg!(m, "内部错误: 查询数据出现了一些问题,请联系管理员"),
-            ),
-            Self::InternalDatabaseInsert(m) => (
-                9903,
-                msg!(m, "内部错误: 保存数据出现了一些问题,请联系管理员"),
-            ),
-            Self::InternalDatabaseUpdate(m) => (
-                9904,
-                msg!(m, "内部错误: 更新数据出现了一些问题,请联系管理员"),
-            ),
-            Self::InternalDatabaseDelete(m) => (
-                9905,
-                msg!(m, "内部错误: 删除数据出现了一些问题,请联系管理员"),
-            ),
-            Self::InternalDataToAccessTokenError(m) => (
-                9906,
-                msg!(m, "内部错误: 生成 access_token 令牌有误,请联系管理员"),
-            ),
-            Self::InternalDatabaseDataInvalid(m) => {
-                (9907, msg!(m, "内部错误: 数据库数据有误,请联系管理员"))
-            }
+            Self::InternalDatabaseDataInvalid => "内部错误: 数据库数据有误,请联系管理员",
+            Self::StatusNotFound => "请求的资源不存在",
+            Self::StatusMethodNotAllowed => "请求方法不被允许",
+            Self::UnknownError => "内部服务异常,请稍后重试",
         }
     }
-}
 
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let (code, message) = self.get_code_message();
-        write!(f, "[{code}] {message}")
+    pub fn code(&self) -> i32 {
+        *self as i32
     }
 }
 
-impl std::error::Error for Error {}
+impl Display for ErrorCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {}", self.code(), self.message())
+    }
+}
+
+impl std::error::Error for ErrorCode {}
 
 #[cfg(test)]
 mod tests {
@@ -203,112 +138,110 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        let err = Error::AuthorizationHeaderMissing(None);
+        let err = ErrorCode::AuthorizationHeaderMissing;
 
         assert_eq!(err.to_string(), "[1000] 认证失败: 缺少认证信息,请重新登录");
     }
 
     #[test]
-    fn test_error_display_with_custom_message() {
-        let err = Error::ParamsJsonInvalid(Some("自定义提示".to_string()));
-
-        assert_eq!(err.to_string(), "[2000] 自定义提示");
-    }
-
-    #[test]
     fn test_error_code_ranges() {
         let cases = [
-            (Error::AuthorizationAccessTokenInvalid(None), 1001),
-            (Error::ParamsUserNotFound(None), 2005),
-            (Error::ThirdHttpResponse(None), 9801),
-            (Error::InternalDatabaseDelete(None), 9905),
+            (ErrorCode::AuthorizationAccessTokenInvalid, 1001),
+            (ErrorCode::ParamsUserNotFound, 2005),
+            (ErrorCode::ThirdHttpResponse, 9801),
+            (ErrorCode::InternalDatabaseDelete, 9905),
         ];
 
         for (err, expected_code) in cases {
-            assert_eq!(err.get_code_message().0, expected_code);
+            assert_eq!(err.code(), expected_code);
         }
     }
 
     #[test]
-    fn test_error_is_clone() {
-        let err = Error::InternalDatabaseQuery(Some("查询失败".to_string()));
-        let cloned = err.clone();
+    fn test_error_is_copy() {
+        let err = ErrorCode::InternalDatabaseQuery;
+        let c = err;
+        let c2 = err;
 
-        assert_eq!(err, cloned);
-        assert_eq!(cloned.to_string(), "[9902] 查询失败");
+        assert_eq!(c, c2);
+        assert_eq!(
+            c.to_string(),
+            "[9902] 内部错误: 查询数据出现了一些问题,请联系管理员"
+        );
     }
 
     #[test]
     fn test_error_implements_std_error() {
         fn assert_std_error<E: std::error::Error>() {}
 
-        assert_std_error::<Error>();
+        assert_std_error::<ErrorCode>();
     }
 
     #[test]
     fn test_auth_access_token_expired_maps_to_1004() {
-        let err = Error::AuthorizationAccessTokenExpired(None);
-        let (code, message) = err.get_code_message();
-        assert_eq!(code, 1004);
-        assert!(message.contains("过期"));
+        let err = ErrorCode::AuthorizationAccessTokenExpired;
+        assert_eq!(err.code(), 1004);
+        assert!(err.message().contains("过期"));
     }
 
     #[test]
     fn test_auth_refresh_token_invalid_maps_to_1005() {
-        let err = Error::AuthorizationRefreshTokenInvalid(None);
-        let (code, message) = err.get_code_message();
-        assert_eq!(code, 1005);
-        assert!(message.contains("不正确"));
+        let err = ErrorCode::AuthorizationRefreshTokenInvalid;
+        assert_eq!(err.code(), 1005);
+        assert!(err.message().contains("不正确"));
     }
 
     #[test]
     fn test_auth_refresh_token_expired_maps_to_1006() {
-        let err = Error::AuthorizationRefreshTokenExpired(None);
-        let (code, message) = err.get_code_message();
-        assert_eq!(code, 1006);
-        assert!(message.contains("过期"));
+        let err = ErrorCode::AuthorizationRefreshTokenExpired;
+        assert_eq!(err.code(), 1006);
+        assert!(err.message().contains("过期"));
     }
 
     #[test]
     fn test_auth_error_codes_are_distinguishable() {
         let cases = [
-            (Error::AuthorizationAccessTokenExpired(None), 1004),
-            (Error::AuthorizationRefreshTokenInvalid(None), 1005),
-            (Error::AuthorizationRefreshTokenExpired(None), 1006),
+            (ErrorCode::AuthorizationAccessTokenExpired, 1004),
+            (ErrorCode::AuthorizationRefreshTokenInvalid, 1005),
+            (ErrorCode::AuthorizationRefreshTokenExpired, 1006),
         ];
         for (err, expected) in cases {
-            assert_eq!(err.get_code_message().0, expected);
+            assert_eq!(err.code(), expected);
         }
     }
 
     #[test]
     fn test_auth_access_token_expired_display_format() {
-        let err = Error::AuthorizationAccessTokenExpired(None);
+        let err = ErrorCode::AuthorizationAccessTokenExpired;
         let display = err.to_string();
         assert!(display.starts_with("[1004]"));
     }
 
     #[test]
-    fn test_auth_access_token_expired_custom_message() {
-        let err = Error::AuthorizationAccessTokenExpired(Some("自定义过期消息".to_string()));
-        let (code, message) = err.get_code_message();
-        assert_eq!(code, 1004);
-        assert_eq!(message, "自定义过期消息");
+    fn test_success_code_and_message() {
+        let err = ErrorCode::Success;
+        assert_eq!(err.code(), 0);
+        assert_eq!(err.message(), "success");
     }
 
     #[test]
-    fn test_auth_refresh_token_invalid_custom_message() {
-        let err = Error::AuthorizationRefreshTokenInvalid(Some("token被篡改".to_string()));
-        let (code, message) = err.get_code_message();
-        assert_eq!(code, 1005);
-        assert_eq!(message, "token被篡改");
+    fn test_status_not_found_code() {
+        let err = ErrorCode::StatusNotFound;
+        assert_eq!(err.code(), 404);
+        assert_eq!(err.message(), "请求的资源不存在");
     }
 
     #[test]
-    fn test_auth_refresh_token_expired_custom_message() {
-        let err = Error::AuthorizationRefreshTokenExpired(Some("刷新令牌已失效".to_string()));
-        let (code, message) = err.get_code_message();
-        assert_eq!(code, 1006);
-        assert_eq!(message, "刷新令牌已失效");
+    fn test_status_method_not_allowed_code() {
+        let err = ErrorCode::StatusMethodNotAllowed;
+        assert_eq!(err.code(), 405);
+        assert_eq!(err.message(), "请求方法不被允许");
+    }
+
+    #[test]
+    fn test_unknown_error_code() {
+        let err = ErrorCode::UnknownError;
+        assert_eq!(err.code(), 9999);
+        assert_eq!(err.message(), "内部服务异常,请稍后重试");
     }
 }
