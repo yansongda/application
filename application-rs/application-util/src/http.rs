@@ -18,13 +18,14 @@ pub struct HttpResponse<T> {
 }
 
 static G_CLIENT: LazyLock<Client> = LazyLock::new(|| {
+    #[allow(clippy::expect_used)]
     Client::builder()
         .user_agent("yansongda/application-rs")
         .connect_timeout(Duration::from_secs(1))
         .timeout(Duration::from_secs(3))
         .pool_idle_timeout(Duration::from_secs(30))
         .pool_max_idle_per_host(8)
-        .tcp_keepalive(Duration::from_secs(60))
+        .tcp_keepalive(Duration::from_mins(1))
         .tcp_nodelay(true)
         .build()
         .expect("HTTP 客户端初始化失败")
