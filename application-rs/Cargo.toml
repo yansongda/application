@@ -4,7 +4,7 @@ default-members = ["application-*"]
 resolver = "3"
 
 [workspace.package]
-rust-version = "1.90.0"
+rust-version = "1.94.0"
 version = "1.18.1"
 edition = "2024"
 publish = false
