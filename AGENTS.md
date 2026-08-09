@@ -76,7 +76,7 @@ yansongda-application/
 ## UNIQUE STYLES
 
 - **多包管理器并存**：后端 cargo，微信主小程序 Deno，TOTP 小程序 Deno，华为 ohpm。
-- **Rust workspace 使用较新的工具链特性**，依赖使用 `~` 约束。
+- **Rust workspace 使用较新的工具链特性**，依赖使用默认 caret 语义（`version = "x.y.z"`）约束。
 - **无 ORM 的数据库层**：通过自定义宏（`query_optional!` / `insert!` / `update!` / `delete!`）统一记录 SQL、耗时和参数。
 - **微信/华为前端共享同一后端**，但登录方式不同：微信用 `wx.login` code，华为用 HuaweiID authorizationCode。
 - **后端无 JWT**：access_token / refresh_token 均为 opaque UUID v7，数据库验证。
