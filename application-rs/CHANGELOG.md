@@ -1,3 +1,15 @@
+## [1.19.0] - 2026-08-09
+
+### Added
+
+- refactor(application-rs): 新增可观测性指标：HTTP 请求事件、Prometheus `/metrics` 端点、tracing span 与结构化日志 (#151) ([34bbec3](https://github.com/yansongda/application/commit/34bbec3))
+
+### Changed
+
+- refactor(application-rs): 错误码体系重构，使用 `ErrorCode` 替代原 `Error` 枚举 (#151) ([34bbec3](https://github.com/yansongda/application/commit/34bbec3))
+- refactor(application-rs): 升级 Salvo 至 0.95，并同步升级依赖版本 (#151) ([34bbec3](https://github.com/yansongda/application/commit/34bbec3))
+- refactor(application-rs): 日志初始化与配置结构对齐 `bin_api.debug` 配置 (#151) ([34bbec3](https://github.com/yansongda/application/commit/34bbec3))
+
 ## [1.18.1] - 2026-06-28
 
 ### Fixed

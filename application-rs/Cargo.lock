@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "application-api"
-version = "1.18.1"
+version = "1.19.0"
 dependencies = [
  "application-database",
  "application-kernel",
@@ -106,7 +106,7 @@ dependencies = [
 
 [[package]]
 name = "application-database"
-version = "1.18.1"
+version = "1.19.0"
 dependencies = [
  "application-kernel",
  "application-util",
@@ -120,7 +120,7 @@ dependencies = [
 
 [[package]]
 name = "application-kernel"
-version = "1.18.1"
+version = "1.19.0"
 dependencies = [
  "chrono",
  "config",
@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "application-util"
-version = "1.18.1"
+version = "1.19.0"
 dependencies = [
  "application-kernel",
  "reqwest",
