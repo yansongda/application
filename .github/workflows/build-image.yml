@@ -53,9 +53,9 @@ jobs:
           docker build -t app -f Dockerfile-application-api .
       - name: Save the docker image
         run: |
-          docker save app | gzip > app.tar.gz
+          docker save app | gzip > ../app.tar.gz
       - name: Upload the docker image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: docker-image
           path: app.tar.gz
@@ -73,7 +73,7 @@ jobs:
         registry: [aliyun, dockerhub, github]
     steps:
       - name: Download the docker image
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: docker-image
       - name: Load the docker image
