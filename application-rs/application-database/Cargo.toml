@@ -5,6 +5,9 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 application-kernel = { path = "../application-kernel" }
 application-util = { path = "../application-util" }

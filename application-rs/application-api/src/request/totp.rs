@@ -41,10 +41,10 @@ impl TryFrom<Totp> for DetailResponse {
             id: totp.id.to_string(),
             issuer: totp
                 .issuer
-                .to_owned()
+                .clone()
                 .unwrap_or_else(|| "未知发行方".to_string()),
-            username: totp.username.to_owned(),
-            config: totp.config.deref().to_owned().into(),
+            username: totp.username.clone(),
+            config: totp.config.deref().clone().into(),
             code: totp.generate_code()?,
         })
     }
@@ -111,7 +111,7 @@ impl Validator for EditIssuerRequest {
 
         Ok(Self::Data {
             id,
-            issuer: self.issuer.to_owned().unwrap_or_default(),
+            issuer: self.issuer.clone().unwrap_or_default(),
         })
     }
 }

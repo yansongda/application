@@ -20,12 +20,15 @@ pub async fn tracing_id(
     ctrl: &mut FlowCtrl,
 ) {
     let id = Ulid::generate().to_string();
-    request
-        .headers_mut()
-        .insert("x-request-id", id.parse().unwrap());
-    response
-        .headers_mut()
-        .insert("x-request-id", id.parse().unwrap());
+    let request_id = id
+        .parse()
+        .unwrap_or_else(|_| salvo::http::HeaderValue::from_static("unknown"));
+    request.headers_mut().insert("x-request-id", request_id);
+    response.headers_mut().insert(
+        "x-request-id",
+        id.parse()
+            .unwrap_or_else(|_| salvo::http::HeaderValue::from_static("unknown")),
+    );
 
     let span = tracing::info_span!("http.request", request_id = %id);
     application_kernel::logger::TracingId::attach(&span, &id);
@@ -50,12 +53,11 @@ pub async fn authorization(
         }};
     }
 
-    let auth = match request.headers().get(AUTHORIZATION) {
-        Some(h) => match h.to_str() {
-            Ok(a) => a,
-            Err(_) => abort!(ErrorCode::AuthorizationInvalidFormat),
-        },
-        None => abort!(ErrorCode::AuthorizationHeaderMissing),
+    let Some(header) = request.headers().get(AUTHORIZATION) else {
+        abort!(ErrorCode::AuthorizationHeaderMissing)
+    };
+    let Ok(auth) = header.to_str() else {
+        abort!(ErrorCode::AuthorizationInvalidFormat)
     };
 
     let token = auth.strip_prefix("Bearer ").unwrap_or(auth);

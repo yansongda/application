@@ -36,7 +36,7 @@ impl Validator for LoginRequest {
             return Ok(LoginRequestParams {
                 platform,
                 third_id: third_id.to_owned(),
-                code: code.to_string(),
+                code: code.clone(),
             });
         }
 
@@ -84,7 +84,7 @@ impl Validator for LoginRefreshRequest {
             return Ok(LoginRefreshRequestParams {
                 platform,
                 third_id: third_id.to_owned(),
-                refresh_token: refresh_token.to_string(),
+                refresh_token: refresh_token.clone(),
             });
         }
 

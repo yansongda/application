@@ -198,6 +198,8 @@ pub async fn update(mut access_token: AccessToken, data: AccessTokenData) -> Res
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::all)]
+
     use super::*;
     use chrono::Duration;
 

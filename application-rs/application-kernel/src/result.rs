@@ -67,12 +67,14 @@ impl ErrorCode {
         match self {
             Self::Success => "success",
             Self::AuthorizationHeaderMissing => "认证失败: 缺少认证信息,请重新登录",
-            Self::AuthorizationAccessTokenInvalid => "认证失败: 认证信息不正确,请重新登录",
+            Self::AuthorizationAccessTokenInvalid | Self::AuthorizationRefreshTokenInvalid => {
+                "认证失败: 认证信息不正确,请重新登录"
+            }
             Self::AuthorizationInvalidFormat => "认证失败: 认证信息格式不正确,请重新登录",
             Self::AuthorizationPermissionUngranted => "认证失败: 未授权,请勿越权使用",
-            Self::AuthorizationAccessTokenExpired => "认证失败: 认证信息已过期,请重新登录",
-            Self::AuthorizationRefreshTokenInvalid => "认证失败: 认证信息不正确,请重新登录",
-            Self::AuthorizationRefreshTokenExpired => "认证失败: 认证信息已过期,请重新登录",
+            Self::AuthorizationAccessTokenExpired | Self::AuthorizationRefreshTokenExpired => {
+                "认证失败: 认证信息已过期,请重新登录"
+            }
             Self::ParamsJsonInvalid => "参数错误: Json 解析失败,请确认您的参数是否符合规范",
             Self::ParamsLoginPlatformUnsupported => "参数错误: platform 参数值不支持",
             Self::ParamsLoginCodeFormatInvalid => "参数错误: 登录秘钥格式错误",
@@ -94,8 +96,7 @@ impl ErrorCode {
             Self::ParamsShortlinkFormatInvalid => "参数错误: URL 格式不正确",
             Self::ParamsUserSloganLengthInvalid => "参数错误: Slogan 长度应大于 3,请正确填写",
             Self::ParamsUserAvatarLengthInvalid => "参数错误: 头像格式不正确,请正确填写",
-            Self::ParamsThirdConfigNotFound => "参数错误: 您访问的平台暂不支持,请重试或联系管理员",
-            Self::ParamsLoginPlatformThirdIdFormatInvalid => {
+            Self::ParamsThirdConfigNotFound | Self::ParamsLoginPlatformThirdIdFormatInvalid => {
                 "参数错误: 您访问的平台暂不支持,请重试或联系管理员"
             }
             Self::ParamsRefreshTokenNotFound => "参数错误: Refresh Token 未找到",
@@ -134,6 +135,8 @@ impl std::error::Error for ErrorCode {}
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::all)]
+
     use super::*;
 
     #[test]

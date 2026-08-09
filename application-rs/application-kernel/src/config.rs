@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 pub static G_CONFIG: LazyLock<Config> = LazyLock::new(|| {
+    #[allow(clippy::expect_used)]
     let config = C::builder()
         .add_source(File::with_name("./config.toml").required(false))
         .add_source(
@@ -16,6 +17,7 @@ pub static G_CONFIG: LazyLock<Config> = LazyLock::new(|| {
         .build()
         .expect("加载配置失败");
 
+    #[allow(clippy::expect_used)]
     config.try_deserialize::<Config>().expect("解析配置失败")
 });
 
@@ -114,11 +116,11 @@ impl Default for AccessToken {
 
 impl AccessToken {
     pub fn get_expired_at(&self) -> DateTime<Local> {
-        Local::now() + chrono::Duration::seconds(self.expired_in as i64)
+        Local::now() + chrono::Duration::seconds(i64::from(self.expired_in))
     }
 
     pub fn get_refresh_expired_at(&self) -> DateTime<Local> {
-        Local::now() + chrono::Duration::seconds(self.refresh_expired_in as i64)
+        Local::now() + chrono::Duration::seconds(i64::from(self.refresh_expired_in))
     }
 }
 

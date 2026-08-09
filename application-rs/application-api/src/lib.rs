@@ -10,22 +10,27 @@ use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
 
-mod middleware;
-mod request;
-mod response;
-mod routes;
-mod service;
-mod v1;
+pub mod middleware;
+pub mod request;
+pub mod response;
+pub mod routes;
+pub mod service;
+pub mod v1;
 
 pub struct App;
 
 impl App {
+    /// # Panics
+    ///
+    /// 当 `G_CONFIG.bin_api.listen` 不是合法的 IP 地址时 panic。此为启动期配置错误，
+    /// 预期 fail-fast。
     pub fn listen() -> SocketAddr {
         let api_config = &G_CONFIG.bin_api;
 
         let listen = api_config.listen.as_str();
         let port = api_config.port;
 
+        #[allow(clippy::expect_used)]
         SocketAddr::from((
             IpAddr::from_str(listen).expect("API 监听地址格式无效"),
             port,
