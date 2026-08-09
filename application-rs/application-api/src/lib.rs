@@ -1,12 +1,14 @@
-use crate::middleware::request_logger;
+use crate::middleware::{catcher, request_logger, tracing_id};
 use application_kernel::config::G_CONFIG;
 use salvo::catcher::Catcher;
+use salvo::compression::{Compression, CompressionLevel};
 use salvo::cors::{AllowOrigin, Cors};
 use salvo::http::Method;
-use salvo::prelude::RequestId;
+use salvo::timeout::Timeout;
 use salvo::{Router, Service};
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
+use std::time::Duration;
 
 mod middleware;
 mod request;
@@ -19,7 +21,7 @@ pub struct App;
 
 impl App {
     pub fn listen() -> SocketAddr {
-        let api_config = G_CONFIG.bin.get("api").expect("配置中缺少 'api' 配置项");
+        let api_config = &G_CONFIG.bin_api;
 
         let listen = api_config.listen.as_str();
         let port = api_config.port;
@@ -31,11 +33,13 @@ impl App {
     }
 
     pub fn router() -> Service {
-        let router = Router::new().push(routes::health()).push(routes::api_v1());
+        let router = Router::new()
+            .push(routes::health())
+            .push(routes::metrics())
+            .push(routes::api_v1());
 
         Service::new(router)
-            .hoop(RequestId::new())
-            .hoop(request_logger)
+            .hoop(tracing_id)
             .hoop(
                 Cors::new()
                     .allow_origin(AllowOrigin::any())
@@ -43,6 +47,10 @@ impl App {
                     .allow_headers("authorization")
                     .into_handler(),
             )
-            .catcher(Catcher::default().hoop(routes::catcher))
+            .hoop(Timeout::new(Duration::from_secs(10)))
+            .hoop(Compression::new().enable_brotli(CompressionLevel::Fastest))
+            .hoop(request_logger)
+            .hoop(salvo::catch_panic::CatchPanic::new())
+            .catcher(Catcher::default().hoop(catcher))
     }
 }

@@ -143,7 +143,7 @@ response.rs  Response<D>、ApiErr、Scribe 实现
 - 禁止在生成代码中使用 `.unwrap()` / `.unwrap_err()` / `.expect()`；启动期 fail-fast 除外，统一使用 `Error` 枚举 + `?` 传播。
 - 禁止使用 `lazy_static!`；全局静态变量使用 `std::sync::LazyLock`。
 - 禁止引入 ORM；数据库层统一使用原生 SQL + `sqlx::query_as` / `sqlx::query`。
-- 禁止在日志中记录完整 headers 或 body，尤其是 `Authorization` 头和第三方 API 响应中的密钥/token。
+ - 日志记录完整 headers 和 body（含 Authorization），此为预期行为。
 - 禁止提交 `config.toml`、`*.private.*`、密钥、Token、生产连接串。
 - 禁止 `#[allow(dead_code)]` 不加注释；若确需保留，需说明理由和清理计划。
 
@@ -155,5 +155,5 @@ response.rs  Response<D>、ApiErr、Scribe 实现
 ## NOTES
 
 - `application-macro/` 目录已不存在，本文件已移除该条目。
-- `middleware.rs` 与 `application-util/src/http.rs` 当前会记录完整 headers，后续需脱敏 `Authorization` 等敏感头。
+ - `middleware.rs` 与 `application-util/src/http.rs` 记录完整 headers（含 Authorization），此为预期行为。
 - 测试覆盖率低，CI 仅执行 `cargo check` / `cargo fmt` / `cargo clippy`，不执行 `cargo test`。

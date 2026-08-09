@@ -3,7 +3,7 @@ use crate::request::totp::{
 };
 use application_database::account::access_token;
 use application_database::tool::totp;
-use application_kernel::result::{Error, Result};
+use application_kernel::result::{ErrorCode, Result};
 use std::collections::BTreeSet;
 use totp_rs::{Secret, TOTP};
 use tracing::error;
@@ -23,7 +23,7 @@ pub async fn sort(
     let item_ids: BTreeSet<u64> = items.iter().map(|i| i.id).collect();
 
     if owned_ids.len() != items.len() || item_ids.len() != items.len() || owned_ids != item_ids {
-        return Err(Error::AuthorizationPermissionUngranted(None));
+        return Err(ErrorCode::AuthorizationPermissionUngranted);
     }
 
     let db_items = items
@@ -52,7 +52,7 @@ pub async fn create(
     let totp = TOTP::from_url_unchecked(uri.as_str()).map_err(|e| {
         error!("TOTP 链接解析失败: {}", e);
 
-        Error::ParamsTotpParseFailed(None)
+        ErrorCode::ParamsTotpParseFailed
     })?;
 
     totp::insert(totp::CreatedTotp {

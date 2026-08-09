@@ -4,7 +4,7 @@ use url::Url;
 use crate::request::Validator;
 use application_database::tool::short_url::ShortUrl;
 use application_kernel::config::G_CONFIG;
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateRequest {
@@ -15,9 +15,9 @@ impl Validator for CreateRequest {
     type Data = String;
 
     fn validate(&self) -> application_kernel::result::Result<Self::Data> {
-        let url = self.url.as_ref().ok_or(Error::ParamsShortlinkEmpty(None))?;
+        let url = self.url.as_ref().ok_or(ErrorCode::ParamsShortlinkEmpty)?;
 
-        Url::parse(url).map_err(|_| Error::ParamsShortlinkFormatInvalid(None))?;
+        Url::parse(url).map_err(|_| ErrorCode::ParamsShortlinkFormatInvalid)?;
 
         Ok(url.to_owned())
     }
@@ -47,10 +47,7 @@ impl Validator for DetailRequest {
     type Data = String;
 
     fn validate(&self) -> application_kernel::result::Result<Self::Data> {
-        let short = self
-            .short
-            .as_ref()
-            .ok_or(Error::ParamsShortlinkEmpty(None))?;
+        let short = self.short.as_ref().ok_or(ErrorCode::ParamsShortlinkEmpty)?;
 
         Ok(short.to_owned())
     }

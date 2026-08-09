@@ -2,7 +2,7 @@ use reqwest::{Method, Request, Url};
 use tracing::error;
 
 use crate::http;
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 use application_kernel::result::Result;
 use serde::{Deserialize, Deserializer, de};
 use serde_json::Value;
@@ -76,7 +76,7 @@ pub async fn login(code: &str, app_id: &str, app_secret: &str) -> Result<LoginRe
     let url = Url::parse_with_params("https://api.weixin.qq.com/sns/jscode2session", query)
         .map_err(|e| {
             error!("URL 解析失败: {:?}", e);
-            Error::ThirdHttpRequest(Some("URL 格式无效".to_string()))
+            ErrorCode::ThirdHttpRequest
         })?;
 
     http::request::<LoginResponse>(Request::new(Method::GET, url))

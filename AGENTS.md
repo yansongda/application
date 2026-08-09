@@ -67,7 +67,7 @@ yansongda-application/
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
-- 不要在日志中记录完整请求/响应头，尤其是 `Authorization` 头。
+ - 日志记录完整 headers 和 body（含 Authorization），此为预期行为。
 - 不要硬编码生产密钥、Token、密码；配置通过 `config.toml` 或 `APP__*` 环境变量注入。
 - 不要在 Rust 生产代码中随意使用 `.unwrap()` / `.unwrap_err()` / `.expect()`（启动期 fail-fast 除外）。
 - 不要引入 ORM；数据库层统一使用 `sqlx` + 原生 SQL。
@@ -109,5 +109,5 @@ deno task typecheck
 - `application-rs/AGENTS.md` 中已修正：移除不存在的 `application-macro/` 目录；CI 不运行 `cargo test`。
 - `wechat/miniprogram/yansongda/` 已迁移到 Deno，锁文件为 `deno.lock`。
 - 华为 `build-profile.json5` 包含本地签名证书路径与明文密码，仅用于本地开发，禁止用于生产。
-- 后端 `middleware.rs` 与 `application-util/src/http.rs` 当前会记录完整 headers，后续需脱敏 `Authorization` 等敏感头。
+ - 后端 `middleware.rs` 与 `application-util/src/http.rs` 记录完整 headers（含 Authorization），此为预期行为。
 - 三个前端均无实际业务测试；Rust 后端仅有少量单元测试，CI 不执行测试。

@@ -1,11 +1,11 @@
 use application_database::account::access_token;
 use application_database::account::user;
 use application_database::tool::totp;
-use application_kernel::result::{Error, Result};
+use application_kernel::result::{ErrorCode, Result};
 
 pub async fn detail(id: u64) -> Result<user::User> {
     if id == 0 {
-        return Err(Error::ParamsUserNotFound(None));
+        return Err(ErrorCode::ParamsUserNotFound);
     }
 
     user::fetch(id).await

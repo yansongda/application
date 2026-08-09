@@ -1,5 +1,5 @@
 use application_kernel::config::{Database, G_CONFIG};
-use application_kernel::result::{Error, Result};
+use application_kernel::result::{ErrorCode, Result};
 use sqlx::MySqlPool;
 use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
 use std::collections::HashMap;
@@ -12,6 +12,14 @@ mod macros;
 
 pub mod account;
 pub mod tool;
+
+/// 携带名称的数据库连接池引用。
+///
+/// 由 [`Pool::mysql`] 返回，供 SQL 宏内部解构后获取 pool 名称用于指标 label。
+pub struct PoolRef<'a> {
+    pub name: &'a str,
+    pub pool: &'a MySqlPool,
+}
 
 pub struct Pool;
 
@@ -30,11 +38,16 @@ static G_POOL_MYSQL: LazyLock<HashMap<&'static str, MySqlPool>> = LazyLock::new(
 });
 
 impl Pool {
-    pub fn mysql(pool: &str) -> Result<&MySqlPool> {
-        G_POOL_MYSQL.get(pool).ok_or_else(|| {
+    pub fn mysql(pool: &str) -> Result<PoolRef<'_>> {
+        let p = G_POOL_MYSQL.get(pool).ok_or_else(|| {
             error!("获取数据库连接失败: {}", pool);
 
-            Error::InternalDatabaseAcquire(None)
+            ErrorCode::InternalDatabaseAcquire
+        })?;
+
+        Ok(PoolRef {
+            name: pool,
+            pool: p,
         })
     }
 
