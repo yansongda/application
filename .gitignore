@@ -2,3 +2,6 @@
 .worktree/
 .worktrees/
 .omo/
+application-rs/docs/implementation/
+application-rs/docs/evidence/
+application-rs/docs/learning/
