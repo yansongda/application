@@ -5,6 +5,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use tracing::{error, warn};
 
+const JSCODE2SESSION_URL: &str = "https://api.weixin.qq.com/sns/jscode2session";
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct LoginResponse {
     pub session_key: String,
@@ -36,11 +38,10 @@ pub async fn login(code: &str, app_id: &str, app_secret: &str) -> Result<LoginRe
         ("grant_type", "authorization_code"),
     ];
 
-    let url = Url::parse_with_params("https://api.weixin.qq.com/sns/jscode2session", query)
-        .map_err(|e| {
-            error!("URL 解析失败: {:?}", e);
-            ErrorCode::ThirdHttpRequest
-        })?;
+    let url = Url::parse_with_params(JSCODE2SESSION_URL, query).map_err(|e| {
+        error!("URL 解析失败: {:?}", e);
+        ErrorCode::ThirdHttpRequest
+    })?;
 
     let req = http::get(url.as_str()).build().map_err(|e| {
         error!("请求构建失败: {:?}", e);

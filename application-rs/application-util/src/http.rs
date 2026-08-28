@@ -41,15 +41,17 @@ pub struct HttpResponse<S, E> {
     pub inner: ResponseVariant<S, E>,
 }
 
+const USER_AGENT: &str = "yansongda/application-rs";
+
 static G_CLIENT: LazyLock<Client> = LazyLock::new(|| {
     #[allow(clippy::expect_used)]
     Client::builder()
-        .user_agent("yansongda/application-rs")
+        .user_agent(USER_AGENT)
         .connect_timeout(Duration::from_secs(G_CONFIG.http.connect_timeout_secs))
         .timeout(Duration::from_secs(G_CONFIG.http.timeout_secs))
-        .pool_idle_timeout(Duration::from_secs(30))
-        .pool_max_idle_per_host(8)
-        .tcp_keepalive(Duration::from_mins(1))
+        .pool_idle_timeout(Duration::from_secs(G_CONFIG.http.pool_idle_timeout_secs))
+        .pool_max_idle_per_host(G_CONFIG.http.pool_max_idle_per_host)
+        .tcp_keepalive(Duration::from_secs(G_CONFIG.http.tcp_keepalive_secs))
         .tcp_nodelay(true)
         .build()
         .expect("HTTP 客户端初始化失败")
@@ -120,7 +122,7 @@ where
         OUTBOUND_HTTP_RESULT_BUSINESS_ERROR
     };
 
-    tracing::info!(
+    info!(
         event = OUTBOUND_HTTP_REQUEST,
         url = %url,
         result = result,
@@ -199,7 +201,7 @@ fn record_http_error<E: std::fmt::Debug>(
 ) -> ErrorCode {
     warn!("{context} {:?}", e);
 
-    tracing::info!(
+    info!(
         event = OUTBOUND_HTTP_REQUEST,
         url = url,
         result = label,

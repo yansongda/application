@@ -4,6 +4,9 @@ use serde::Deserialize;
 use serde_json::Value;
 use tracing::{error, warn};
 
+const OAUTH_TOKEN_URL: &str = "https://oauth-login.cloud.huawei.com/oauth2/v3/token";
+const TOKEN_INFO_URL: &str = "https://oauth-api.cloud.huawei.com/rest.php?nsp_fmt=JSON&nsp_svc=huawei.oauth2.user.getTokenInfo";
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct TokenResponse {
     pub token_type: String,
@@ -38,7 +41,7 @@ pub async fn token(code: &str, app_id: &str, client_secret: &str) -> Result<Toke
         ("code", code),
     ];
 
-    let req = http::post("https://oauth-login.cloud.huawei.com/oauth2/v3/token")
+    let req = http::post(OAUTH_TOKEN_URL)
         .form(&form)
         .build()
         .map_err(|e| {
@@ -64,6 +67,8 @@ pub async fn token(code: &str, app_id: &str, client_secret: &str) -> Result<Toke
 #[derive(Debug, Clone, Deserialize)]
 pub struct TokenInfoResponse {
     pub client_id: String,
+    /// 华为 getTokenInfo API 返回字段本身即拼写为 `expire_in`，
+    /// 与 OAuth token 接口的 `expires_in` 不同，勿"顺手"修正。
     pub expire_in: i64,
     pub union_id: String,
     pub project_id: String,
@@ -89,15 +94,13 @@ impl ResponseEnvelope for TokenInfoResponse {
 pub async fn token_info(access_token: &str) -> Result<TokenInfoResponse> {
     let form = [("access_token", access_token)];
 
-    let req = http::post(
-        "https://oauth-api.cloud.huawei.com/rest.php?nsp_fmt=JSON&nsp_svc=huawei.oauth2.user.getTokenInfo",
-    )
-    .form(&form)
-    .build()
-    .map_err(|e| {
-        error!("请求构建失败: {:?}", e);
-        ErrorCode::ThirdHttpRequest
-    })?;
+    let req = http::post(TOKEN_INFO_URL)
+        .form(&form)
+        .build()
+        .map_err(|e| {
+            error!("请求构建失败: {:?}", e);
+            ErrorCode::ThirdHttpRequest
+        })?;
 
     let response = http::request::<TokenInfoResponse>(req).await?;
 
