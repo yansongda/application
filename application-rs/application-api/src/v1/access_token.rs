@@ -37,6 +37,6 @@ pub async fn login_refresh(request: &mut Request) -> Resp<LoginRefreshResponse> 
 }
 
 #[handler]
-pub async fn valid() -> Resp<()> {
-    Ok(Response::success(()))
+pub fn valid() -> Response<()> {
+    Response::success(())
 }
