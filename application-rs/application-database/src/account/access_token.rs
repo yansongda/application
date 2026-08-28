@@ -3,7 +3,6 @@ use crate::account::Platform;
 use crate::{insert, query_optional, update};
 use application_kernel::config::G_CONFIG;
 use application_kernel::result::{ErrorCode, Result};
-use application_util::wechat::LoginResponse;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -52,24 +51,6 @@ pub struct AccessTokenData {
 pub struct WechatAccessTokenData {
     pub open_id: String,
     pub union_id: Option<String>,
-}
-
-impl From<LoginResponse> for WechatAccessTokenData {
-    fn from(response: LoginResponse) -> Self {
-        WechatAccessTokenData {
-            open_id: response.openid,
-            union_id: response.unionid,
-        }
-    }
-}
-
-impl From<LoginResponse> for AccessTokenData {
-    fn from(response: LoginResponse) -> Self {
-        AccessTokenData {
-            wechat: Some(WechatAccessTokenData::from(response)),
-            huawei: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

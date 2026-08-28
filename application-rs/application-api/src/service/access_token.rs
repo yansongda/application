@@ -84,7 +84,13 @@ async fn login_wechat(
 
     Ok((
         user_id,
-        access_token::AccessTokenData::from(wechat_response),
+        access_token::AccessTokenData {
+            wechat: Some(access_token::WechatAccessTokenData {
+                open_id: wechat_response.openid,
+                union_id: wechat_response.unionid,
+            }),
+            huawei: None,
+        },
     ))
 }
 

@@ -109,7 +109,6 @@ name = "application-database"
 version = "1.19.0"
 dependencies = [
  "application-kernel",
- "application-util",
  "chrono",
  "serde",
  "sqlx",
