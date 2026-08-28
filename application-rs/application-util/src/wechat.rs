@@ -1,4 +1,4 @@
-use crate::http::{self, ResponseEnvelope, ResponseVariant};
+use crate::http::{self, Body};
 use application_kernel::result::{ErrorCode, Result};
 use reqwest::Url;
 use serde::Deserialize;
@@ -20,7 +20,7 @@ pub struct LoginResponseError {
     pub errcode: i32,
 }
 
-impl ResponseEnvelope for LoginResponse {
+impl Body for LoginResponse {
     type Error = LoginResponseError;
 
     fn is_success(body: &Value) -> bool {
@@ -50,9 +50,9 @@ pub async fn login(code: &str, app_id: &str, app_secret: &str) -> Result<LoginRe
 
     let response = http::request::<LoginResponse>(req).await?;
 
-    match response.inner {
-        ResponseVariant::Success(success) => Ok(success),
-        ResponseVariant::Error(error) => {
+    match response.body {
+        Ok(success) => Ok(success),
+        Err(error) => {
             warn!(
                 errcode = error.errcode,
                 errmsg = %error.errmsg,

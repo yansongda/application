@@ -1,4 +1,4 @@
-use crate::http::{self, ResponseEnvelope, ResponseVariant};
+use crate::http::{self, Body};
 use application_kernel::result::{ErrorCode, Result};
 use serde::Deserialize;
 use serde_json::Value;
@@ -23,7 +23,7 @@ pub struct TokenResponseError {
     pub error_description: Option<String>,
 }
 
-impl ResponseEnvelope for TokenResponse {
+impl Body for TokenResponse {
     type Error = TokenResponseError;
 
     fn is_success(body: &Value) -> bool {
@@ -51,9 +51,9 @@ pub async fn token(code: &str, app_id: &str, client_secret: &str) -> Result<Toke
 
     let response = http::request::<TokenResponse>(req).await?;
 
-    match response.inner {
-        ResponseVariant::Success(success) => Ok(success),
-        ResponseVariant::Error(error) => {
+    match response.body {
+        Ok(success) => Ok(success),
+        Err(error) => {
             warn!(
                 error = error.error,
                 error_description = ?error.error_description,
@@ -81,7 +81,7 @@ pub struct TokenInfoResponseError {
     pub error: String,
 }
 
-impl ResponseEnvelope for TokenInfoResponse {
+impl Body for TokenInfoResponse {
     type Error = TokenInfoResponseError;
 
     fn is_success(body: &Value) -> bool {
@@ -104,9 +104,9 @@ pub async fn token_info(access_token: &str) -> Result<TokenInfoResponse> {
 
     let response = http::request::<TokenInfoResponse>(req).await?;
 
-    match response.inner {
-        ResponseVariant::Success(success) => Ok(success),
-        ResponseVariant::Error(error) => {
+    match response.body {
+        Ok(success) => Ok(success),
+        Err(error) => {
             warn!(error = %error.error, "华为 getTokenInfo 业务错误");
             Err(ErrorCode::ThirdHttpResponseResult)
         }

@@ -14,11 +14,11 @@ use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
-/// provider 响应类型自声明的封套判别规则。
+/// 第三方响应体：成功载荷自声明的封套判别规则。
 ///
 /// `is_success` 仅在 HTTP 状态码为 2xx 时被咨询；判别依据是响应体 JSON 的字段约定，
-/// 各上游（微信 errcode / 华为 error）约定不同，故由 provider 自行实现。
-pub trait ResponseEnvelope: std::fmt::Debug + DeserializeOwned {
+/// 各上游（微信 errcode / 华为 error）约定不同，故由响应类型自行实现。
+pub trait Body: std::fmt::Debug + DeserializeOwned {
     /// 业务失败时响应体的类型。
     type Error: std::fmt::Debug + DeserializeOwned;
 
@@ -26,19 +26,15 @@ pub trait ResponseEnvelope: std::fmt::Debug + DeserializeOwned {
     fn is_success(body: &Value) -> bool;
 }
 
-/// 判别后的响应变体：业务成功 / 业务失败。
+/// 第三方 HTTP 响应，携带状态码、耗时与判别后的业务结果。
+///
+/// 外层 `request` 返回 kernel `Result`，传输层错误已归一化为 9800~9805；
+/// `body` 为判别后的业务结果，成功载荷即响应类型本身，失败载荷为 `Body::Error`。
 #[derive(Debug)]
-pub enum ResponseVariant<S, E> {
-    Success(S),
-    Error(E),
-}
-
-/// HTTP 响应包装，携带状态码、耗时与判别后的业务变体。
-#[derive(Debug)]
-pub struct HttpResponse<S, E> {
+pub struct Response<T: Body> {
     pub status: u16,
     pub duration: Duration,
-    pub inner: ResponseVariant<S, E>,
+    pub body: std::result::Result<T, T::Error>,
 }
 
 const USER_AGENT: &str = "yansongda/application-rs";
@@ -65,10 +61,7 @@ pub fn post(url: &str) -> RequestBuilder {
     G_CLIENT.post(url)
 }
 
-pub async fn request<T>(req: Request) -> Result<HttpResponse<T, T::Error>>
-where
-    T: ResponseEnvelope,
-{
+pub async fn request<T: Body>(req: Request) -> Result<Response<T>> {
     let url = normalize_url(req.url().as_str());
 
     info!("请求第三方服务接口 {:?}", req);
@@ -89,7 +82,7 @@ where
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
         .collect::<Vec<(String, String)>>();
 
-    let body = response
+    let raw_body = response
         .text()
         .await
         .map_err(|e| classify_body_error(&e, "接收第三方服务接口响应失败", &url, started_at))?;
@@ -99,24 +92,20 @@ where
         duration,
         status.as_u16(),
         &headers,
-        &body
+        &raw_body
     );
 
     let value =
-        serde_json::from_str::<Value>(&body).map_err(|e| parse_error(&e, &url, started_at))?;
+        serde_json::from_str::<Value>(&raw_body).map_err(|e| parse_error(&e, &url, started_at))?;
 
-    let inner = if status.is_success() && T::is_success(&value) {
-        ResponseVariant::Success(
-            serde_json::from_value::<T>(value).map_err(|e| parse_error(&e, &url, started_at))?,
-        )
+    let body = if status.is_success() && T::is_success(&value) {
+        Ok(serde_json::from_value::<T>(value).map_err(|e| parse_error(&e, &url, started_at))?)
     } else {
-        ResponseVariant::Error(
-            serde_json::from_value::<T::Error>(value)
-                .map_err(|e| parse_error(&e, &url, started_at))?,
-        )
+        Err(serde_json::from_value::<T::Error>(value)
+            .map_err(|e| parse_error(&e, &url, started_at))?)
     };
 
-    let result = if matches!(inner, ResponseVariant::Success(_)) {
+    let result = if body.is_ok() {
         OUTBOUND_HTTP_RESULT_SUCCESS
     } else {
         OUTBOUND_HTTP_RESULT_BUSINESS_ERROR
@@ -129,10 +118,10 @@ where
         duration_seconds = duration.as_secs_f64()
     );
 
-    Ok(HttpResponse {
+    Ok(Response {
         status: status.as_u16(),
         duration,
-        inner,
+        body,
     })
 }
 

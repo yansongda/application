@@ -81,6 +81,8 @@ timeout-secs = 3
 
 ### 3.2 http.rs：封套判别核心
 
+> **2026-08-28 修订**：`ResponseVariant` 已删除，判别结果直接以 `std::result::Result<T, T::Error>` 表示（成功载荷即 `Self`，无需新增关联类型）；`ResponseEnvelope` / `HttpResponse` 分别更名为 `Body` / `Response`（结果字段名 `body`）。下文代码与图表保留历史原貌。
+
 ```rust
 /// provider 响应类型自声明的封套判别规则；is_success 仅在 HTTP 2xx 时被咨询
 pub trait ResponseEnvelope: Debug + DeserializeOwned {
