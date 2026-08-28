@@ -45,6 +45,8 @@ pub enum ErrorCode {
     ThirdHttpResponse = 9801,
     ThirdHttpResponseParse = 9802,
     ThirdHttpResponseResult = 9803,
+    ThirdHttpTimeout = 9804,
+    ThirdHttpConnect = 9805,
 
     // 9900 系列：内部/数据库错误
     InternalReadBodyFailed = 9900,
@@ -104,6 +106,8 @@ impl ErrorCode {
             Self::ThirdHttpResponse => "第三方错误: 第三方 API 响应出错,请联系管理员",
             Self::ThirdHttpResponseParse => "第三方错误: 第三方 API 响应解析出错,请联系管理员",
             Self::ThirdHttpResponseResult => "第三方错误: 第三方 API 业务结果出错,请联系管理员",
+            Self::ThirdHttpTimeout => "第三方错误: 第三方 API 请求超时,请联系管理员",
+            Self::ThirdHttpConnect => "第三方错误: 第三方 API 连接失败,请联系管理员",
             Self::InternalReadBodyFailed => "内部错误: 读取 Body 体失败,请联系管理员",
             Self::InternalDatabaseAcquire => "内部错误: 数据库连接出现了一些问题,请联系管理员",
             Self::InternalDatabaseQuery => "内部错误: 查询数据出现了一些问题,请联系管理员",
@@ -152,6 +156,8 @@ mod tests {
             (ErrorCode::AuthorizationAccessTokenInvalid, 1001),
             (ErrorCode::ParamsUserNotFound, 2005),
             (ErrorCode::ThirdHttpResponse, 9801),
+            (ErrorCode::ThirdHttpTimeout, 9804),
+            (ErrorCode::ThirdHttpConnect, 9805),
             (ErrorCode::InternalDatabaseDelete, 9905),
         ];
 
@@ -211,6 +217,22 @@ mod tests {
         for (err, expected) in cases {
             assert_eq!(err.code(), expected);
         }
+    }
+
+    /// 测试场景：第三方 HTTP 超时 -> 验证错误码与消息 -> 预期 9804 且含"超时"
+    #[test]
+    fn test_third_http_timeout_maps_to_9804() {
+        let err = ErrorCode::ThirdHttpTimeout;
+        assert_eq!(err.code(), 9804);
+        assert!(err.message().contains("超时"));
+    }
+
+    /// 测试场景：第三方 HTTP 连接失败 -> 验证错误码与消息 -> 预期 9805 且含"连接失败"
+    #[test]
+    fn test_third_http_connect_maps_to_9805() {
+        let err = ErrorCode::ThirdHttpConnect;
+        assert_eq!(err.code(), 9805);
+        assert!(err.message().contains("连接失败"));
     }
 
     #[test]

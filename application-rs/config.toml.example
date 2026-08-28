@@ -21,3 +21,8 @@ acquire-timeout = 3
 
 [short-url]
 domain = "https://u.ysdor.cn"
+
+[http]
+connect-timeout-secs = 1
+timeout-secs = 3
+

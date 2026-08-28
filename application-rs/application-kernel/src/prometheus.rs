@@ -40,6 +40,12 @@ pub const OUTBOUND_HTTP_RESULT_REQUEST_ERROR: &str = "request_error";
 /// `outbound_http_requests_total` 指标的 `result` label 取值：出站 HTTP 响应解析失败。
 pub const OUTBOUND_HTTP_RESULT_PARSE_ERROR: &str = "parse_error";
 
+/// `outbound_http_requests_total` 指标的 `result` label 取值：出站 HTTP 请求成功但业务结果失败。
+pub const OUTBOUND_HTTP_RESULT_BUSINESS_ERROR: &str = "business_error";
+
+/// `outbound_http_requests_total` 指标的 `result` label 取值：出站 HTTP 响应接收失败。
+pub const OUTBOUND_HTTP_RESULT_RESPONSE_ERROR: &str = "response_error";
+
 /// HTTP 请求总数。
 ///
 /// # 标签

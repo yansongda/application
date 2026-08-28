@@ -30,6 +30,7 @@ pub struct Config {
     pub databases: HashMap<String, Database>,
     pub short_url: ShortUrl,
     pub access_token: AccessToken,
+    pub http: Http,
 }
 
 impl Default for Config {
@@ -40,6 +41,7 @@ impl Default for Config {
             databases: HashMap::new(),
             short_url: ShortUrl::default(),
             access_token: AccessToken::default(),
+            http: Http::default(),
         }
     }
 }
@@ -121,6 +123,22 @@ impl AccessToken {
 
     pub fn get_refresh_expired_at(&self) -> DateTime<Local> {
         Local::now() + chrono::Duration::seconds(i64::from(self.refresh_expired_in))
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Http {
+    pub connect_timeout_secs: u64,
+    pub timeout_secs: u64,
+}
+
+impl Default for Http {
+    fn default() -> Self {
+        Self {
+            connect_timeout_secs: 1,
+            timeout_secs: 3,
+        }
     }
 }
 
@@ -253,6 +271,39 @@ mod tests {
         let toml = r#"
             [access-token]
             expired-in = 3600
+            extra_field = 1
+        "#;
+        let result = build_config_from_toml(toml);
+        assert!(result.is_err(), "含未声明字段应返回 ConfigError");
+    }
+
+    /// 测试场景：[http] 段提供完整值 -> 验证覆盖默认 -> 预期 2/5
+    #[test]
+    fn http_section_overrides_defaults() {
+        let toml = r#"
+            [http]
+            connect-timeout-secs = 2
+            timeout-secs = 5
+        "#;
+        let cfg = build_config_from_toml(toml).expect("反序列化应成功");
+        assert_eq!(cfg.http.connect_timeout_secs, 2);
+        assert_eq!(cfg.http.timeout_secs, 5);
+    }
+
+    /// 测试场景：缺 [http] 段 -> 验证默认值 -> 预期 1/3
+    #[test]
+    fn http_section_missing_uses_default() {
+        let cfg = build_config_from_toml("").expect("空 TOML 反序列化应成功");
+        assert_eq!(cfg.http.connect_timeout_secs, 1);
+        assert_eq!(cfg.http.timeout_secs, 3);
+    }
+
+    /// 测试场景：[http] 含未声明字段 -> deny_unknown_fields -> ConfigError
+    #[test]
+    fn http_extra_field_rejected() {
+        let toml = r#"
+            [http]
+            connect-timeout-secs = 1
             extra_field = 1
         "#;
         let result = build_config_from_toml(toml);
