@@ -1,28 +1,52 @@
+use application_kernel::config::G_CONFIG;
 use application_kernel::events::OUTBOUND_HTTP_REQUEST;
 use application_kernel::prometheus::{
-    OUTBOUND_HTTP_RESULT_CONNECT_ERROR, OUTBOUND_HTTP_RESULT_PARSE_ERROR,
-    OUTBOUND_HTTP_RESULT_REQUEST_ERROR, OUTBOUND_HTTP_RESULT_SUCCESS, OUTBOUND_HTTP_RESULT_TIMEOUT,
+    OUTBOUND_HTTP_RESULT_BUSINESS_ERROR, OUTBOUND_HTTP_RESULT_CONNECT_ERROR,
+    OUTBOUND_HTTP_RESULT_PARSE_ERROR, OUTBOUND_HTTP_RESULT_REQUEST_ERROR,
+    OUTBOUND_HTTP_RESULT_RESPONSE_ERROR, OUTBOUND_HTTP_RESULT_SUCCESS,
+    OUTBOUND_HTTP_RESULT_TIMEOUT,
 };
 use application_kernel::result::{ErrorCode, Result};
-use reqwest::{Client, Request};
-use serde::Deserialize;
+use reqwest::{Client, Request, RequestBuilder};
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 use std::sync::LazyLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
+/// provider 响应类型自声明的封套判别规则。
+///
+/// `is_success` 仅在 HTTP 状态码为 2xx 时被咨询；判别依据是响应体 JSON 的字段约定，
+/// 各上游（微信 errcode / 华为 error）约定不同，故由 provider 自行实现。
+pub trait ResponseEnvelope: std::fmt::Debug + DeserializeOwned {
+    /// 业务失败时响应体的类型。
+    type Error: std::fmt::Debug + DeserializeOwned;
+
+    /// 判别响应体是否为业务成功。
+    fn is_success(body: &Value) -> bool;
+}
+
+/// 判别后的响应变体：业务成功 / 业务失败。
 #[derive(Debug)]
-pub struct HttpResponse<T> {
+pub enum ResponseVariant<S, E> {
+    Success(S),
+    Error(E),
+}
+
+/// HTTP 响应包装，携带状态码、耗时与判别后的业务变体。
+#[derive(Debug)]
+pub struct HttpResponse<S, E> {
     pub status: u16,
     pub duration: Duration,
-    pub inner: T,
+    pub inner: ResponseVariant<S, E>,
 }
 
 static G_CLIENT: LazyLock<Client> = LazyLock::new(|| {
     #[allow(clippy::expect_used)]
     Client::builder()
         .user_agent("yansongda/application-rs")
-        .connect_timeout(Duration::from_secs(1))
-        .timeout(Duration::from_secs(3))
+        .connect_timeout(Duration::from_secs(G_CONFIG.http.connect_timeout_secs))
+        .timeout(Duration::from_secs(G_CONFIG.http.timeout_secs))
         .pool_idle_timeout(Duration::from_secs(30))
         .pool_max_idle_per_host(8)
         .tcp_keepalive(Duration::from_mins(1))
@@ -31,24 +55,32 @@ static G_CLIENT: LazyLock<Client> = LazyLock::new(|| {
         .expect("HTTP 客户端初始化失败")
 });
 
-pub async fn request<T>(req: Request) -> Result<HttpResponse<T>>
+pub fn get(url: &str) -> RequestBuilder {
+    G_CLIENT.get(url)
+}
+
+pub fn post(url: &str) -> RequestBuilder {
+    G_CLIENT.post(url)
+}
+
+pub async fn request<T>(req: Request) -> Result<HttpResponse<T, T::Error>>
 where
-    T: for<'de> Deserialize<'de>,
+    T: ResponseEnvelope,
 {
     let url = normalize_url(req.url().as_str());
 
     info!("请求第三方服务接口 {:?}", req);
 
-    let started_at = std::time::Instant::now();
+    let started_at = Instant::now();
 
     let response = G_CLIENT
         .execute(req)
         .await
-        .map_err(|e| classify_http_error(&e, "请求第三方服务接口失败", &url, started_at))?;
+        .map_err(|e| classify_execute_error(&e, "请求第三方服务接口失败", &url, started_at))?;
 
     let duration = started_at.elapsed();
 
-    let status = response.status().as_u16();
+    let status = response.status();
     let headers = response
         .headers()
         .iter()
@@ -58,49 +90,62 @@ where
     let body = response
         .text()
         .await
-        .map_err(|e| classify_http_error(&e, "接收第三方服务接口响应失败", &url, started_at))?;
+        .map_err(|e| classify_body_error(&e, "接收第三方服务接口响应失败", &url, started_at))?;
 
     info!(
         "请求第三方服务接口结果：duration: {:?}, status: {}, headers: {:?}, body: {:?}",
-        duration, status, &headers, &body
+        duration,
+        status.as_u16(),
+        &headers,
+        &body
     );
 
-    let inner = serde_json::from_str::<T>(&body).map_err(|e| {
-        record_http_error(
-            &e,
-            "响应解析失败",
-            &url,
-            started_at,
-            ErrorCode::ThirdHttpResponseParse,
-            OUTBOUND_HTTP_RESULT_PARSE_ERROR,
+    let value =
+        serde_json::from_str::<Value>(&body).map_err(|e| parse_error(&e, &url, started_at))?;
+
+    let inner = if status.is_success() && T::is_success(&value) {
+        ResponseVariant::Success(
+            serde_json::from_value::<T>(value).map_err(|e| parse_error(&e, &url, started_at))?,
         )
-    })?;
+    } else {
+        ResponseVariant::Error(
+            serde_json::from_value::<T::Error>(value)
+                .map_err(|e| parse_error(&e, &url, started_at))?,
+        )
+    };
+
+    let result = if matches!(inner, ResponseVariant::Success(_)) {
+        OUTBOUND_HTTP_RESULT_SUCCESS
+    } else {
+        OUTBOUND_HTTP_RESULT_BUSINESS_ERROR
+    };
 
     tracing::info!(
         event = OUTBOUND_HTTP_REQUEST,
         url = %url,
-        result = OUTBOUND_HTTP_RESULT_SUCCESS,
+        result = result,
         duration_seconds = duration.as_secs_f64()
     );
 
     Ok(HttpResponse {
-        status,
+        status: status.as_u16(),
         duration,
         inner,
     })
 }
 
-fn classify_http_error(
+/// 执行阶段错误分类：超时->9804，连接失败->9805，其他->9800。
+fn classify_execute_error(
     e: &reqwest::Error,
     context: &str,
     url: &str,
-    started_at: std::time::Instant,
+    started_at: Instant,
 ) -> ErrorCode {
     let (err, label) = if e.is_timeout() {
-        (ErrorCode::ThirdHttpRequest, OUTBOUND_HTTP_RESULT_TIMEOUT)
+        (ErrorCode::ThirdHttpTimeout, OUTBOUND_HTTP_RESULT_TIMEOUT)
     } else if e.is_connect() {
         (
-            ErrorCode::ThirdHttpRequest,
+            ErrorCode::ThirdHttpConnect,
             OUTBOUND_HTTP_RESULT_CONNECT_ERROR,
         )
     } else {
@@ -113,11 +158,42 @@ fn classify_http_error(
     record_http_error(e, context, url, started_at, err, label)
 }
 
+/// 响应体接收阶段错误分类：超时->9804，其他->9801。
+fn classify_body_error(
+    e: &reqwest::Error,
+    context: &str,
+    url: &str,
+    started_at: Instant,
+) -> ErrorCode {
+    let (err, label) = if e.is_timeout() {
+        (ErrorCode::ThirdHttpTimeout, OUTBOUND_HTTP_RESULT_TIMEOUT)
+    } else {
+        (
+            ErrorCode::ThirdHttpResponse,
+            OUTBOUND_HTTP_RESULT_RESPONSE_ERROR,
+        )
+    };
+
+    record_http_error(e, context, url, started_at, err, label)
+}
+
+/// JSON / S / E 反序列化失败统一归类 9802。
+fn parse_error(e: &serde_json::Error, url: &str, started_at: Instant) -> ErrorCode {
+    record_http_error(
+        e,
+        "响应解析失败",
+        url,
+        started_at,
+        ErrorCode::ThirdHttpResponseParse,
+        OUTBOUND_HTTP_RESULT_PARSE_ERROR,
+    )
+}
+
 fn record_http_error<E: std::fmt::Debug>(
     e: &E,
     context: &str,
     url: &str,
-    started_at: std::time::Instant,
+    started_at: Instant,
     err: ErrorCode,
     label: &'static str,
 ) -> ErrorCode {
