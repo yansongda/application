@@ -131,6 +131,9 @@ impl AccessToken {
 pub struct Http {
     pub connect_timeout_secs: u64,
     pub timeout_secs: u64,
+    pub pool_idle_timeout_secs: u64,
+    pub pool_max_idle_per_host: usize,
+    pub tcp_keepalive_secs: u64,
 }
 
 impl Default for Http {
@@ -138,6 +141,9 @@ impl Default for Http {
         Self {
             connect_timeout_secs: 1,
             timeout_secs: 3,
+            pool_idle_timeout_secs: 30,
+            pool_max_idle_per_host: 8,
+            tcp_keepalive_secs: 60,
         }
     }
 }
@@ -277,25 +283,34 @@ mod tests {
         assert!(result.is_err(), "含未声明字段应返回 ConfigError");
     }
 
-    /// 测试场景：[http] 段提供完整值 -> 验证覆盖默认 -> 预期 2/5
+    /// 测试场景：[http] 段提供完整值 -> 验证覆盖默认 -> 预期 2/5/60/16/120
     #[test]
     fn http_section_overrides_defaults() {
         let toml = r#"
             [http]
             connect-timeout-secs = 2
             timeout-secs = 5
+            pool-idle-timeout-secs = 60
+            pool-max-idle-per-host = 16
+            tcp-keepalive-secs = 120
         "#;
         let cfg = build_config_from_toml(toml).expect("反序列化应成功");
         assert_eq!(cfg.http.connect_timeout_secs, 2);
         assert_eq!(cfg.http.timeout_secs, 5);
+        assert_eq!(cfg.http.pool_idle_timeout_secs, 60);
+        assert_eq!(cfg.http.pool_max_idle_per_host, 16);
+        assert_eq!(cfg.http.tcp_keepalive_secs, 120);
     }
 
-    /// 测试场景：缺 [http] 段 -> 验证默认值 -> 预期 1/3
+    /// 测试场景：缺 [http] 段 -> 验证默认值 -> 预期 1/3/30/8/60
     #[test]
     fn http_section_missing_uses_default() {
         let cfg = build_config_from_toml("").expect("空 TOML 反序列化应成功");
         assert_eq!(cfg.http.connect_timeout_secs, 1);
         assert_eq!(cfg.http.timeout_secs, 3);
+        assert_eq!(cfg.http.pool_idle_timeout_secs, 30);
+        assert_eq!(cfg.http.pool_max_idle_per_host, 8);
+        assert_eq!(cfg.http.tcp_keepalive_secs, 60);
     }
 
     /// 测试场景：[http] 含未声明字段 -> deny_unknown_fields -> ConfigError

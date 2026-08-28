@@ -207,7 +207,7 @@ provider 细节（errcode/errmsg 值）从客户端 message 移入服务端日�
 - 不改 `application-api` / `application-database` 任何代码
 - 不新增依赖（`serde_path_to_error` 等调研中出现的可选项明确排除）
 - 不做 URL 配置化（维持常量，如需另行立项）
-- 不改连接池参数的可配置性（仅超时两项）
+- 不改连接池参数的可配置性（仅超时两项）——**2026-08-28 修订**：连接池 idle/max-idle/keepalive 三参数已按后续决策配置化，纳入 `[http]` 段
 
 ## 附录 B：调研来源
 
