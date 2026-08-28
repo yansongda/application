@@ -90,8 +90,8 @@ use tracing::{error, info};
 
 ### 错误处理
 
-自定义 `Error` 枚举位于 `application-kernel::result`，配合 `Result<D>` 类型别名。
-每个变体包装 `Option<String>`，用于可选的自定义错误消息。
+`ErrorCode` 枚举位于 `application-kernel::result`（实现 `Display` 与 `std::error::Error`），配合 `Result<D>` 类型别名（`Result<D, ErrorCode>`）。
+枚举为无负载变体，错误详情通过日志携带，不随错误值向上游传递。
 错误消息使用中文，错误码按类别分段：
 
 - 1000 系列：授权认证错误
@@ -99,7 +99,7 @@ use tracing::{error, info};
 - 9800 系列：第三方服务错误
 - 9900 系列：内部/数据库错误
 
-数据库错误标准模式：`error!()` 记录日志后映射为通用错误。服务层使用 `?` 提前返回或显式 `Err(Error::Variant(None))`。
+数据库错误标准模式：`error!()` 记录日志后映射为通用错误。服务层使用 `?` 提前返回或显式 `Err(ErrorCode::Variant)`。
 
 ## 架构分层（application-api）
 

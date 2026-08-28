@@ -6,7 +6,7 @@ use salvo::{Router, handler};
 
 pub fn health() -> Router {
     #[handler]
-    async fn success() -> &'static str {
+    fn success() -> &'static str {
         "success"
     }
 
@@ -15,7 +15,7 @@ pub fn health() -> Router {
 
 pub fn metrics() -> Router {
     #[handler]
-    async fn metrics() -> Text<String> {
+    fn metrics() -> Text<String> {
         Text::Plain(gather_metrics())
     }
 

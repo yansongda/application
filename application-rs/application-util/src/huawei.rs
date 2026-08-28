@@ -1,14 +1,13 @@
-use reqwest::{Client, Method, Request, RequestBuilder, Url};
-
-use crate::http;
-use application_kernel::result::ErrorCode;
-use application_kernel::result::Result;
-use serde::{Deserialize, Deserializer, de};
+use crate::http::{self, Body};
+use application_kernel::result::{ErrorCode, Result};
+use serde::Deserialize;
 use serde_json::Value;
-use tracing::error;
+use tracing::{error, warn};
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
+const OAUTH_TOKEN_URL: &str = "https://oauth-login.cloud.huawei.com/oauth2/v3/token";
+const TOKEN_INFO_URL: &str = "https://oauth-api.cloud.huawei.com/rest.php?nsp_fmt=JSON&nsp_svc=huawei.oauth2.user.getTokenInfo";
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct TokenResponse {
     pub token_type: String,
     pub access_token: String,
@@ -19,52 +18,19 @@ pub struct TokenResponse {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct RawTokenResponse {
-    pub token_type: String,
-    pub access_token: String,
-    pub scope: String,
-    pub expires_in: i64,
-    pub refresh_token: String,
-    pub id_token: String,
-}
-
-impl<'de> Deserialize<'de> for TokenResponse {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = Value::deserialize(deserializer)?;
-
-        // 检查 error 字段（数字类型）
-        if let Some(error) = value.get("error").and_then(serde_json::Value::as_i64)
-            && error != 0
-        {
-            let err: TokenResponseError =
-                serde_json::from_value(value).map_err(de::Error::custom)?;
-            return Err(de::Error::custom(format!(
-                "第三方错误: 华为 API 响应业务结果出错，请联系管理员: {}",
-                err.error_description
-            )));
-        }
-
-        serde_json::from_value::<RawTokenResponse>(value)
-            .map(|raw| TokenResponse {
-                token_type: raw.token_type,
-                access_token: raw.access_token,
-                scope: raw.scope,
-                expires_in: raw.expires_in,
-                refresh_token: raw.refresh_token,
-                id_token: raw.id_token,
-            })
-            .map_err(de::Error::custom)
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Deserialize)]
 pub struct TokenResponseError {
     pub error: i64,
-    pub error_description: String,
+    pub error_description: Option<String>,
+}
+
+impl Body for TokenResponse {
+    type Error = TokenResponseError;
+
+    fn is_success(body: &Value) -> bool {
+        body.get("error")
+            .and_then(Value::as_i64)
+            .is_none_or(|error| error == 0)
+    }
 }
 
 pub async fn token(code: &str, app_id: &str, client_secret: &str) -> Result<TokenResponse> {
@@ -75,39 +41,34 @@ pub async fn token(code: &str, app_id: &str, client_secret: &str) -> Result<Toke
         ("code", code),
     ];
 
-    let builder = RequestBuilder::from_parts(
-        Client::new(),
-        Request::new(
-            Method::POST,
-            Url::parse("https://oauth-login.cloud.huawei.com/oauth2/v3/token").map_err(|e| {
-                error!("URL 解析失败: {:?}", e);
-                ErrorCode::ThirdHttpRequest
-            })?,
-        ),
-    )
-    .form(&form);
+    let req = http::post(OAUTH_TOKEN_URL)
+        .form(&form)
+        .build()
+        .map_err(|e| {
+            error!("请求构建失败: {:?}", e);
+            ErrorCode::ThirdHttpRequest
+        })?;
 
-    http::request::<TokenResponse>(builder.build().map_err(|e| {
-        error!("请求构建失败: {:?}", e);
-        ErrorCode::ThirdHttpRequest
-    })?)
-    .await
-    .map(|response| response.inner)
-}
+    let response = http::request::<TokenResponse>(req).await?;
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct TokenInfoResponse {
-    pub client_id: String,
-    pub expire_in: i64,
-    pub union_id: String,
-    pub project_id: String,
-    pub r#type: i64,
+    match response.body {
+        Ok(success) => Ok(success),
+        Err(error) => {
+            warn!(
+                error = error.error,
+                error_description = ?error.error_description,
+                "华为 OAuth token 业务错误"
+            );
+            Err(ErrorCode::ThirdHttpResponseResult)
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct RawTokenInfoResponse {
+pub struct TokenInfoResponse {
     pub client_id: String,
+    /// 华为 getTokenInfo API 返回字段本身即拼写为 `expire_in`，
+    /// 与 OAuth token 接口的 `expires_in` 不同，勿"顺手"修正。
     pub expire_in: i64,
     pub union_id: String,
     pub project_id: String,
@@ -115,71 +76,82 @@ struct RawTokenInfoResponse {
     pub r#type: i64,
 }
 
-impl<'de> Deserialize<'de> for TokenInfoResponse {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = Value::deserialize(deserializer)?;
-
-        if let Some(error) = value.get("error").and_then(|e| e.as_str())
-            && !error.is_empty()
-        {
-            let err: TokenInfoResponseError =
-                serde_json::from_value(value).map_err(de::Error::custom)?;
-            return Err(de::Error::custom(format!(
-                "第三方错误: 华为 API 响应业务结果出错，请联系管理员: {}",
-                err.error
-            )));
-        }
-
-        serde_json::from_value::<RawTokenInfoResponse>(value)
-            .map(|raw| TokenInfoResponse {
-                client_id: raw.client_id,
-                expire_in: raw.expire_in,
-                union_id: raw.union_id,
-                project_id: raw.project_id,
-                r#type: raw.r#type,
-            })
-            .map_err(de::Error::custom)
-    }
-}
-
-#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct TokenInfoResponseError {
     pub error: String,
 }
 
+impl Body for TokenInfoResponse {
+    type Error = TokenInfoResponseError;
+
+    fn is_success(body: &Value) -> bool {
+        body.get("error")
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+    }
+}
+
 pub async fn token_info(access_token: &str) -> Result<TokenInfoResponse> {
     let form = [("access_token", access_token)];
 
-    let builder = RequestBuilder::from_parts(
-        Client::new(),
-        Request::new(
-            Method::POST,
-            Url::parse("https://oauth-api.cloud.huawei.com/rest.php?nsp_fmt=JSON&nsp_svc=huawei.oauth2.user.getTokenInfo").map_err(|e| {
-                error!("URL 解析失败: {:?}", e);
-                ErrorCode::ThirdHttpRequest
-            })?,
-        ),
-    )
-        .form(&form);
+    let req = http::post(TOKEN_INFO_URL)
+        .form(&form)
+        .build()
+        .map_err(|e| {
+            error!("请求构建失败: {:?}", e);
+            ErrorCode::ThirdHttpRequest
+        })?;
 
-    http::request::<TokenInfoResponse>(builder.build().map_err(|e| {
-        error!("请求构建失败: {:?}", e);
-        ErrorCode::ThirdHttpRequest
-    })?)
-    .await
-    .map(|response| response.inner)
+    let response = http::request::<TokenInfoResponse>(req).await?;
+
+    match response.body {
+        Ok(success) => Ok(success),
+        Err(error) => {
+            warn!(error = %error.error, "华为 getTokenInfo 业务错误");
+            Err(ErrorCode::ThirdHttpResponseResult)
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     #![allow(clippy::all)]
 
-    use super::{TokenInfoResponse, TokenResponse};
+    use super::*;
 
+    /// 测试场景：TokenResponse 判别 error 数字字段 -> 0 或缺失为成功，非 0 为失败
+    #[test]
+    fn token_response_is_success() {
+        // (a) error 为 0
+        assert!(TokenResponse::is_success(&serde_json::json!({"error": 0})));
+        // (b) 无 error 字段
+        assert!(TokenResponse::is_success(
+            &serde_json::json!({"access_token": "x"})
+        ));
+        // (c) error 非 0
+        assert!(!TokenResponse::is_success(
+            &serde_json::json!({"error": 10001})
+        ));
+    }
+
+    /// 测试场景：TokenInfoResponse 判别 error 字符串字段 -> 空串或缺失为成功，非空为失败
+    #[test]
+    fn token_info_response_is_success() {
+        // (a) error 为空串
+        assert!(TokenInfoResponse::is_success(
+            &serde_json::json!({"error": ""})
+        ));
+        // (b) 无 error 字段
+        assert!(TokenInfoResponse::is_success(
+            &serde_json::json!({"client_id": "c"})
+        ));
+        // (c) error 非空串
+        assert!(!TokenInfoResponse::is_success(
+            &serde_json::json!({"error": "invalid_token"})
+        ));
+    }
+
+    /// 测试场景：成功响应六字段 -> 反序列化为 TokenResponse
     #[test]
     fn deserialize_token_response_success() {
         let value = serde_json::json!({
@@ -200,20 +172,32 @@ mod tests {
         assert_eq!(resp.id_token, "id");
     }
 
+    /// 测试场景：错误响应含 error_description -> 反序列化为 TokenResponseError 且字段相等
     #[test]
-    fn deserialize_token_response_error() {
+    fn deserialize_token_response_error_with_description() {
         let value = serde_json::json!({
             "error": 10001,
             "error_description": "bad code"
         });
 
-        let err = serde_json::from_value::<TokenResponse>(value).expect_err("should fail");
-        assert!(
-            err.to_string()
-                .contains("第三方错误: 华为 API 响应业务结果出错，请联系管理员: bad code")
-        );
+        let err: TokenResponseError = serde_json::from_value(value).expect("should deserialize");
+        assert_eq!(err.error, 10001);
+        assert_eq!(err.error_description, Some("bad code".to_string()));
     }
 
+    /// 测试场景：错误响应无 error_description -> 宽松化反序列化成功且为 None
+    #[test]
+    fn deserialize_token_response_error_without_description() {
+        let value = serde_json::json!({
+            "error": 10001
+        });
+
+        let err: TokenResponseError = serde_json::from_value(value).expect("should deserialize");
+        assert_eq!(err.error, 10001);
+        assert_eq!(err.error_description, None);
+    }
+
+    /// 测试场景：成功响应五字段含 type rename -> 反序列化为 TokenInfoResponse
     #[test]
     fn deserialize_token_info_response_success() {
         let value = serde_json::json!({
@@ -232,17 +216,15 @@ mod tests {
         assert_eq!(resp.r#type, 1);
     }
 
+    /// 测试场景：错误响应 -> 反序列化为 TokenInfoResponseError 且字段相等
     #[test]
     fn deserialize_token_info_response_error() {
         let value = serde_json::json!({
-            "error": "invalid_token",
-            "error_description": "token expired"
+            "error": "invalid_token"
         });
 
-        let err = serde_json::from_value::<TokenInfoResponse>(value).expect_err("should fail");
-        assert!(
-            err.to_string()
-                .contains("第三方错误: 华为 API 响应业务结果出错，请联系管理员: invalid_token")
-        );
+        let err: TokenInfoResponseError =
+            serde_json::from_value(value).expect("should deserialize");
+        assert_eq!(err.error, "invalid_token");
     }
 }

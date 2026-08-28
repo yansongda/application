@@ -30,6 +30,7 @@ pub struct Config {
     pub databases: HashMap<String, Database>,
     pub short_url: ShortUrl,
     pub access_token: AccessToken,
+    pub http: Http,
 }
 
 impl Default for Config {
@@ -40,6 +41,7 @@ impl Default for Config {
             databases: HashMap::new(),
             short_url: ShortUrl::default(),
             access_token: AccessToken::default(),
+            http: Http::default(),
         }
     }
 }
@@ -47,7 +49,6 @@ impl Default for Config {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct BinApi {
-    pub listen: String,
     pub port: u16,
     pub debug: bool,
 }
@@ -55,7 +56,6 @@ pub struct BinApi {
 impl Default for BinApi {
     fn default() -> Self {
         Self {
-            listen: "0.0.0.0".to_string(),
             port: 8080,
             debug: false,
         }
@@ -124,6 +124,28 @@ impl AccessToken {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Http {
+    pub connect_timeout_secs: u64,
+    pub timeout_secs: u64,
+    pub pool_idle_timeout_secs: u64,
+    pub pool_max_idle_per_host: usize,
+    pub tcp_keepalive_secs: u64,
+}
+
+impl Default for Http {
+    fn default() -> Self {
+        Self {
+            connect_timeout_secs: 1,
+            timeout_secs: 3,
+            pool_idle_timeout_secs: 30,
+            pool_max_idle_per_host: 8,
+            tcp_keepalive_secs: 60,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(
@@ -151,13 +173,11 @@ mod tests {
             [bin-api]
             port = 9090
             debug = true
-            listen = "0.0.0.0"
         "#;
         let cfg = build_config_from_toml(toml).expect("反序列化应成功");
         let bin = &cfg.bin_api;
         assert_eq!(bin.port, 9090);
         assert!(bin.debug);
-        assert_eq!(bin.listen, "0.0.0.0");
     }
 
     /// 测试场景：[bin-api] 段包含未声明字段 → 验证 `deny_unknown_fields` 生效 → 预期反序列化返回 `ConfigError`
@@ -172,14 +192,13 @@ mod tests {
         assert!(result.is_err(), "含未声明字段应返回 ConfigError");
     }
 
-    /// 测试场景：使用 `Config::default()` → 验证 `bin_api` 字段被默认结构填充 → 预期 port=8080, debug=false, listen=0.0.0.0
+    /// 测试场景：使用 `Config::default()` → 验证 `bin_api` 字段被默认结构填充 → 预期 port=8080, debug=false
     #[test]
     fn config_default_seeds_bin_api() {
         let cfg = Config::default();
         let bin = &cfg.bin_api;
         assert_eq!(bin.port, 8080);
         assert!(!bin.debug);
-        assert_eq!(bin.listen, "0.0.0.0");
     }
 
     /// 测试场景：空 TOML 字符串 → 验证 Config 反序列化成功且 `bin_api` 取默认值 → 预期 port=8080
@@ -253,6 +272,48 @@ mod tests {
         let toml = r#"
             [access-token]
             expired-in = 3600
+            extra_field = 1
+        "#;
+        let result = build_config_from_toml(toml);
+        assert!(result.is_err(), "含未声明字段应返回 ConfigError");
+    }
+
+    /// 测试场景：[http] 段提供完整值 -> 验证覆盖默认 -> 预期 2/5/60/16/120
+    #[test]
+    fn http_section_overrides_defaults() {
+        let toml = r#"
+            [http]
+            connect-timeout-secs = 2
+            timeout-secs = 5
+            pool-idle-timeout-secs = 60
+            pool-max-idle-per-host = 16
+            tcp-keepalive-secs = 120
+        "#;
+        let cfg = build_config_from_toml(toml).expect("反序列化应成功");
+        assert_eq!(cfg.http.connect_timeout_secs, 2);
+        assert_eq!(cfg.http.timeout_secs, 5);
+        assert_eq!(cfg.http.pool_idle_timeout_secs, 60);
+        assert_eq!(cfg.http.pool_max_idle_per_host, 16);
+        assert_eq!(cfg.http.tcp_keepalive_secs, 120);
+    }
+
+    /// 测试场景：缺 [http] 段 -> 验证默认值 -> 预期 1/3/30/8/60
+    #[test]
+    fn http_section_missing_uses_default() {
+        let cfg = build_config_from_toml("").expect("空 TOML 反序列化应成功");
+        assert_eq!(cfg.http.connect_timeout_secs, 1);
+        assert_eq!(cfg.http.timeout_secs, 3);
+        assert_eq!(cfg.http.pool_idle_timeout_secs, 30);
+        assert_eq!(cfg.http.pool_max_idle_per_host, 8);
+        assert_eq!(cfg.http.tcp_keepalive_secs, 60);
+    }
+
+    /// 测试场景：[http] 含未声明字段 -> deny_unknown_fields -> ConfigError
+    #[test]
+    fn http_extra_field_rejected() {
+        let toml = r#"
+            [http]
+            connect-timeout-secs = 1
             extra_field = 1
         "#;
         let result = build_config_from_toml(toml);

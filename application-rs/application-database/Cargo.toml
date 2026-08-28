@@ -10,7 +10,6 @@ workspace = true
 
 [dependencies]
 application-kernel = { path = "../application-kernel" }
-application-util = { path = "../application-util" }
 
 chrono = { workspace = true }
 serde = { workspace = true }
