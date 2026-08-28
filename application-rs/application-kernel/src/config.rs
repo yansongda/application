@@ -49,7 +49,6 @@ impl Default for Config {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "kebab-case")]
 pub struct BinApi {
-    pub listen: String,
     pub port: u16,
     pub debug: bool,
 }
@@ -57,7 +56,6 @@ pub struct BinApi {
 impl Default for BinApi {
     fn default() -> Self {
         Self {
-            listen: "0.0.0.0".to_string(),
             port: 8080,
             debug: false,
         }
@@ -175,13 +173,11 @@ mod tests {
             [bin-api]
             port = 9090
             debug = true
-            listen = "0.0.0.0"
         "#;
         let cfg = build_config_from_toml(toml).expect("反序列化应成功");
         let bin = &cfg.bin_api;
         assert_eq!(bin.port, 9090);
         assert!(bin.debug);
-        assert_eq!(bin.listen, "0.0.0.0");
     }
 
     /// 测试场景：[bin-api] 段包含未声明字段 → 验证 `deny_unknown_fields` 生效 → 预期反序列化返回 `ConfigError`
@@ -196,14 +192,13 @@ mod tests {
         assert!(result.is_err(), "含未声明字段应返回 ConfigError");
     }
 
-    /// 测试场景：使用 `Config::default()` → 验证 `bin_api` 字段被默认结构填充 → 预期 port=8080, debug=false, listen=0.0.0.0
+    /// 测试场景：使用 `Config::default()` → 验证 `bin_api` 字段被默认结构填充 → 预期 port=8080, debug=false
     #[test]
     fn config_default_seeds_bin_api() {
         let cfg = Config::default();
         let bin = &cfg.bin_api;
         assert_eq!(bin.port, 8080);
         assert!(!bin.debug);
-        assert_eq!(bin.listen, "0.0.0.0");
     }
 
     /// 测试场景：空 TOML 字符串 → 验证 Config 反序列化成功且 `bin_api` 取默认值 → 预期 port=8080
