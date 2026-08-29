@@ -55,7 +55,7 @@ jobs:
         run: |
           docker save app | gzip > ../app.tar.gz
       - name: Upload the docker image
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: docker-image
           path: app.tar.gz
@@ -73,7 +73,7 @@ jobs:
         registry: [aliyun, dockerhub, github]
     steps:
       - name: Download the docker image
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: docker-image
       - name: Load the docker image
@@ -82,7 +82,7 @@ jobs:
       - name: Push the image to ${{ matrix.registry }} registry
         env:
           TAG: ${{ needs.build-application-api.outputs.tag }}
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
