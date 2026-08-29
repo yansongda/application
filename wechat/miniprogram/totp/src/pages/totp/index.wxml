@@ -12,7 +12,7 @@
 
 <view class="page {{isSortMode ? 'page-sort' : ''}}" style="{{isDragging ? 'overflow: hidden;' : ''}}">
   <view class="loading-state" wx:if="{{isLoading}}">
-    <t-loading size="40px" text="加载中..." />
+    <t-loading size="40px" text="{{loadingText}}" />
   </view>
 
   <view class="error-state" wx:elif="{{isError}}">

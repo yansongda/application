@@ -22,7 +22,7 @@ Page({
   onLoad(query: Query) {
     this.setData({
       id: query.id || "0",
-      username: query.username || "",
+      username: query.username ? decodeURIComponent(query.username) : "",
     });
   },
   async submit(e: FormSubmit<FormData>) {

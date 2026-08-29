@@ -17,6 +17,7 @@ Page({
   data: {
     isLoading: true,
     isError: false,
+    loadingText: "登录中...",
     dialogVisible: false,
     currentItemId: "0",
     items: [] as Item[],
@@ -31,9 +32,10 @@ Page({
     if (this.isCreating) {
       return;
     }
-    this.setData({ isLoading: true, isError: false });
+    this.setData({ isLoading: true, isError: false, loadingText: "登录中..." });
     try {
       await ensureAuthenticated();
+      this.setData({ loadingText: "加载中..." });
       this.loadItems();
     } catch {
       this.setData({ isLoading: false, isError: true });

@@ -13,6 +13,7 @@ interface Dataset {
 
 Page({
   data: {
+    isLoading: true,
     dialogVisible: false,
     id: "0",
     issuer: "",
@@ -24,11 +25,14 @@ Page({
     this.data.id = query.id || "0";
   },
   onShow() {
+    this.setData({ isLoading: true });
+
     api
       .detail(this.data.id)
       .then((response: Item) => {
         this.response = response;
         this.setData({
+          isLoading: false,
           id: response.id,
           issuer: substr(response.issuer),
           username: substr(response.username),
@@ -36,7 +40,7 @@ Page({
         });
       })
       .catch(() => {
-        this.setData({ dialogVisible: true });
+        this.setData({ isLoading: false, dialogVisible: true });
       });
   },
   async gotoEdit(e: Tap<Dataset, Dataset>) {
