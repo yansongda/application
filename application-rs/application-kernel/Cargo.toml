@@ -18,4 +18,4 @@ tracing-appender = { workspace = true }
 prometheus = { workspace = true }
 ulid = { workspace = true }
 
-config = { version = "0.15.4", default-features = false, features = ["toml", "json", "json5", "convert-case"] }
+config = { version = "0.15.25", default-features = false, features = ["toml", "json", "json5", "convert-case"] }

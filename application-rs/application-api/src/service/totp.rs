@@ -5,7 +5,7 @@ use application_database::account::access_token;
 use application_database::tool::totp;
 use application_kernel::result::{ErrorCode, Result};
 use std::collections::BTreeSet;
-use totp_rs::{Secret, TOTP};
+use totp_rs::Totp;
 use tracing::error;
 
 pub async fn all(access_token: &access_token::AccessToken) -> Result<Vec<DetailResponse>> {
@@ -51,7 +51,7 @@ pub async fn create(
     access_token: &access_token::AccessToken,
     uri: String,
 ) -> Result<DetailResponse> {
-    let totp = TOTP::from_url_unchecked(uri.as_str()).map_err(|e| {
+    let totp = Totp::from_url_unchecked(uri.as_str()).map_err(|e| {
         error!("TOTP 链接解析失败: {}", e);
 
         ErrorCode::ParamsTotpParseFailed
@@ -60,11 +60,11 @@ pub async fn create(
     totp::insert(totp::CreatedTotp {
         user_id: access_token.user_id,
         sort: None,
-        username: totp.account_name,
-        issuer: totp.issuer,
+        username: totp.account_name().to_string(),
+        issuer: totp.issuer().map(str::to_string),
         config: totp::TotpConfig {
-            period: totp.step,
-            secret: Secret::Raw(totp.secret).to_encoded().to_string(),
+            period: totp.step(),
+            secret: totp.secret().to_base32(),
         },
     })
     .await?
