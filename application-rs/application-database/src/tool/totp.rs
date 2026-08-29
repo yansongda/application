@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use sqlx::types::Json;
 use std::time::Instant;
-use totp_rs::{Algorithm, Secret, TOTP};
+use totp_rs::{Algorithm, Builder, Secret};
 use tracing::error;
 use tracing::info;
 
@@ -39,27 +39,23 @@ impl Totp {
     pub fn generate_code(&self) -> Result<String> {
         let config = &self.config;
 
-        let secret = Secret::Encoded(config.secret.clone())
-            .to_bytes()
-            .map_err(|e| {
-                error!("TOTP Secret 解码失败: {:?}", e);
-                ErrorCode::ParamsTotpUriFormatInvalid
-            })?;
+        let secret = Secret::try_from_base32(&config.secret).map_err(|e| {
+            error!("TOTP Secret 解码失败: {:?}", e);
+            ErrorCode::ParamsTotpUriFormatInvalid
+        })?;
 
-        let totp = TOTP::new_unchecked(
-            Algorithm::SHA1,
-            6,
-            1,
-            config.period,
-            secret,
-            self.issuer.clone(),
-            self.username.clone(),
-        );
+        // 非 RFC 合规构建：第三方服务的 secret 可能短于 RFC 6238 建议长度，需跳过校验
+        let totp = Builder::new()
+            .with_algorithm(Algorithm::SHA1)
+            .with_digits(6)
+            .with_skew(1)
+            .with_step_duration(config.period)
+            .with_secret(secret)
+            .with_issuer(self.issuer.clone())
+            .with_account_name(self.username.clone())
+            .build_noncompliant();
 
-        totp.generate_current().map_err(|e| {
-            error!("TOTP Code 生成失败: {:?}", e);
-            ErrorCode::InternalDatabaseQuery
-        })
+        Ok(totp.generate_current().to_string())
     }
 }
 
@@ -180,7 +176,8 @@ pub async fn sort(user_id: u64, items: &[SortItem]) -> Result<()> {
     }
     sql.push_str(") AND user_id = ?");
 
-    let mut query = sqlx::query(&sql);
+    // 动态部分仅为占位符结构（CASE WHEN / IN 的数量），无用户输入进入 SQL 文本。
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql.clone()));
     for item in items {
         query = query.bind(item.id).bind(item.sort);
     }
@@ -194,6 +191,8 @@ pub async fn sort(user_id: u64, items: &[SortItem]) -> Result<()> {
         ErrorCode::InternalDatabaseUpdate
     })?;
 
+    // 依赖 sqlx 默认在 MySQL 握手开启 CLIENT_FOUND_ROWS：affected_rows 为匹配行数（含值未变的行），
+    // 重复提交相同排序不会误判为越权；若驱动默认行为变化需重新评估此校验。
     if result.rows_affected() != items.len() as u64 {
         return Err(ErrorCode::AuthorizationPermissionUngranted);
     }
