@@ -1,3 +1,18 @@
+## [1.20.0] - 2026-08-29
+
+### Added
+
+- feat(kernel): 新增第三方 HTTP 错误码：请求超时（9804）、连接失败（9805），并细化认证/参数类错误提示文案 (#155) ([ac0a40d](https://github.com/yansongda/application/commit/ac0a40d))
+- feat(kernel): 新增 `[http]` 配置段：连接超时、请求超时、连接池空闲时长/上限、TCP keepalive 参数，默认值与原硬编码一致，存量配置零迁移 (#155) ([ac0a40d](https://github.com/yansongda/application/commit/ac0a40d))
+- feat(kernel): `outbound_http_requests_total` 指标新增 `business_error` / `response_error` result 标签取值 (#155) ([ac0a40d](https://github.com/yansongda/application/commit/ac0a40d))
+
+### Changed
+
+- ⚠️ **Breaking**: `[bin-api]` 配置移除 `listen` 项，监听地址固定为 `0.0.0.0`（端口仍取 `port`）；存量 `config.toml` 若含 `listen` 行需删除，否则启动时因 `deny_unknown_fields` 校验失败 (#155) ([ac0a40d](https://github.com/yansongda/application/commit/ac0a40d))
+- refactor(util): HTTP 层引入 `ResponseEnvelope` 封套判别，第三方业务错误细分至 9803，并清理样板代码 (#155) ([ac0a40d](https://github.com/yansongda/application/commit/ac0a40d))
+- refactor(application-rs): 全量依赖升级至最新版本：salvo 0.96.0、totp-rs 6.0（TOTP 构建迁移至 Builder 模式）、sqlx 0.9.0（动态 SQL 显式 `AssertSqlSafe` 包装）等 (#156) ([4b84f65](https://github.com/yansongda/application/commit/4b84f65))
+- build(application-rs): 统一 workspace clippy lint 配置并修复告警 (#154) ([0353fb2](https://github.com/yansongda/application/commit/0353fb2))
+
 ## [1.19.0] - 2026-08-09
 
 ### Added
