@@ -10,24 +10,18 @@
 />
 
 <view class="page">
-  <view class="loading-state" wx:if="{{isLoading}}">
-    <t-loading size="40px" text="加载中..." />
+  <view class="section">
+    <view class="section-title">基本信息</view>
+    <t-cell-group theme="card">
+      <t-cell title="提供商" note="{{issuer || '-'}}" bind:tap="gotoEdit" data-type="issuer" hover arrow></t-cell>
+      <t-cell title="账号" note="{{username || '-'}}" bind:tap="gotoEdit" data-type="username" hover arrow></t-cell>
+    </t-cell-group>
   </view>
 
-  <block wx:else>
-    <view class="section">
-      <view class="section-title">基本信息</view>
-      <t-cell-group theme="card">
-        <t-cell title="提供商" note="{{issuer || '-'}}" bind:tap="gotoEdit" data-type="issuer" hover arrow></t-cell>
-        <t-cell title="账号" note="{{username || '-'}}" bind:tap="gotoEdit" data-type="username" hover arrow></t-cell>
-      </t-cell-group>
-    </view>
-
-    <view class="section">
-      <view class="section-title">配置信息</view>
-      <t-cell-group theme="card">
-        <t-cell title="更新周期" note="{{config.period}}s" hover></t-cell>
-      </t-cell-group>
-    </view>
-  </block>
+  <view class="section">
+    <view class="section-title">配置信息</view>
+    <t-cell-group theme="card">
+      <t-cell title="更新周期" note="{{config.period}}s" hover></t-cell>
+    </t-cell-group>
+  </view>
 </view>

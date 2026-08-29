@@ -1,5 +1,6 @@
 import api from "@api/totp";
 import { substr } from "@utils/string";
+import Toast from "tdesign-miniprogram/toast/index";
 import type { Item } from "types/totp";
 import type { Tap } from "types/wechat";
 
@@ -13,7 +14,6 @@ interface Dataset {
 
 Page({
   data: {
-    isLoading: true,
     dialogVisible: false,
     id: "0",
     issuer: "",
@@ -25,14 +25,27 @@ Page({
     this.data.id = query.id || "0";
   },
   onShow() {
-    this.setData({ isLoading: true });
+    Toast({
+      message: "加载中...",
+      theme: "loading",
+      duration: 5000,
+      direction: "column",
+      preventScrollThrough: true,
+    });
 
     api
       .detail(this.data.id)
       .then((response: Item) => {
         this.response = response;
+
+        Toast({
+          message: "加载成功",
+          theme: "success",
+          duration: 100,
+          direction: "column",
+        });
+
         this.setData({
-          isLoading: false,
           id: response.id,
           issuer: substr(response.issuer),
           username: substr(response.username),
@@ -40,7 +53,14 @@ Page({
         });
       })
       .catch(() => {
-        this.setData({ isLoading: false, dialogVisible: true });
+        Toast({
+          message: "加载失败",
+          theme: "error",
+          duration: 100,
+          direction: "column",
+        });
+
+        this.setData({ dialogVisible: true });
       });
   },
   async gotoEdit(e: Tap<Dataset, Dataset>) {

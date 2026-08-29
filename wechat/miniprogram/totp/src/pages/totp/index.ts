@@ -15,9 +15,7 @@ import type {
 
 Page({
   data: {
-    isLoading: true,
     isError: false,
-    loadingText: "登录中...",
     dialogVisible: false,
     currentItemId: "0",
     items: [] as Item[],
@@ -32,13 +30,28 @@ Page({
     if (this.isCreating) {
       return;
     }
-    this.setData({ isLoading: true, isError: false, loadingText: "登录中..." });
+    this.setData({ isError: false });
+
+    Toast({
+      message: "登录中...",
+      theme: "loading",
+      duration: 5000,
+      direction: "column",
+      preventScrollThrough: true,
+    });
+
     try {
       await ensureAuthenticated();
-      this.setData({ loadingText: "加载中..." });
       this.loadItems();
     } catch {
-      this.setData({ isLoading: false, isError: true });
+      Toast({
+        message: "登录失败",
+        theme: "error",
+        duration: 100,
+        direction: "column",
+      });
+
+      this.setData({ isError: true });
     }
   },
   retry() {
@@ -64,7 +77,6 @@ Page({
         });
 
         this.setData({
-          isLoading: false,
           items: response.map((item) => ({
             ...item,
             issuer: substr(item.issuer, 7),
@@ -73,7 +85,7 @@ Page({
         });
       })
       .catch((e: HttpError) => {
-        this.setData({ isLoading: false, isError: true });
+        this.setData({ isError: true });
 
         Toast({
           message: "加载失败",

@@ -4,7 +4,6 @@
     "t-message": "tdesign-miniprogram/message/message",
     "t-dialog": "tdesign-miniprogram/dialog/dialog",
     "t-cell": "tdesign-miniprogram/cell/cell",
-    "t-cell-group": "tdesign-miniprogram/cell-group/cell-group",
-    "t-loading": "tdesign-miniprogram/loading/loading"
+    "t-cell-group": "tdesign-miniprogram/cell-group/cell-group"
   }
 }
