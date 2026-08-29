@@ -4,18 +4,14 @@
   visible="{{dialogVisible}}"
   title="是否确定删除？"
   content="删除后数据不可恢复"
-  confirm-btn="{{ { content: '删除', variant: 'base', style: 'color: #fff; background-color: #e34d59;' } }}"
-  cancel-btn="取消"
+  confirm-btn="{{ { content: '删除', theme: 'danger' } }}"
+  cancel-btn="{{ { content: '取消', variant: 'text' } }}"
   bind:confirm="dialogConfirm"
   bind:cancel="dialogCancel"
 />
 
 <view class="page {{isSortMode ? 'page-sort' : ''}}" style="{{isDragging ? 'overflow: hidden;' : ''}}">
-  <view class="loading-state" wx:if="{{isLoading}}">
-    <t-loading size="40px" text="加载中..." />
-  </view>
-
-  <view class="error-state" wx:elif="{{isError}}">
+  <view class="error-state" wx:if="{{isError}}">
     <t-empty icon="error-circle-filled" description="加载失败，请重试" />
     <t-button theme="primary" variant="outline" size="small" bind:tap="retry" style="margin-top: 24rpx;">重试</t-button>
   </view>

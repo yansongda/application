@@ -22,7 +22,7 @@ Page({
   onLoad(query: Query) {
     this.setData({
       id: query.id || "0",
-      issuer: query.issuer || "",
+      issuer: query.issuer ? decodeURIComponent(query.issuer) : "",
     });
   },
   async submit(e: FormSubmit<FormData>) {

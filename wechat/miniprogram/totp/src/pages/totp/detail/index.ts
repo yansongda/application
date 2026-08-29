@@ -1,5 +1,6 @@
 import api from "@api/totp";
 import { substr } from "@utils/string";
+import Toast from "tdesign-miniprogram/toast/index";
 import type { Item } from "types/totp";
 import type { Tap } from "types/wechat";
 
@@ -24,10 +25,26 @@ Page({
     this.data.id = query.id || "0";
   },
   onShow() {
+    Toast({
+      message: "加载中...",
+      theme: "loading",
+      duration: 5000,
+      direction: "column",
+      preventScrollThrough: true,
+    });
+
     api
       .detail(this.data.id)
       .then((response: Item) => {
         this.response = response;
+
+        Toast({
+          message: "加载成功",
+          theme: "success",
+          duration: 100,
+          direction: "column",
+        });
+
         this.setData({
           id: response.id,
           issuer: substr(response.issuer),
@@ -36,6 +53,13 @@ Page({
         });
       })
       .catch(() => {
+        Toast({
+          message: "加载失败",
+          theme: "error",
+          duration: 100,
+          direction: "column",
+        });
+
         this.setData({ dialogVisible: true });
       });
   },
