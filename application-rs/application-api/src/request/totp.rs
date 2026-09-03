@@ -1,6 +1,6 @@
 use crate::request::Validator;
 use application_database::tool::totp::{Totp, TotpConfig};
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
@@ -13,10 +13,9 @@ impl Validator for DetailRequest {
     type Data = u64;
 
     fn validate(&self) -> application_kernel::result::Result<Self::Data> {
-        let id = self.id.as_deref().ok_or(Error::ParamsTotpIdEmpty(None))?;
+        let id = self.id.as_deref().ok_or(ErrorCode::ParamsTotpIdEmpty)?;
 
-        id.parse::<u64>()
-            .map_err(|_| Error::ParamsTotpIdEmpty(None))
+        id.parse::<u64>().map_err(|_| ErrorCode::ParamsTotpIdEmpty)
     }
 }
 
@@ -35,17 +34,17 @@ pub struct DetailResponseConfig {
 }
 
 impl TryFrom<Totp> for DetailResponse {
-    type Error = application_kernel::result::Error;
+    type Error = application_kernel::result::ErrorCode;
 
     fn try_from(totp: Totp) -> application_kernel::result::Result<Self> {
         Ok(Self {
             id: totp.id.to_string(),
             issuer: totp
                 .issuer
-                .to_owned()
+                .clone()
                 .unwrap_or_else(|| "未知发行方".to_string()),
-            username: totp.username.to_owned(),
-            config: totp.config.deref().to_owned().into(),
+            username: totp.username.clone(),
+            config: totp.config.deref().clone().into(),
             code: totp.generate_code()?,
         })
     }
@@ -71,10 +70,10 @@ impl Validator for CreateRequest {
         let uri = self
             .uri
             .as_deref()
-            .ok_or(Error::ParamsTotpUriFormatInvalid(None))?;
+            .ok_or(ErrorCode::ParamsTotpUriFormatInvalid)?;
 
         if !uri.starts_with("otpauth://totp/") {
-            return Err(Error::ParamsTotpUriFormatInvalid(None));
+            return Err(ErrorCode::ParamsTotpUriFormatInvalid);
         }
 
         Ok(uri.to_string())
@@ -100,19 +99,19 @@ impl Validator for EditIssuerRequest {
         let id = self
             .id
             .as_deref()
-            .ok_or(Error::ParamsTotpIdEmpty(None))?
+            .ok_or(ErrorCode::ParamsTotpIdEmpty)?
             .parse::<u64>()
-            .map_err(|_| Error::ParamsTotpIdEmpty(None))?;
+            .map_err(|_| ErrorCode::ParamsTotpIdEmpty)?;
 
         if let Some(issuer) = &self.issuer
             && issuer.chars().count() > 128
         {
-            return Err(Error::ParamsTotpIssuerMaxLengthReached(None));
+            return Err(ErrorCode::ParamsTotpIssuerMaxLengthReached);
         }
 
         Ok(Self::Data {
             id,
-            issuer: self.issuer.to_owned().unwrap_or_default(),
+            issuer: self.issuer.clone().unwrap_or_default(),
         })
     }
 }
@@ -136,17 +135,17 @@ impl Validator for EditUsernameRequest {
         let id = self
             .id
             .as_deref()
-            .ok_or(Error::ParamsTotpIdEmpty(None))?
+            .ok_or(ErrorCode::ParamsTotpIdEmpty)?
             .parse::<u64>()
-            .map_err(|_| Error::ParamsTotpIdEmpty(None))?;
+            .map_err(|_| ErrorCode::ParamsTotpIdEmpty)?;
 
         let username = self
             .username
             .as_deref()
-            .ok_or(Error::ParamsTotpUsernameFormatInvalid(None))?;
+            .ok_or(ErrorCode::ParamsTotpUsernameFormatInvalid)?;
 
         if username.is_empty() || username.chars().count() > 128 {
-            return Err(Error::ParamsTotpUsernameFormatInvalid(None));
+            return Err(ErrorCode::ParamsTotpUsernameFormatInvalid);
         }
 
         Ok(Self::Data {
@@ -165,10 +164,9 @@ impl Validator for DeleteRequest {
     type Data = u64;
 
     fn validate(&self) -> application_kernel::result::Result<Self::Data> {
-        let id = self.id.as_deref().ok_or(Error::ParamsTotpIdEmpty(None))?;
+        let id = self.id.as_deref().ok_or(ErrorCode::ParamsTotpIdEmpty)?;
 
-        id.parse::<u64>()
-            .map_err(|_| Error::ParamsTotpIdEmpty(None))
+        id.parse::<u64>().map_err(|_| ErrorCode::ParamsTotpIdEmpty)
     }
 }
 
@@ -193,10 +191,10 @@ impl Validator for SortRequest {
     type Data = Vec<SortItemParams>;
 
     fn validate(&self) -> application_kernel::result::Result<Self::Data> {
-        let items = self.items.as_ref().ok_or(Error::ParamsTotpIdEmpty(None))?;
+        let items = self.items.as_ref().ok_or(ErrorCode::ParamsTotpIdEmpty)?;
 
         if items.is_empty() {
-            return Err(Error::ParamsTotpIdEmpty(None));
+            return Err(ErrorCode::ParamsTotpIdEmpty);
         }
 
         items
@@ -205,11 +203,11 @@ impl Validator for SortRequest {
                 let id = item
                     .id
                     .as_deref()
-                    .ok_or(Error::ParamsTotpIdEmpty(None))?
+                    .ok_or(ErrorCode::ParamsTotpIdEmpty)?
                     .parse::<u64>()
-                    .map_err(|_| Error::ParamsTotpIdEmpty(None))?;
+                    .map_err(|_| ErrorCode::ParamsTotpIdEmpty)?;
 
-                let sort = item.sort.ok_or(Error::ParamsTotpIdEmpty(None))?;
+                let sort = item.sort.ok_or(ErrorCode::ParamsTotpIdEmpty)?;
 
                 Ok(SortItemParams { id, sort })
             })

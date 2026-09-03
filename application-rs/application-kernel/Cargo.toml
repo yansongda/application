@@ -5,6 +5,9 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 serde = { workspace = true }
 chrono = { workspace = true }
@@ -12,4 +15,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-appender = { workspace = true }
 
-config = { version = "~0.15.4", default-features = false, features = ["toml", "json", "json5"] }
+prometheus = { workspace = true }
+ulid = { workspace = true }
+
+config = { version = "0.15.25", default-features = false, features = ["toml", "json", "json5", "convert-case"] }

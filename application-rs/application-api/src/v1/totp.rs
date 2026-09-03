@@ -9,13 +9,13 @@ use crate::response::Resp;
 use crate::response::Response;
 use crate::service;
 use application_database::account::access_token::AccessToken;
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 
 #[handler]
 pub async fn sort(request: &mut Request, depot: &mut Depot) -> Resp<()> {
     let access_token = depot
-        .obtain::<AccessToken>()
-        .map_err(|_| Error::AuthorizationAccessTokenInvalid(None))?;
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let params = request.parse_json::<SortRequest>().await?;
     let items = params.validate()?;
@@ -28,8 +28,8 @@ pub async fn sort(request: &mut Request, depot: &mut Depot) -> Resp<()> {
 #[handler]
 pub async fn all(depot: &mut Depot) -> Resp<Vec<DetailResponse>> {
     let access_token = depot
-        .obtain::<AccessToken>()
-        .map_err(|_| Error::AuthorizationAccessTokenInvalid(None))?;
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     Ok(Response::success(service::totp::all(access_token).await?))
 }
@@ -37,8 +37,8 @@ pub async fn all(depot: &mut Depot) -> Resp<Vec<DetailResponse>> {
 #[handler]
 pub async fn detail(request: &mut Request, depot: &mut Depot) -> Resp<DetailResponse> {
     let access_token = depot
-        .obtain::<AccessToken>()
-        .map_err(|_| Error::AuthorizationAccessTokenInvalid(None))?;
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let params = request.parse_json::<DetailRequest>().await?;
 
@@ -50,8 +50,8 @@ pub async fn detail(request: &mut Request, depot: &mut Depot) -> Resp<DetailResp
 #[handler]
 pub async fn create(request: &mut Request, depot: &mut Depot) -> Resp<DetailResponse> {
     let access_token = depot
-        .obtain::<AccessToken>()
-        .map_err(|_| Error::AuthorizationAccessTokenInvalid(None))?;
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let params = request.parse_json::<CreateRequest>().await?;
 
@@ -63,8 +63,8 @@ pub async fn create(request: &mut Request, depot: &mut Depot) -> Resp<DetailResp
 #[handler]
 pub async fn edit_issuer(request: &mut Request, depot: &mut Depot) -> Resp<()> {
     let access_token = depot
-        .obtain::<AccessToken>()
-        .map_err(|_| Error::AuthorizationAccessTokenInvalid(None))?;
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let params = request.parse_json::<EditIssuerRequest>().await?;
 
@@ -76,8 +76,8 @@ pub async fn edit_issuer(request: &mut Request, depot: &mut Depot) -> Resp<()> {
 #[handler]
 pub async fn edit_username(request: &mut Request, depot: &mut Depot) -> Resp<()> {
     let access_token = depot
-        .obtain::<AccessToken>()
-        .map_err(|_| Error::AuthorizationAccessTokenInvalid(None))?;
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let params = request.parse_json::<EditUsernameRequest>().await?;
 
@@ -89,8 +89,8 @@ pub async fn edit_username(request: &mut Request, depot: &mut Depot) -> Resp<()>
 #[handler]
 pub async fn delete(request: &mut Request, depot: &mut Depot) -> Resp<()> {
     let access_token = depot
-        .obtain::<AccessToken>()
-        .map_err(|_| Error::AuthorizationAccessTokenInvalid(None))?;
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     let params = request.parse_json::<DeleteRequest>().await?;
 

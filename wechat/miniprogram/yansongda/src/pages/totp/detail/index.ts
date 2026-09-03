@@ -66,10 +66,10 @@ Page({
 
     switch (e.currentTarget.dataset.type) {
       case "issuer":
-        url = `/pages/totp/edit/issuer?id=${this.data.id}&issuer=${this.response.issuer}`;
+        url = `/pages/totp/edit/issuer?id=${this.data.id}&issuer=${encodeURIComponent(this.response.issuer)}`;
         break;
       case "username":
-        url = `/pages/totp/edit/username?id=${this.data.id}&username=${this.response.username}`;
+        url = `/pages/totp/edit/username?id=${this.data.id}&username=${encodeURIComponent(this.response.username)}`;
         break;
       default:
         break;

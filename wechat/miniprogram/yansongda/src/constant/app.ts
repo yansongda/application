@@ -1,5 +1,5 @@
 const STORAGE = {
-  ACCESS_TOKEN: "access_token",
+  TOKEN_BUNDLE: "token_bundle",
   USER: "user",
 };
 

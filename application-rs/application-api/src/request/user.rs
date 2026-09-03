@@ -1,6 +1,6 @@
 use crate::request::Validator;
 use application_database::account::user::{Config, User};
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -15,10 +15,10 @@ impl Validator for EditAvatarRequest {
         let avatar = self
             .avatar
             .as_deref()
-            .ok_or(Error::ParamsUserAvatarLengthInvalid(None))?;
+            .ok_or(ErrorCode::ParamsUserAvatarLengthInvalid)?;
 
         if !avatar.starts_with("data:image/jpeg;base64,") && !avatar.starts_with("http") {
-            return Err(Error::ParamsUserAvatarLengthInvalid(None));
+            return Err(ErrorCode::ParamsUserAvatarLengthInvalid);
         }
 
         Ok(avatar.to_string())
@@ -37,10 +37,10 @@ impl Validator for EditNicknameRequest {
         let nickname = self
             .nickname
             .as_deref()
-            .ok_or(Error::ParamsUserNicknameLengthInvalid(None))?;
+            .ok_or(ErrorCode::ParamsUserNicknameLengthInvalid)?;
 
         if nickname.chars().count() > 16 {
-            return Err(Error::ParamsUserNicknameLengthInvalid(None));
+            return Err(ErrorCode::ParamsUserNicknameLengthInvalid);
         }
 
         Ok(nickname.to_string())
@@ -59,11 +59,11 @@ impl Validator for EditSloganRequest {
         let slogan = self
             .slogan
             .as_deref()
-            .ok_or(Error::ParamsUserSloganLengthInvalid(None))?;
+            .ok_or(ErrorCode::ParamsUserSloganLengthInvalid)?;
 
         let char_count = slogan.chars().count();
         if char_count <= 3 || char_count > 128 {
-            return Err(Error::ParamsUserSloganLengthInvalid(None));
+            return Err(ErrorCode::ParamsUserSloganLengthInvalid);
         }
 
         Ok(slogan.to_string())
@@ -83,10 +83,10 @@ impl Validator for EditPhoneRequest {
         let phone = self
             .phone
             .as_deref()
-            .ok_or(Error::ParamsUserPhoneFormatInvalid(None))?;
+            .ok_or(ErrorCode::ParamsUserPhoneFormatInvalid)?;
 
         if !(11..=128).contains(&phone.chars().count()) {
-            return Err(Error::ParamsUserPhoneFormatInvalid(None));
+            return Err(ErrorCode::ParamsUserPhoneFormatInvalid);
         }
 
         Ok(phone.to_string())

@@ -4,6 +4,13 @@
   min-height: 100vh;
 }
 
+.page-sort {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -26,13 +33,25 @@
 .items-sort {
   padding-bottom: 0;
   position: relative;
-  overflow: hidden;
+}
+
+.sort-row {
+  height: 100px;
+  position: relative;
 }
 
 .sort-item {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 100px;
+  height: 100%;
+  transition: transform 0.2s ease;
+}
+
+.sort-item-dragging {
+  transition: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .sort-mask {

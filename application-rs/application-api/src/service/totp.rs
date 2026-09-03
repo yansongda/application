@@ -3,15 +3,17 @@ use crate::request::totp::{
 };
 use application_database::account::access_token;
 use application_database::tool::totp;
-use application_kernel::result::{Error, Result};
+use application_kernel::result::{ErrorCode, Result};
 use std::collections::BTreeSet;
-use totp_rs::{Secret, TOTP};
+use totp_rs::Totp;
 use tracing::error;
 
 pub async fn all(access_token: &access_token::AccessToken) -> Result<Vec<DetailResponse>> {
     let totp = totp::all(access_token.user_id).await?;
 
-    totp.into_iter().map(|t| t.try_into()).collect()
+    totp.into_iter()
+        .map(std::convert::TryInto::try_into)
+        .collect()
 }
 
 pub async fn sort(
@@ -23,7 +25,7 @@ pub async fn sort(
     let item_ids: BTreeSet<u64> = items.iter().map(|i| i.id).collect();
 
     if owned_ids.len() != items.len() || item_ids.len() != items.len() || owned_ids != item_ids {
-        return Err(Error::AuthorizationPermissionUngranted(None));
+        return Err(ErrorCode::AuthorizationPermissionUngranted);
     }
 
     let db_items = items
@@ -49,20 +51,20 @@ pub async fn create(
     access_token: &access_token::AccessToken,
     uri: String,
 ) -> Result<DetailResponse> {
-    let totp = TOTP::from_url_unchecked(uri.as_str()).map_err(|e| {
+    let totp = Totp::from_url_unchecked(uri.as_str()).map_err(|e| {
         error!("TOTP 链接解析失败: {}", e);
 
-        Error::ParamsTotpParseFailed(None)
+        ErrorCode::ParamsTotpParseFailed
     })?;
 
     totp::insert(totp::CreatedTotp {
         user_id: access_token.user_id,
         sort: None,
-        username: totp.account_name,
-        issuer: totp.issuer,
+        username: totp.account_name().to_string(),
+        issuer: totp.issuer().map(str::to_string),
         config: totp::TotpConfig {
-            period: totp.step,
-            secret: Secret::Raw(totp.secret).to_encoded().to_string(),
+            period: totp.step(),
+            secret: totp.secret().to_base32(),
         },
     })
     .await?

@@ -1,12 +1,13 @@
 {
   "name": "yansongda",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "wechat for yansongda",
   "type": "module",
   "scripts": {
     "biome:check": "biome check",
     "biome:fix": "biome check --fix",
-    "biome:fix-unsafe": "biome check --fix --unsafe"
+    "biome:fix-unsafe": "biome check --fix --unsafe",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "miniprogram",
@@ -15,12 +16,11 @@
   "author": "me@yansongda.cn",
   "license": "MIT",
   "devDependencies": {
-    "@biomejs/biome": "2.4.15",
-    "miniprogram-api-typings": "^5.2.0",
+    "@biomejs/biome": "^2.5.1",
+    "miniprogram-api-typings": "^5.2.1",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "tdesign-miniprogram": "^1.14.0"
-  },
-  "packageManager": "pnpm@10.17.0+sha512.fce8a3dd29a4ed2ec566fb53efbb04d8c44a0f05bc6f24a73046910fb9c3ce7afa35a0980500668fa3573345bd644644fa98338fa168235c80f4aa17aa17fbef"
+    "tdesign-miniprogram": "^1.15.1"
+  }
 }

@@ -4,7 +4,12 @@ import { HttpError } from "@models/error";
 import error from "@utils/error";
 import http from "@utils/http";
 import logger from "@utils/logger";
-import type { LoginRequest, LoginResponse } from "types/access-token";
+import type {
+  LoginRefreshRequest,
+  LoginRefreshResponse,
+  LoginRequest,
+  LoginResponse,
+} from "types/access-token";
 
 const { appId } = wx.getAccountInfoSync().miniProgram;
 
@@ -25,6 +30,23 @@ const login = async (code: string) => {
   }
 };
 
+const refresh = async (refreshToken: string) => {
+  try {
+    return await http.post<LoginRefreshResponse>(PATH.REFRESH, {
+      platform: "wechat",
+      third_id: appId,
+      refresh_token: refreshToken,
+    } as LoginRefreshRequest);
+  } catch (e: unknown) {
+    logger.error("刷新令牌接口请求失败", e);
+
+    throw new HttpError(
+      CODE.HTTP_API_ACCESS_TOKEN_REFRESH,
+      error.getErrorMessage(e),
+    );
+  }
+};
+
 const valid = async () => {
   try {
     return await http.get<null>(PATH.VALID);
@@ -38,4 +60,4 @@ const valid = async () => {
   }
 };
 
-export default { login, valid };
+export default { login, refresh, valid };

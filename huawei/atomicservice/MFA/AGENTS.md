@@ -22,6 +22,7 @@ MFA/
 
 `entry/src/main/ets/` 下常见结构：
 
+- `ability/`：Ability 入口（EntryAbility.ets）
 - `pages/`：页面
 - `components/`：组件
 - `api/`：接口调用
@@ -71,3 +72,10 @@ MFA/
 
 - 涉及后端接口联动时，同时参考根目录 `AGENTS.md` 与 `application-rs/AGENTS.md`
 - 仅修改华为前端时，不需要遵循 Rust 或微信小程序目录下的专属规范
+
+## NOTES
+
+- `entry/src/main/ets/ability/` 目录包含 `EntryAbility.ets`（UIAbility 入口），上表已补充。
+- `code-linter.json5` 包含 `@security/no-unsafe-*` 系列规则，修改加密/安全相关逻辑前请先确认不会触发 lint 错误。
+- `build-profile.json5` 中的签名配置使用本地绝对路径与明文密码，仅用于本地开发，禁止用于生产。
+- 当前仓库 CI 未包含华为前端的构建/lint 检查。

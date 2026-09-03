@@ -1,23 +1,97 @@
 import accessToken from "@api/access-token";
 import { STORAGE } from "@constant/app";
-import type { LoginResponse } from "types/access-token";
+import type { LoginRefreshResponse, LoginResponse } from "types/access-token";
 import type {
   WxGetUpdateManagerOnCheckForUpdateResult,
   WxLoginSuccessCallbackResult,
 } from "types/wechat";
 import logger from "./logger";
 
-const valid = async (): Promise<boolean> => {
-  try {
-    await wx.checkSession();
-    await accessToken.valid();
+type TokenBundleResponse = LoginResponse | LoginRefreshResponse;
 
-    return true;
-  } catch (_e) {
-    /* empty */
+interface TokenBundle {
+  access_token: string;
+  refresh_token: string;
+  expired_in: number;
+  expired_at: number;
+}
+
+const getTokenBundle = (): TokenBundle => {
+  const bundle = wx.getStorageSync(STORAGE.TOKEN_BUNDLE) as
+    | TokenBundle
+    | undefined;
+
+  return {
+    access_token: bundle?.access_token ?? "",
+    refresh_token: bundle?.refresh_token ?? "",
+    expired_in: bundle?.expired_in ?? 0,
+    expired_at: bundle?.expired_at ?? 0,
+  };
+};
+
+const saveTokenBundle = (response: TokenBundleResponse) => {
+  if (!response.access_token) {
+    throw new Error("saveTokenBundle: access_token is empty");
+  }
+  if (!response.refresh_token) {
+    throw new Error("saveTokenBundle: refresh_token is empty");
+  }
+  if (typeof response.expired_in !== "number" || response.expired_in <= 0) {
+    throw new Error("saveTokenBundle: expired_in must be a positive number");
   }
 
-  return false;
+  const expired_at = Date.now() + response.expired_in * 1000;
+
+  wx.setStorageSync(STORAGE.TOKEN_BUNDLE, {
+    access_token: response.access_token,
+    refresh_token: response.refresh_token,
+    expired_in: response.expired_in,
+    expired_at,
+  });
+};
+
+const clearTokenBundle = () => {
+  wx.removeStorageSync(STORAGE.TOKEN_BUNDLE);
+};
+
+const isAccessTokenFresh = (): boolean => {
+  const bundle = getTokenBundle();
+
+  // Requires all three fields — legacy storage that only has ACCESS_TOKEN
+  // (no refresh_token / expired_at) is treated as incomplete, not valid.
+  if (!bundle.access_token || !bundle.refresh_token || !bundle.expired_at) {
+    return false;
+  }
+
+  return Date.now() < bundle.expired_at - 60_000;
+};
+
+const refreshToken = async (): Promise<LoginRefreshResponse> => {
+  const bundle = getTokenBundle();
+  const response = await accessToken.refresh(bundle.refresh_token);
+
+  saveTokenBundle(response);
+
+  return response;
+};
+
+const valid = async (): Promise<boolean> => {
+  if (isAccessTokenFresh()) {
+    return true;
+  }
+
+  const bundle = getTokenBundle();
+
+  if (!bundle.refresh_token) {
+    return false;
+  }
+
+  try {
+    await refreshToken();
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 const login = async () => {
@@ -33,10 +107,7 @@ const login = async () => {
       try {
         const loginResponse: LoginResponse = await accessToken.login(res.code);
 
-        await wx.setStorage({
-          key: STORAGE.ACCESS_TOKEN,
-          data: loginResponse.access_token,
-        });
+        saveTokenBundle(loginResponse);
 
         await wx.hideToast();
       } catch (e) {
@@ -68,6 +139,40 @@ const restart = (
   });
 };
 
+let fallbackPromise: Promise<void> | null = null;
+
+const refreshFallback = (): Promise<void> => {
+  if (fallbackPromise) {
+    return fallbackPromise;
+  }
+
+  fallbackPromise = new Promise<void>((resolve, reject) => {
+    clearTokenBundle();
+
+    wx.showModal({
+      title: "提示",
+      content: "登录已过期，请重新登录",
+      showCancel: true,
+      confirmText: "重新登录",
+      success(res) {
+        if (res.confirm) {
+          login();
+          resolve();
+        } else {
+          reject(new Error("登录已过期，用户取消重新登录"));
+        }
+      },
+      fail() {
+        reject(new Error("登录弹窗调用失败"));
+      },
+    });
+  }).finally(() => {
+    fallbackPromise = null;
+  });
+
+  return fallbackPromise;
+};
+
 const upgrade = () => {
   const updateManager = wx.getUpdateManager();
 
@@ -96,4 +201,13 @@ const upgrade = () => {
   });
 };
 
+export {
+  clearTokenBundle,
+  getTokenBundle,
+  isAccessTokenFresh,
+  login,
+  refreshFallback,
+  refreshToken,
+  valid,
+};
 export default { valid, login, restart, upgrade };

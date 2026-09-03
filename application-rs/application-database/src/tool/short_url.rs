@@ -1,5 +1,5 @@
 use crate::{Pool, insert, query_optional, update};
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -22,22 +22,22 @@ pub struct CreateShortUrl {
 
 pub async fn fetch(short: &str) -> application_kernel::result::Result<ShortUrl> {
     let sql = "select * from tool.short_url where short = ? limit 1";
-    let pool = Pool::mysql("tool")?;
+    let pool_ref = Pool::mysql("tool")?;
 
-    let result: Option<ShortUrl> = query_optional!(pool, sql, short);
+    let result: Option<ShortUrl> = query_optional!(pool_ref, sql, short);
 
     if let Some(short_url) = result {
         return Ok(short_url);
     }
 
-    Err(Error::ParamsShortlinkNotFound(None))
+    Err(ErrorCode::ParamsShortlinkNotFound)
 }
 
 pub async fn insert(url: CreateShortUrl) -> application_kernel::result::Result<ShortUrl> {
     let sql = "insert into tool.short_url (short, url) values (?, ?)";
-    let pool = Pool::mysql("tool")?;
+    let pool_ref = Pool::mysql("tool")?;
 
-    let result = insert!(pool, sql, &url.short, &url.url);
+    let result = insert!(pool_ref, sql, &url.short, &url.url);
 
     Ok(ShortUrl {
         id: result.last_insert_id(),
@@ -51,9 +51,9 @@ pub async fn insert(url: CreateShortUrl) -> application_kernel::result::Result<S
 
 pub async fn update_count(id: u64) -> application_kernel::result::Result<()> {
     let sql = "update tool.short_url set visit = visit + 1 where id = ?";
-    let pool = Pool::mysql("tool")?;
+    let pool_ref = Pool::mysql("tool")?;
 
-    let _ = update!(pool, sql, id);
+    let _ = update!(pool_ref, sql, id);
 
     Ok(())
 }

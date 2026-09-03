@@ -10,7 +10,7 @@
   bind:cancel="dialogCancel"
 />
 
-<view class="page">
+<view class="page {{isSortMode ? 'page-sort' : ''}}" style="{{isDragging ? 'overflow: hidden;' : ''}}">
   <view class="header" wx:if="{{items.length > 0}}">
     <view class="header-title">总计 {{items.length}} 个账号</view>
     <view class="header-action">
@@ -25,22 +25,20 @@
     <text class="sort-tip-text">长按并拖动可调整顺序</text>
   </view>
 
-  <movable-area class="items items-sort" wx:if="{{isSortMode && items.length > 0}}" style="height: {{dragItems.length * 100}}px; width: 100%;">
-    <movable-view
+  <view class="items items-sort" wx:if="{{isSortMode && items.length > 0}}">
+    <view
       wx:for="{{ dragItems }}"
       wx:key="id"
-      y="{{item.y}}"
-      direction="vertical"
-      damping="40"
-      friction="2"
-      out-of-bounds="true"
-      style="width: 100%; height: 100px; z-index: {{draggingIndex === index ? 99 : 1}};"
-      bindchange="onDragChange"
-      bindtouchstart="onDragStart"
-      bindtouchend="onDragEnd"
-      data-index="{{index}}"
+      class="sort-row"
     >
-      <view class="sort-item">
+      <view
+        class="sort-item {{draggingIndex === index ? 'sort-item-dragging' : ''}}"
+        style="transform: translateY({{item.translateY}}px); z-index: {{draggingIndex === index ? 99 : 1}};"
+        bindtouchstart="onTouchStart"
+        bindtouchmove="onTouchMove"
+        bindtouchend="onTouchEnd"
+        data-index="{{index}}"
+      >
         <app-totp-item
           itemId="{{ item.id }}"
           period="{{ item.config.period }}"
@@ -50,8 +48,8 @@
         />
         <view class="sort-mask" />
       </view>
-    </movable-view>
-  </movable-area>
+    </view>
+  </view>
 
   <view class="items" wx:if="{{!isSortMode && items.length > 0}}">
     <app-totp-item

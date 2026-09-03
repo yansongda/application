@@ -1,8 +1,6 @@
-import { STORAGE } from "@constant/app";
 import { DEFAULT } from "@constant/user";
 import { substr } from "@utils/string";
-import type { User } from "types/user";
-import type { WxGetStorageSuccess } from "types/wechat";
+import user from "@utils/user";
 
 Page({
   data: {
@@ -13,17 +11,13 @@ Page({
     },
   },
   async onShow() {
-    const storage: WxGetStorageSuccess<User> = await wx.getStorage({
-      key: STORAGE.USER,
-    });
+    const u = await user.detail();
 
     this.setData({
       config: {
-        nickname: substr(
-          storage.data.config?.nickname ?? DEFAULT.CONFIG.NICKNAME,
-        ),
-        avatar: storage.data.config?.avatar ?? DEFAULT.CONFIG.AVATAR,
-        slogan: substr(storage.data.config?.slogan ?? DEFAULT.CONFIG.SLOGAN),
+        nickname: substr(u.config?.nickname ?? DEFAULT.CONFIG.NICKNAME),
+        avatar: u.config?.avatar ?? DEFAULT.CONFIG.AVATAR,
+        slogan: substr(u.config?.slogan ?? DEFAULT.CONFIG.SLOGAN),
       },
     });
   },

@@ -6,6 +6,11 @@ import type { AppOnUnhandledRejection } from "types/wechat";
 
 App({
   async onLaunch() {
+    wx.loadFontFace({
+      family: "t",
+      source: 'url("https://tdesign.gtimg.com/icon/0.4.2/fonts/t.ttf")',
+    });
+
     const valid = await app.valid();
 
     if (!valid) {

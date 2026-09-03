@@ -3,8 +3,8 @@ use application_database::account::third_user;
 use application_database::account::user;
 use application_database::account::{Platform, third_config};
 use application_database::account::{access_token, refresh_token};
-use application_kernel::result::{Error, Result};
-use application_util::{huawei, wechat};
+use application_http::{huawei, wechat};
+use application_kernel::result::{ErrorCode, Result};
 
 pub async fn login(
     request: &LoginRequestParams,
@@ -13,7 +13,7 @@ pub async fn login(
     let (user_id, access_token_data) = match platform {
         Platform::Wechat => login_wechat(request).await,
         Platform::Huawei => login_huawei(request).await,
-        _ => Err(Error::ParamsLoginPlatformUnsupported(None)),
+        Platform::Unsupported => Err(ErrorCode::ParamsLoginPlatformUnsupported),
     }?;
 
     let access_token = access_token::update_or_insert(
@@ -35,16 +35,16 @@ pub async fn login_refresh(
 ) -> Result<(refresh_token::RefreshToken, access_token::AccessToken)> {
     let refresh_token = refresh_token::fetch(request.refresh_token.as_str())
         .await
-        .map_err(|_| Error::AuthorizationRefreshTokenInvalid(None))?;
+        .map_err(|_| ErrorCode::AuthorizationRefreshTokenInvalid)?;
 
     if refresh_token.is_expired() {
-        return Err(Error::AuthorizationRefreshTokenExpired(None));
+        return Err(ErrorCode::AuthorizationRefreshTokenExpired);
     }
 
     let access_token = refresh_token.access_token().await?;
 
     if access_token.platform != request.platform || access_token.third_id != request.third_id {
-        return Err(Error::AuthorizationPermissionUngranted(None));
+        return Err(ErrorCode::AuthorizationPermissionUngranted);
     }
 
     let data = access_token.data.0.clone();
@@ -64,16 +64,33 @@ async fn login_wechat(
         .config
         .as_ref()
         .and_then(|c| c.wechat.as_ref())
-        .ok_or(Error::InternalDatabaseDataInvalid(None))?
+        .ok_or(ErrorCode::InternalDatabaseDataInvalid)?
         .app_secret
         .as_ref();
 
     let wechat_response =
         wechat::login(request.code.as_str(), config.third_id.as_str(), app_secret).await?;
 
+    let third_user_config = third_user::ThirdUserConfig {
+        r#type: "openid".to_string(),
+    };
+
+    let user_id = get_user_id(
+        &Platform::Wechat,
+        wechat_response.openid.as_str(),
+        Some(&third_user_config),
+    )
+    .await?;
+
     Ok((
-        get_user_id(&Platform::Wechat, wechat_response.openid.as_str()).await?,
-        access_token::AccessTokenData::from(wechat_response),
+        user_id,
+        access_token::AccessTokenData {
+            wechat: Some(access_token::WechatAccessTokenData {
+                open_id: wechat_response.openid,
+                union_id: wechat_response.unionid,
+            }),
+            huawei: None,
+        },
     ))
 }
 
@@ -86,7 +103,7 @@ async fn login_huawei(
         .config
         .as_ref()
         .and_then(|c| c.huawei.as_ref())
-        .ok_or(Error::InternalDatabaseDataInvalid(None))?
+        .ok_or(ErrorCode::InternalDatabaseDataInvalid)?
         .client_secret
         .as_ref();
 
@@ -95,7 +112,12 @@ async fn login_huawei(
     let token_info_response = huawei::token_info(token_response.access_token.as_str()).await?;
 
     Ok((
-        get_user_id(&Platform::Huawei, token_info_response.union_id.as_str()).await?,
+        get_user_id(
+            &Platform::Huawei,
+            token_info_response.union_id.as_str(),
+            None,
+        )
+        .await?,
         access_token::AccessTokenData {
             wechat: None,
             huawei: Some(access_token::HuaweiAccessTokenData {
@@ -111,21 +133,22 @@ async fn login_huawei(
     ))
 }
 
-async fn get_user_id(platform: &Platform, third_id: &str) -> Result<u64> {
+async fn get_user_id(
+    platform: &Platform,
+    third_id: &str,
+    config: Option<&third_user::ThirdUserConfig>,
+) -> Result<u64> {
     let result = third_user::fetch(platform, third_id).await;
 
-    if let Ok(user) = result {
-        return Ok(user.user_id);
-    }
-
-    match result.unwrap_err() {
-        Error::ParamsThirdUserNotFound(_) => {
+    match result {
+        Ok(user) => Ok(user.user_id),
+        Err(ErrorCode::ParamsThirdUserNotFound) => {
             let user_id = user::insert(None, user::Config::default()).await?;
 
-            third_user::insert(platform, third_id, user_id).await?;
+            third_user::insert(platform, third_id, user_id, config).await?;
 
             Ok(user_id)
         }
-        e => Err(e),
+        Err(e) => Err(e),
     }
 }

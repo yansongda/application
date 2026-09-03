@@ -5,6 +5,9 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[lints]
+workspace = true
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [[bin]]
@@ -14,18 +17,21 @@ path = "src/bin/api.rs"
 [dependencies]
 application-kernel = { path = "../application-kernel" }
 application-database = { path = "../application-database" }
-application-util = { path = "../application-util" }
+application-http = { path = "../application-http" }
 
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-tokio = { version = "~1.52.1", features = ["full"] }
-salvo = { version = "~0.93.0", features = ["cors", "request-id", "logging"] }
-futures-util = { version = "~0.3.31" }
+ulid = { workspace = true }
 
-murmurs = { version = "~1.0.5" }
-base62 = { version = "~2.2.0" }
-url = { version = "~2.5.0" }
-totp-rs = { version = "~5.7.0", features = ["otpauth"] }
+tokio = { version = "1.53.1", features = ["full"] }
+salvo = { version = "0.96.0", features = ["cors", "request-id", "logging", "catch-panic", "timeout", "compression"] }
+futures-util = { version = "0.3.34" }
+bytes = { version = "1.12" }
+
+murmurs = { version = "1.0.5" }
+base62 = { version = "2.2.4" }
+url = { version = "2.5.8" }
+totp-rs = { version = "6.0.0", features = ["otpauth"] }

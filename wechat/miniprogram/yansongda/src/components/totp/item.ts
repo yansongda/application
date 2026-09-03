@@ -77,7 +77,7 @@ Component({
       this.data.refreshCodeTimeoutIdentity = -1;
 
       clearInterval(this.data.countdownIntervalIdentity);
-      this.data.refreshCodeTimeoutIdentity = -1;
+      this.data.countdownIntervalIdentity = -1;
     },
   },
 });

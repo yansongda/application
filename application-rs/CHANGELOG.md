@@ -1,3 +1,46 @@
+## [1.20.0] - 2026-08-29
+
+### Added
+
+- feat(kernel): 新增第三方 HTTP 错误码：请求超时（9804）、连接失败（9805），并细化认证/参数类错误提示文案 (#155) ([ac0a40d](https://github.com/yansongda/application/commit/ac0a40d))
+- feat(kernel): 新增 `[http]` 配置段：连接超时、请求超时、连接池空闲时长/上限、TCP keepalive 参数，默认值与原硬编码一致，存量配置零迁移 (#155) ([ac0a40d](https://github.com/yansongda/application/commit/ac0a40d))
+- feat(kernel): `outbound_http_requests_total` 指标新增 `business_error` / `response_error` result 标签取值 (#155) ([ac0a40d](https://github.com/yansongda/application/commit/ac0a40d))
+
+### Changed
+
+- ⚠️ **Breaking**: `[bin-api]` 配置移除 `listen` 项，监听地址固定为 `0.0.0.0`（端口仍取 `port`）；存量 `config.toml` 若含 `listen` 行需删除，否则启动时因 `deny_unknown_fields` 校验失败 (#155) ([ac0a40d](https://github.com/yansongda/application/commit/ac0a40d))
+- refactor(util): HTTP 层引入 `ResponseEnvelope` 封套判别，第三方业务错误细分至 9803，并清理样板代码 (#155) ([ac0a40d](https://github.com/yansongda/application/commit/ac0a40d))
+- refactor(application-rs): 全量依赖升级至最新版本：salvo 0.96.0、totp-rs 6.0（TOTP 构建迁移至 Builder 模式）、sqlx 0.9.0（动态 SQL 显式 `AssertSqlSafe` 包装）等 (#156) ([4b84f65](https://github.com/yansongda/application/commit/4b84f65))
+- build(application-rs): 统一 workspace clippy lint 配置并修复告警 (#154) ([0353fb2](https://github.com/yansongda/application/commit/0353fb2))
+
+## [1.19.0] - 2026-08-09
+
+### Added
+
+- refactor(application-rs): 新增可观测性指标：HTTP 请求事件、Prometheus `/metrics` 端点、tracing span 与结构化日志 (#151) ([34bbec3](https://github.com/yansongda/application/commit/34bbec3))
+
+### Changed
+
+- refactor(application-rs): 错误码体系重构，使用 `ErrorCode` 替代原 `Error` 枚举 (#151) ([34bbec3](https://github.com/yansongda/application/commit/34bbec3))
+- refactor(application-rs): 升级 Salvo 至 0.95，并同步升级依赖版本 (#151) ([34bbec3](https://github.com/yansongda/application/commit/34bbec3))
+- refactor(application-rs): 日志初始化与配置结构对齐 `bin_api.debug` 配置 (#151) ([34bbec3](https://github.com/yansongda/application/commit/34bbec3))
+
+## [1.18.1] - 2026-06-28
+
+### Fixed
+
+- fix(wechat): 微信登录 `union_id` 字段改为可选类型，适配部分用户无 `union_id` 的情况 (#145) ([c47ffcf](https://github.com/yansongda/application/commit/c47ffcf))
+
+## [1.18.0] - 2026-06-25
+
+### Added
+
+- feat(auth): 新增认证错误码：access_token 过期（1004）、refresh_token 无效（1005）、refresh_token 过期（1006）(#140) ([8f9e59f](https://github.com/yansongda/application/commit/8f9e59f))
+
+### Changed
+
+- refactor(auth): 调整 access_token 过期语义，`expired_at` 为空时视为已过期，不再对微信 access_token 做永不过期特殊处理 (#140) ([8f9e59f](https://github.com/yansongda/application/commit/8f9e59f))
+
 ## [1.17.0] - 2026-05-13
 
 ### Added

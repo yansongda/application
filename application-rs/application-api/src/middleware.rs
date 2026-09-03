@@ -1,14 +1,42 @@
-use crate::response::ApiErr;
+use crate::response::AppErr;
 use application_database::account::access_token;
+use application_kernel::events::HTTP_REQUEST;
 use application_kernel::logger::truncate_for_log;
-use application_kernel::result::Error;
+use application_kernel::result::ErrorCode;
+use bytes::Bytes;
 use futures_util::StreamExt;
 use salvo::http::header::AUTHORIZATION;
-use salvo::http::{Mime, mime};
+use salvo::http::{Mime, StatusCode, mime};
 use salvo::{Depot, FlowCtrl, Request, Response, handler};
 use std::time::Instant;
-use tracing::{Instrument, info};
-use tracing_subscriber::registry::LookupSpan;
+use tracing::Instrument;
+use ulid::Ulid;
+
+#[handler]
+pub async fn tracing_id(
+    request: &mut Request,
+    depot: &mut Depot,
+    response: &mut Response,
+    ctrl: &mut FlowCtrl,
+) {
+    let id = Ulid::generate().to_string();
+    let request_id = id
+        .parse()
+        .unwrap_or_else(|_| salvo::http::HeaderValue::from_static("unknown"));
+    request.headers_mut().insert("x-request-id", request_id);
+    response.headers_mut().insert(
+        "x-request-id",
+        id.parse()
+            .unwrap_or_else(|_| salvo::http::HeaderValue::from_static("unknown")),
+    );
+
+    let span = tracing::info_span!("http.request", request_id = %id);
+    application_kernel::logger::TracingId::attach(&span, &id);
+
+    ctrl.call_next(request, depot, response)
+        .instrument(span)
+        .await;
+}
 
 #[handler]
 pub async fn authorization(
@@ -19,28 +47,27 @@ pub async fn authorization(
 ) {
     macro_rules! abort {
         ($error:expr) => {{
-            response.render(ApiErr($error));
+            response.render(AppErr($error));
             ctrl.skip_rest();
             return;
         }};
     }
 
-    let auth = match request.headers().get(AUTHORIZATION) {
-        Some(h) => match h.to_str() {
-            Ok(a) => a,
-            Err(_) => abort!(Error::AuthorizationInvalidFormat(None)),
-        },
-        None => abort!(Error::AuthorizationHeaderMissing(None)),
+    let Some(header) = request.headers().get(AUTHORIZATION) else {
+        abort!(ErrorCode::AuthorizationHeaderMissing)
+    };
+    let Ok(auth) = header.to_str() else {
+        abort!(ErrorCode::AuthorizationInvalidFormat)
     };
 
     let token = auth.strip_prefix("Bearer ").unwrap_or(auth);
     let access_token = match access_token::fetch(token).await {
         Ok(t) if !t.is_expired() => t,
-        Ok(_) => abort!(Error::AuthorizationAccessTokenExpired(None)),
-        Err(_) => abort!(Error::AuthorizationAccessTokenInvalid(None)),
+        Ok(_) => abort!(ErrorCode::AuthorizationAccessTokenExpired),
+        Err(_) => abort!(ErrorCode::AuthorizationAccessTokenInvalid),
     };
 
-    depot.inject(access_token);
+    depot.insert_typed(access_token);
 
     ctrl.call_next(request, depot, response).await;
 }
@@ -52,78 +79,83 @@ pub async fn request_logger(
     response: &mut Response,
     ctrl: &mut FlowCtrl,
 ) {
-    let request_id = request
-        .headers()
-        .get("x-request-id")
-        .map_or_else(|| "unknown", |v| v.to_str().unwrap_or("unknown"));
+    let path = request.uri().path().to_string();
 
-    let span = tracing::info_span!("root", request_id);
+    if path == "/health" || path == "/metrics" {
+        ctrl.call_next(request, depot, response).await;
+        return;
+    }
 
-    span.with_subscriber(|(id, dispatch)| {
-        if let Some(sub) = dispatch.downcast_ref::<tracing_subscriber::Registry>()
-            && let Some(span_ref) = sub.span(id)
-        {
-            span_ref
-                .extensions_mut()
-                .insert(application_kernel::logger::TracingId(
-                    request_id.to_string(),
-                ));
-        }
-    });
+    let start = Instant::now();
 
-    let (message, body) = match request.content_type() {
-        Some(ct) if is_loggable_mime(&ct) => {
-            let body = request
-                .parse_body::<&str>()
-                .await
-                .unwrap_or("未解析出请求 body");
-            ("--> 接收到请求", truncate_for_log(body))
-        }
-        Some(_) => ("--> 接收到非 JSON 或表单请求", String::new()),
-        None => ("--> 接收到未知数据源请求", String::new()),
+    let req_body = match request.content_type() {
+        Some(ct) if is_loggable_mime(&ct) => match request.payload().await {
+            Ok(bytes) => truncate_for_log(&bytes[..]),
+            Err(_) => String::from("<payload read error>"),
+        },
+        Some(_) => String::from("非 JSON 或表单请求"),
+        None => String::from("未知数据源请求"),
     };
 
-    async move {
-        info!(
-            message,
-            method = %request.method(),
-            uri = %request.uri(),
-            headers = ?request.headers(),
-            body,
-        );
+    tracing::info!(
+        method = %request.method(),
+        uri = %request.uri(),
+        headers = ?request.headers(),
+        body = %req_body,
+        "--> 接收到请求"
+    );
 
-        let now = Instant::now();
+    ctrl.call_next(request, depot, response).await;
 
-        ctrl.call_next(request, depot, response).await;
+    let elapsed_secs = start.elapsed().as_secs_f64();
 
-        let elapsed = now.elapsed().as_secs_f32();
+    let res_body = match response.content_type() {
+        Some(ct) if is_loggable_mime(&ct) => read_body_for_log(response).await,
+        _ => String::new(),
+    };
 
-        let body = match response.content_type() {
-            Some(ct) if is_loggable_mime(&ct) => {
-                let mut body = response.take_body();
-                let mut bytes = Vec::new();
+    tracing::info!(
+        event = HTTP_REQUEST,
+        method = request.method().as_str(),
+        path = path.as_str(),
+        status = response.status_code.unwrap_or_default().as_str(),
+        duration_seconds = elapsed_secs,
+        body = %res_body,
+        "<-- 请求处理完成"
+    );
+}
 
-                while let Some(Ok(chunk)) = body.next().await {
-                    if let Ok(data) = chunk.into_data() {
-                        bytes.extend_from_slice(&data);
-                    }
-                }
+#[handler]
+pub fn catcher(_req: &Request, _depot: &Depot, res: &mut Response, ctrl: &mut FlowCtrl) {
+    let error_code = match res.status_code {
+        Some(StatusCode::NOT_FOUND) => ErrorCode::StatusNotFound,
+        Some(StatusCode::METHOD_NOT_ALLOWED) => ErrorCode::StatusMethodNotAllowed,
+        Some(StatusCode::INTERNAL_SERVER_ERROR) => ErrorCode::UnknownError,
+        _ => return,
+    };
 
-                let res_body = String::from_utf8_lossy(&bytes).to_string();
+    res.status_code(StatusCode::OK);
+    res.render(crate::response::Response::<String>::error(error_code));
 
-                response.body(res_body.to_owned());
-
-                truncate_for_log(&res_body)
-            }
-            _ => String::new(),
-        };
-
-        info!(message = "<-- 请求处理完成", elapsed, headers = ?response.headers, body);
-    }
-    .instrument(span)
-    .await
+    ctrl.skip_rest();
 }
 
 fn is_loggable_mime(ct: &Mime) -> bool {
     ct.subtype() == mime::JSON || ct.subtype() == mime::WWW_FORM_URLENCODED
+}
+
+async fn read_body_for_log(res: &mut Response) -> String {
+    let mut body = res.take_body();
+    let mut bytes = Vec::new();
+
+    while let Some(Ok(chunk)) = body.next().await {
+        if let Ok(data) = chunk.into_data() {
+            bytes.extend_from_slice(&data);
+        }
+    }
+
+    let res_bytes = Bytes::from(bytes);
+    res.body(res_bytes.clone());
+
+    truncate_for_log(&res_bytes)
 }

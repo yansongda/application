@@ -1,12 +1,10 @@
 import api from "@api/user";
-import { STORAGE } from "@constant/app";
 import { DEFAULT } from "@constant/user";
 import error from "@utils/error";
 import user from "@utils/user";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
-import type { User } from "types/user";
-import type { FormSubmit, WxGetStorageSuccess } from "types/wechat";
+import type { FormSubmit } from "types/wechat";
 
 interface FormData {
   nickname: string;
@@ -17,13 +15,9 @@ Page({
     nickname: "",
   },
   async onShow() {
-    const storage: WxGetStorageSuccess<User> = await wx.getStorage({
-      key: STORAGE.USER,
-    });
+    const u = await user.detail();
 
-    this.setData({
-      nickname: storage.data.config?.nickname ?? DEFAULT.CONFIG.NICKNAME,
-    });
+    this.setData({ nickname: u.config?.nickname ?? DEFAULT.CONFIG.NICKNAME });
   },
   async submit(e: FormSubmit<FormData>) {
     Toast({

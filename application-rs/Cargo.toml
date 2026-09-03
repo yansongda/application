@@ -4,16 +4,35 @@ default-members = ["application-*"]
 resolver = "3"
 
 [workspace.package]
-rust-version = "1.90.0"
-version = "1.17.0"
+rust-version = "1.94.0"
+version = "1.20.0"
 edition = "2024"
 publish = false
 
 [workspace.dependencies]
-chrono = { version = "~0.4.22", features = ["serde"] }
-serde = { version = "~1.0.130", features = ["derive"] }
-serde_json = { version = "~1.0.71" }
+chrono = { version = "0.4.45", features = ["serde"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151" }
 
-tracing = { version = "~0.1.37" }
-tracing-subscriber = { version = "~0.3.16", default-features = false, features = ["registry"] }
-tracing-appender = { version = "~0.2.3" }
+tracing = { version = "0.1.44" }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry"] }
+tracing-appender = { version = "0.2.5" }
+
+prometheus = { version = "0.14.0" }
+ulid = { version = "3.0.0" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unreachable_pub = "warn"
+missing_docs = "allow"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+cast_precision_loss = "allow"
+derivable_impls = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"

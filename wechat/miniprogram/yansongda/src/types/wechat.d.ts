@@ -60,3 +60,10 @@ export interface WxLoginSuccessCallbackResult {
 export interface WxGetStorageSuccess<T> {
   data: T;
 }
+
+declare global {
+  class URLSearchParams {
+    append(name: string, value: string): void;
+    toString(): string;
+  }
+}

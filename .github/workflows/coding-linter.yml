@@ -10,20 +10,20 @@ on:
 
 jobs:
   check-backend:
-    name: Check - Backend
+    name: "Backend: Check"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: application-rs
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
       - name: Cache crates
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
@@ -39,21 +39,21 @@ jobs:
           cargo check --all-features
 
   lint-backend:
-    name: Lint - Backend
+    name: "Backend: Lint"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: application-rs
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: rustfmt, clippy
       - name: Cache crates
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
@@ -71,38 +71,73 @@ jobs:
         run: |
           cargo clippy -- -D warnings
 
+  test-backend:
+    name: "Backend: Test"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: application-rs
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Cache crates
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Run cargo test
+        run: |
+          cargo test --all-features
+
   lint-frontend-yansongda:
-    name: Lint - Frontend
+    name: "Frontend: Lint (Yansongda)"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: wechat/miniprogram/yansongda
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: latest
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: latest
-          run_install: false
-      - name: Get pnpm store directory
-        shell: bash
+        uses: actions/checkout@v7
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+      - name: Install dependencies
         run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-      - name: Setup pnpm cache
-        uses: actions/cache@v5
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-      - name: Run pnpm install
+          deno install
+      - name: Run biome check
         run: |
-          pnpm i
-      - name: Run pnpm lint
+          deno task biome:check
+      - name: Run type check
         run: |
-          pnpm biome:check
+          deno task typecheck
+
+  lint-frontend-totp:
+    name: "Frontend: Lint (TOTP)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wechat/miniprogram/totp
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+      - name: Install dependencies
+        run: |
+          deno install
+      - name: Run biome check
+        run: |
+          deno task biome:check
+      - name: Run type check
+        run: |
+          deno task typecheck

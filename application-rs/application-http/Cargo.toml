@@ -1,9 +1,12 @@
 [package]
-name = "application-util"
+name = "application-http"
 rust-version.workspace = true
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 application-kernel = { path = "../application-kernel" }
@@ -12,4 +15,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 
-reqwest = { version = "~0.13.1", features = ["form"] }
+reqwest = { version = "0.13.4", features = ["form"] }
