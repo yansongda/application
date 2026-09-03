@@ -5,14 +5,13 @@ import {
   AppStorageV2,
   LoadingDialogV2,
   PersistenceV2,
-  SymbolGlyphModifier,
-  promptAction
+  SymbolGlyphModifier
 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Authorization } from '../../models/Auth';
-import { Dialog } from '../../utils/PromptAction';
+import { Dialog, Toast } from '../../utils/PromptAction';
 import { AppPagesName, LogDomain } from '../../App';
-import { Totp } from '../../api/Totp';
+import { SortRequestItem, Totp } from '../../api/Totp';
 import { scanBarcode } from '@kit.ScanKit';
 import { User } from '../../models/User';
 import { User as UserApi } from '../../api/User';
@@ -69,6 +68,12 @@ export struct Index {
           }
         }
         .onRefreshing(() => {
+          if (this.isSortMode) {
+            this.isRefreshing = false;
+
+            return;
+          }
+
           this.refresh();
 
           this.isRefreshing = false;
@@ -100,21 +105,7 @@ export struct Index {
               value: '扫码添加',
               symbolIcon: new SymbolGlyphModifier($r('sys.symbol.line_viewfinder')),
               action: () => {
-                scanBarcode.startScanForResult(this.getUIContext().getHostContext()).then(async (result) => {
-                  let uri = result.originalValue;
-
-                  hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果: %{public}s', uri);
-
-                  try {
-                    const data =
-                      await Dialog.execute(() => this.loadingDialog($r('app.string.handling')),
-                        () => Totp.create(uri));
-
-                    this.itemsRuntime.add(data);
-                  } catch (e) {
-                    await Dialog.open(() => this.addFailedDialog(e.message));
-                  }
-                });
+                this.addByScan();
               },
             },
             {
@@ -134,6 +125,10 @@ export struct Index {
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .onActive(() => {
       hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '页面显示');
+
+      if (this.isSortMode) {
+        return;
+      }
 
       this.refresh();
     })
@@ -158,20 +153,19 @@ export struct Index {
           .backgroundColor($r('app.color.brand'))
           .fontColor($r('sys.color.font_on_primary'))
           .onClick(async () => {
-            let reqItems: Array<{ id: string, sort: number }> = [];
-            let len = this.itemsRuntime.ids.length;
-            this.itemsRuntime.ids.forEach((id, idx) => {
+            const reqItems: SortRequestItem[] = [];
+            const len = this.itemsRuntime.ids.length;
+            this.itemsRuntime.ids.forEach((id: string, idx: number): void => {
               reqItems.push({ id: id, sort: len - 1 - idx });
             });
 
             try {
-              const dialogId = await Dialog.open(() => this.loadingDialog());
-              await Totp.sort(reqItems);
-              Dialog.close(dialogId);
+              await Dialog.execute(() => this.loadingDialog(), () => Totp.sort(reqItems));
+
               this.isSortMode = false;
             } catch (e) {
-              this.itemsRuntime.ids.splice(0, this.itemsRuntime.ids.length, ...this.snapshotIds);
-              promptAction.showToast({ message: '排序失败: ' + e.message });
+              this.itemsRuntime.restore(this.snapshotIds);
+              Toast.show({ message: '排序失败: ' + e.message, duration: 3000 });
             }
           })
       } else {
@@ -257,21 +251,7 @@ export struct Index {
               Button("扫码添加")
                 .margin({ top: 30 })
                 .onClick(() => {
-                  scanBarcode.startScanForResult(this.getUIContext().getHostContext()).then(async (result) => {
-                    let uri = result.originalValue;
-
-                    hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果: %{public}s', uri);
-
-                    try {
-                      const data =
-                        await Dialog.execute(() => this.loadingDialog($r('app.string.handling')),
-                          () => Totp.create(uri));
-
-                      this.itemsRuntime.add(data);
-                    } catch (e) {
-                      await Dialog.open(() => this.addFailedDialog(e.message));
-                    }
-                  });
+                  this.addByScan();
                 })
             }
             .width('100%')
@@ -421,12 +401,14 @@ export struct Index {
             },
             edgeEffect: SwipeEdgeEffect.None,
           })
-          .onDragStart((event: DragEvent, extraParams: string) => {
+          .onDragStart((event: DragEvent, extraParams: string): DragItemInfo | undefined => {
             if (!this.isSortMode) {
-              return;
+              return undefined;
             }
+
             this.draggedIndex = ri.index;
-            return this.dragPreview(ri.item.valueOf());
+
+            return { builder: (): void => { this.dragPreview(ri.item.valueOf()) } };
           })
           .onDrop((event: DragEvent, extraParams: string) => {
             if (!this.isSortMode) {
@@ -571,6 +553,23 @@ export struct Index {
         action,
       }),
     })
+  }
+
+  private async addByScan(): Promise<void> {
+    const result = await scanBarcode.startScanForResult(this.getUIContext().getHostContext());
+    const uri = result.originalValue;
+
+    hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果: %{public}s', uri);
+
+    try {
+      const data =
+        await Dialog.execute(() => this.loadingDialog($r('app.string.handling')),
+          () => Totp.create(uri));
+
+      this.itemsRuntime.add(data);
+    } catch (e) {
+      await Dialog.open(() => this.addFailedDialog(e.message));
+    }
   }
 
   private async refresh(): Promise<void> {

@@ -262,4 +262,8 @@ export class ItemsRuntime {
     ids.splice(toIndex, 0, movedId);
     this._ids = ids;
   }
+
+  restore(ids: string[]) {
+    this._ids = [...ids];
+  }
 }
