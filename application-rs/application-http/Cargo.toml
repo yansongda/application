@@ -1,5 +1,5 @@
 [package]
-name = "application-util"
+name = "application-http"
 rust-version.workspace = true
 version.workspace = true
 edition.workspace = true

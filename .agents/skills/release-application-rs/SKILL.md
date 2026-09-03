@@ -206,7 +206,7 @@ application-rs/
   application-database/# Database layer
   application-kernel/  # Core types, config, errors
   application-macro/   # Procedural macros
-  application-util/    # HTTP client, 3rd party integrations
+  application-http/   # HTTP client, 3rd party integrations
 ```
 
 All crates share the workspace version via `version.workspace = true`.
