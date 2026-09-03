@@ -17,7 +17,7 @@ path = "src/bin/api.rs"
 [dependencies]
 application-kernel = { path = "../application-kernel" }
 application-database = { path = "../application-database" }
-application-util = { path = "../application-util" }
+application-http = { path = "../application-http" }
 
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

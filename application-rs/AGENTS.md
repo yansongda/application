@@ -12,7 +12,7 @@ application-rs/
   application-api/       # HTTP API 二进制入口（src/bin/api.rs）
   application-kernel/    # 核心库：配置、日志、错误/结果类型
   application-database/  # 数据库访问层（MySQL、SQLx）
-  application-util/      # HTTP 客户端、第三方平台对接
+  application-http/     # HTTP 客户端、第三方平台对接
   database/              # SQL 迁移脚本
 ```
 
@@ -155,5 +155,5 @@ response.rs  Response<D>、ApiErr、Scribe 实现
 ## NOTES
 
 - `application-macro/` 目录已不存在，本文件已移除该条目。
- - `middleware.rs` 与 `application-util/src/http.rs` 记录完整 headers（含 Authorization），此为预期行为。
+ - `middleware.rs` 与 `application-http/src/http.rs` 记录完整 headers（含 Authorization），此为预期行为。
 - 测试覆盖率低，CI 仅执行 `cargo check` / `cargo fmt` / `cargo clippy`，不执行 `cargo test`。

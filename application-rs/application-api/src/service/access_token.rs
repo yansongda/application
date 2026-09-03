@@ -3,8 +3,8 @@ use application_database::account::third_user;
 use application_database::account::user;
 use application_database::account::{Platform, third_config};
 use application_database::account::{access_token, refresh_token};
+use application_http::{huawei, wechat};
 use application_kernel::result::{ErrorCode, Result};
-use application_util::{huawei, wechat};
 
 pub async fn login(
     request: &LoginRequestParams,

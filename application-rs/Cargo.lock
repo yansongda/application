@@ -87,8 +87,8 @@ name = "application-api"
 version = "1.20.0"
 dependencies = [
  "application-database",
+ "application-http",
  "application-kernel",
- "application-util",
  "base62",
  "bytes",
  "futures-util",
@@ -118,6 +118,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "application-http"
+version = "1.20.0"
+dependencies = [
+ "application-kernel",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "application-kernel"
 version = "1.20.0"
 dependencies = [
@@ -129,17 +140,6 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "ulid",
-]
-
-[[package]]
-name = "application-util"
-version = "1.20.0"
-dependencies = [
- "application-kernel",
- "reqwest",
- "serde",
- "serde_json",
- "tracing",
 ]
 
 [[package]]

@@ -18,7 +18,7 @@ yansongda-application/
 │   ├── application-api/            # HTTP API 二进制入口
 │   ├── application-kernel/         # 配置、日志、错误类型
 │   ├── application-database/       # 数据库访问层（SQLx + 原生 SQL）
-│   ├── application-util/           # 第三方 HTTP 对接（微信/华为）
+│   ├── application-http/           # 第三方 HTTP 对接（微信/华为）
 │   └── database/                   # SQL 迁移脚本
 ├── wechat/miniprogram/
 │   ├── yansongda/                  # 主微信小程序（Deno）
@@ -52,9 +52,9 @@ yansongda-application/
 | `G_CONFIG` | static | `application-rs/application-kernel/src/config.rs` | 全局运行时配置 |
 | `Pool` | struct | `application-rs/application-database/src/lib.rs` | MySQL 连接池管理 |
 | `Platform` | enum | `application-rs/application-database/src/account/mod.rs` | 平台标识：wechat/huawei |
-| `request` | function | `application-rs/application-util/src/http.rs:27` | 通用第三方 HTTP 请求 |
-| `login` | function | `application-rs/application-util/src/wechat.rs` | 微信 jscode2session |
-| `token` | function | `application-rs/application-util/src/huawei.rs` | 华为 OAuth token |
+| `request` | function | `application-rs/application-http/src/http.rs:27` | 通用第三方 HTTP 请求 |
+| `login` | function | `application-rs/application-http/src/wechat.rs` | 微信 jscode2session |
+| `token` | function | `application-rs/application-http/src/huawei.rs` | 华为 OAuth token |
 
 ## CONVENTIONS
 
@@ -109,5 +109,5 @@ deno task typecheck
 - `application-rs/AGENTS.md` 中已修正：移除不存在的 `application-macro/` 目录；CI 不运行 `cargo test`。
 - `wechat/miniprogram/yansongda/` 已迁移到 Deno，锁文件为 `deno.lock`。
 - 华为 `build-profile.json5` 包含本地签名证书路径与明文密码，仅用于本地开发，禁止用于生产。
- - 后端 `middleware.rs` 与 `application-util/src/http.rs` 记录完整 headers（含 Authorization），此为预期行为。
+ - 后端 `middleware.rs` 与 `application-http/src/http.rs` 记录完整 headers（含 Authorization），此为预期行为。
 - 三个前端均无实际业务测试；Rust 后端仅有少量单元测试，CI 不执行测试。
