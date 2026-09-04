@@ -149,7 +149,7 @@ export class Authorization {
     if ('undefined' === typeof refreshToken) {
       hilog.error(LogDomain.MODELS, 'models/auth', '传递的 refresh_token 参数错误');
 
-      Promise.reject();
+      return Promise.reject();
     }
 
     const response = await AccessToken.loginRefresh(App.clientId, refreshToken!);
@@ -160,5 +160,12 @@ export class Authorization {
     this._expiredAt = dateformat.now().add(response.expired_in, 'second').toDate() as Date;
 
     return this;
+  }
+
+  clear(): void {
+    this._authorizedAt = undefined;
+    this._accessToken = undefined;
+    this._refreshToken = undefined;
+    this._expiredAt = undefined;
   }
 }

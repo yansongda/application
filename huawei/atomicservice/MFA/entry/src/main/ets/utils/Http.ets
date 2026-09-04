@@ -10,6 +10,17 @@ const authorization =
   (): Authorization => PersistenceV2.globalConnect({ type: Authorization, defaultCreator: () => new Authorization() })!;
 const pages = (): NavPathStack => AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
 
+// 跳转到登录页重新认证，已在登录页时忽略，避免重复入栈
+const redirectLoginPage = (state: State): void => {
+  const allPathName = pages().getAllPathName();
+
+  if (allPathName.includes(AppPagesName.LOGIN.toString())) {
+    return;
+  }
+
+  pages().pushPathByName(AppPagesName.LOGIN, { forceAuthorizationState: state } as LoginPageParams);
+};
+
 const url = (): string => {
   const env = App.env;
 
@@ -60,26 +71,16 @@ http.interceptors.response.use((response: AxiosResponse): AxiosResponse => {
     response.config.url,
     response.config.method, JSON.stringify(response.data), JSON.stringify(response.performanceTiming));
 
-  const responseCode: number = response.data.code ?? '-1';
+  const responseCode: number = response.data.code ?? -1;
 
   // refresh_token 过期
   if ([1005, 1006].includes(responseCode)) {
-    const allPathName = pages().getAllPathName();
-
-    if (AppPagesName.LOGIN.toString() !== (allPathName[0] ?? 'undefined')) {
-      pages()
-        .pushPathByName(AppPagesName.LOGIN,
-          { forceAuthorizationState: State.REFRESH_TOKEN_EXPIRED } as LoginPageParams);
-    }
+    redirectLoginPage(State.REFRESH_TOKEN_EXPIRED);
   }
 
   // token 过期
   if ([1000, 1001, 1002, 1004].includes(responseCode)) {
-    const allPathName = pages().getAllPathName();
-
-    if (AppPagesName.LOGIN.toString() !== (allPathName[0] ?? 'undefined')) {
-      pages().pushPathByName(AppPagesName.LOGIN, { forceAuthorizationState: State.NEED_REFRESH } as LoginPageParams);
-    }
+    redirectLoginPage(State.NEED_REFRESH);
   }
 
   return response;

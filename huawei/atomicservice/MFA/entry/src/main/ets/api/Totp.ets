@@ -30,6 +30,18 @@ export interface DeleteRequest {
   id: string;
 }
 
+export interface SortRequest {
+  items: Array<SortRequestItem>;
+}
+
+export interface SortRequestItem {
+  id: string;
+  sort: number;
+}
+
+
+export interface SortResponse {}
+
 export class Totp {
   static async all(): Promise<Set<AllResponse>> {
     const response: AxiosResponse<Response<Set<AllResponse>>> =
@@ -105,6 +117,20 @@ export class Totp {
       await http.post<void, AxiosResponse<Response<void>>, DeleteRequest>('api/v1/totp/delete',
         {
           id,
+        });
+
+    if (0 === response.data?.code) {
+      return;
+    }
+
+    return Promise.reject(new HttpError(response.data.message));
+  }
+
+  static async sort(items: Array<SortRequestItem>): Promise<void> {
+    const response: AxiosResponse<Response<SortResponse>> =
+      await http.post<SortResponse, AxiosResponse<Response<SortResponse>>, SortRequest>('api/v1/totp/sort',
+        {
+          items,
         });
 
     if (0 === response.data?.code) {

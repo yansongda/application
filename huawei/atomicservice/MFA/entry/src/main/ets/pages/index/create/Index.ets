@@ -111,8 +111,17 @@ struct Index {
                 return;
               }
 
+              const period = Number.parseInt(this.period);
+
+              if (Number.isNaN(period) || period <= 0) {
+                Toast.show({ message: $r('app.string.index_create_page_period_error') });
+
+                return;
+              }
+
+              const label = `${encodeURIComponent(this.issuer)}:${encodeURIComponent(this.username)}`;
               const uri =
-                `otpauth://totp/${this.issuer}:${this.username}?secret=${this.secret}&issuer=${this.issuer}&period=${this.period}`;
+                `otpauth://totp/${label}?secret=${this.secret}&issuer=${encodeURIComponent(this.issuer)}&period=${period}`;
 
               hilog.info(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建: %{public}s', uri);
 

@@ -125,6 +125,10 @@
       "value": "请输入用户名、发行方、密钥"
     },
     {
+      "name": "index_create_page_period_error",
+      "value": "请输入正确的更新周期（正整数秒）"
+    },
+    {
       "name": "index_edit_issuer_page_title",
       "value": "设置发行方"
     },

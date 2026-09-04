@@ -5,6 +5,8 @@ import {
   AdvancedDialogV2Button, AlertDialogV2, AppStorageV2, LoadingDialogV2, PersistenceV2
 } from '@kit.ArkUI';
 import { Dialog } from '../utils/PromptAction';
+import { User } from '../models/User';
+import { User as UserApi } from '../api/User';
 
 export interface LoginPageParams {
   forceAuthorizationState: State;
@@ -25,12 +27,26 @@ struct Login {
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
   private authorization: Authorization =
     PersistenceV2.globalConnect({ type: Authorization, defaultCreator: () => new Authorization() })!;
+  private user: User =
+    PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
+  @Local
+  private failed: boolean = false;
+  @Local
+  private lastAuthType: AuthType = AuthType.LOGIN;
 
   build() {
     NavDestination() {
       Column() {
         Image($r('app.media.icon')).width('30%');
         Text($r('app.string.login_page_login')).fontSize(20).margin({ top: 20 });
+
+        if (this.failed) {
+          Button($r('app.string.retry'))
+            .margin({ top: 30 })
+            .onClick(() => {
+              this.auth(this.lastAuthType);
+            })
+        }
       }
       .width('100%')
       .height('100%')
@@ -67,6 +83,9 @@ struct Login {
     AlertDialogV2({
       primaryTitle: $r('app.string.home_page_login_failed_title'),
       content: $r('app.string.is_retry'),
+      primaryButton: new AdvancedDialogV2Button({
+        content: $r('app.string.cancel'),
+      }),
       secondaryButton: new AdvancedDialogV2Button({
         content: $r('app.string.retry'),
         role: ButtonRole.ERROR,
@@ -76,33 +95,57 @@ struct Login {
   }
 
   private async auth(type: AuthType): Promise<void> {
-    if (AuthType.LOGIN === type) {
-      await Dialog.execute(
-        () => this.loadingDialog(),
-        () => this.authorization.login(),
-        () => this.loginConfirmDialog(() => this.auth(type))
-      );
-    }
+    this.lastAuthType = type;
+    this.failed = false;
 
-    if (AuthType.LOGIN_REFRESH === type) {
-      const dialogId = await Dialog.open(() => this.loadingDialog());
-
-      try {
-        await this.authorization.refresh(this.authorization.refreshToken);
-
-        Dialog.close(dialogId);
-      } catch (e) {
-        hilog.warn(LogDomain.PAGES, AppPagesName.LOGIN,
-          'refresh_token 刷新失败，可能过期或服务器错误，重新登录， Cause: %{public}s',
-          JSON.stringify(e))
-
-        Dialog.close(dialogId);
-
-        return this.auth(AuthType.LOGIN);
+    try {
+      if (AuthType.LOGIN === type) {
+        await Dialog.execute(
+          () => this.loadingDialog(),
+          () => this.authorization.login(),
+          () => this.loginConfirmDialog(() => this.auth(type))
+        );
       }
-    }
 
-    this.pages.pop();
+      if (AuthType.LOGIN_REFRESH === type) {
+        const dialogId = await Dialog.open(() => this.loadingDialog());
+
+        try {
+          await this.authorization.refresh(this.authorization.refreshToken);
+
+          Dialog.close(dialogId);
+        } catch (e) {
+          hilog.warn(LogDomain.PAGES, AppPagesName.LOGIN,
+            'refresh_token 刷新失败，可能过期或服务器错误，重新登录， Cause: %{public}s',
+            JSON.stringify(e))
+
+          Dialog.close(dialogId);
+
+          return this.auth(AuthType.LOGIN);
+        }
+      }
+
+      await this.fetchUser();
+
+      this.pages.pop();
+    } catch (e) {
+      // 用户在重试对话框选择取消，停留在登录页并提供重试按钮
+      hilog.warn(LogDomain.PAGES, AppPagesName.LOGIN, '登录失败: %{public}s', JSON.stringify(e));
+
+      this.failed = true;
+    }
+  }
+
+  // 登录成功后拉取一次用户信息，失败不阻塞登录流程
+  private async fetchUser(): Promise<void> {
+    try {
+      const user = await UserApi.detail();
+
+      this.user.phone = user.phone;
+      this.user.config = user.config;
+    } catch (e) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.LOGIN, '获取用户信息失败: %{public}s', JSON.stringify(e));
+    }
   }
 
   private getFinalState(pageParams: LoginPageParams): State {
