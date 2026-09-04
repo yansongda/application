@@ -15,12 +15,17 @@ export function builder() {
 struct Slogan {
   @Local
   private title: Resource | undefined = $r('app.string.user_detail_edit_slogan_page_title');
+  @Local
+  private slogan: string = '';
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
   private user: User =
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
 
   aboutToAppear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+
+    // 本地暂存输入值，避免双向绑定直接修改持久化模型
+    this.slogan = this.user.config.slogan ?? '';
   }
 
   build() {
@@ -36,7 +41,7 @@ struct Slogan {
 
           TextInput({
             placeholder: $r('app.string.user_detail_edit_slogan_page_placeholder'),
-            text: this.user.config.slogan!!,
+            text: this.slogan!!,
           })
             .defaultFocus(true)
             .onFocus(() => {
@@ -53,16 +58,19 @@ struct Slogan {
             .margin({ bottom: 30 })
             .onClick(async () => {
               hilog.info(LogDomain.PAGES, AppPagesName.USER_EDIT_SLOGAN, '修改后的值: %{public}s',
-                this.user.config.slogan);
+                this.slogan);
 
               try {
                 await Toast.execute(
-                  () => UserApi.editSlogan(this.user.config.slogan ?? ''),
+                  () => UserApi.editSlogan(this.slogan),
                   () => this.loadingDialog(),
                   $r('app.string.operation_success'),
                 );
 
-                this.pages.pop({ value: this.user.config.slogan } as IJumpCallbackResult);
+                // 仅在保存成功后写入持久化模型
+                this.user.config.slogan = this.slogan;
+
+                this.pages.pop({ value: this.slogan } as IJumpCallbackResult);
               } catch (e) {
               }
             })

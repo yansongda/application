@@ -1,7 +1,8 @@
 import { HashMap } from '@kit.ArkTS';
 import { IItem, IItemConfig } from '../types/Item';
 import { AppStorageV2 } from '@kit.ArkUI';
-import { AppPagesName } from '../App';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { AppPagesName, LogDomain } from '../App';
 import { Toast } from '../utils/PromptAction';
 import { Totp } from '../api/Totp';
 
@@ -13,6 +14,10 @@ export class ItemRuntime {
     this._issuer = item.issuer;
     this._username = item.username;
     this._config = item.config;
+  }
+
+  static empty(): ItemRuntime {
+    return new ItemRuntime({ id: '', issuer: '', username: '', code: '', sort: 0, config: { period: 30 } });
   }
 
   private _id: string;
@@ -105,11 +110,49 @@ export class ItemRuntime {
 
     const allPathName: string[] = AppStorageV2.connect(NavPathStack)!.getAllPathName();
 
-    if (AppPagesName.LOGIN.toString() === (allPathName[0] ?? 'undefined')) {
+    if (allPathName.includes(AppPagesName.LOGIN.toString())) {
       return;
     }
 
-    this.freshCode();
+    this.freshCode().catch(() => {
+      // 失败已通过 Toast 提示，这里仅避免 unhandled rejection
+    });
+
+    this.schedule();
+  }
+
+  // 恢复定时器（如退后台后回前台），不额外发起网络请求，验证码由页面刷新时统一拉取
+  resume() {
+    if (this._timeoutId !== undefined) {
+      return;
+    }
+
+    const allPathName: string[] = AppStorageV2.connect(NavPathStack)!.getAllPathName();
+
+    if (allPathName.includes(AppPagesName.LOGIN.toString())) {
+      return;
+    }
+
+    this.schedule();
+  }
+
+  stop() {
+    clearTimeout(this._timeoutId)
+    clearInterval(this._intervalId)
+
+    this._code = undefined;
+    this._progress = undefined;
+    this._timeoutId = undefined;
+    this._intervalId = undefined;
+  }
+
+  // 根据更新周期对齐进度并重建定时器，周期到达时重新 start() 拉取新验证码
+  private schedule() {
+    if (!(this._config.period > 0)) {
+      hilog.warn(LogDomain.MODELS, 'models/runtime', '非法的更新周期: %{public}d', this._config.period);
+
+      return;
+    }
 
     const now = new Date();
 
@@ -130,16 +173,6 @@ export class ItemRuntime {
 
     this._timeoutId = timeoutId;
     this._intervalId = intervalId;
-  }
-
-  stop() {
-    clearTimeout(this._timeoutId)
-    clearInterval(this._intervalId)
-
-    this._code = undefined;
-    this._progress = undefined;
-    this._timeoutId = undefined;
-    this._intervalId = undefined;
   }
 
   async freshCode() {
@@ -164,11 +197,6 @@ export class ItemsRuntime {
       return;
     }
 
-    try {
-      this._runtimes.clear();
-    } catch (error) {
-    }
-
     for (const item of Array.from(items).sort((a: IItem, b: IItem): number => b.sort - a.sort)) {
       this.add(item);
     }
@@ -182,15 +210,23 @@ export class ItemsRuntime {
   }
 
   start(id: string) {
-    this.get(id).start();
+    this._runtimes.get(id)?.start();
   }
 
   stop(id: string) {
-    this.get(id).stop();
+    this._runtimes.get(id)?.stop();
+  }
+
+  stopAll() {
+    this._ids.forEach((id: string): void => this._runtimes.get(id)?.stop());
+  }
+
+  resumeAll() {
+    this._ids.forEach((id: string): void => this._runtimes.get(id)?.resume());
   }
 
   delete(id: string) {
-    this.stop(id);
+    this._runtimes.get(id)?.stop();
 
     const index = this._ids.indexOf(id);
 
@@ -199,25 +235,11 @@ export class ItemsRuntime {
       this._ids = [...this._ids];
     }
 
-    try {
-      this._runtimes.remove(id);
-    } catch (error) {
-    }
+    this._runtimes.remove(id);
   }
 
   get(id: string): ItemRuntime {
-    let runtime: undefined | ItemRuntime = undefined;
-
-    try {
-      runtime = this._runtimes.get(id);
-    } catch (error) {
-    }
-
-    return runtime ?? new ItemRuntime({} as IItem);
-  }
-
-  isEmpty(): boolean {
-    return this._ids.length === 0;
+    return this._runtimes.get(id) ?? ItemRuntime.empty();
   }
 
   clear() {
@@ -225,23 +247,20 @@ export class ItemsRuntime {
   }
 
   add(item: IItem): ItemRuntime {
-    this.stop(item.id);
+    this._runtimes.get(item.id)?.stop();
 
     const runtime = new ItemRuntime(item);
 
-    try {
-      this._runtimes.set(item.id, runtime);
+    this._runtimes.set(item.id, runtime);
 
-      const index = this._ids.indexOf(item.id);
+    const index = this._ids.indexOf(item.id);
 
-      if (index >= 0) {
-        this._ids.splice(index, 1);
-      }
-
-      this._ids.push(item.id);
-      this._ids = [...this._ids];
-    } catch (error) {
+    if (index >= 0) {
+      this._ids.splice(index, 1);
     }
+
+    this._ids.push(item.id);
+    this._ids = [...this._ids];
 
     return runtime;
   }
@@ -265,5 +284,32 @@ export class ItemsRuntime {
 
   restore(ids: string[]) {
     this._ids = [...ids];
+  }
+
+  // 以服务端数据原地刷新：更新已有条目（保留运行中的定时器，不额外拉码）、增删差异条目并按服务端顺序重排
+  reload(items: Iterable<IItem>) {
+    const nextItems = Array.from(items).sort((a: IItem, b: IItem): number => b.sort - a.sort);
+    const nextIds = nextItems.map((item: IItem): string => item.id);
+
+    [...this._ids]
+      .filter((id: string): boolean => !nextIds.includes(id))
+      .forEach((id: string): void => this.delete(id));
+
+    nextItems.forEach((item: IItem): void => {
+      const existing = this._runtimes.get(item.id);
+
+      if (existing) {
+        existing.issuer = item.issuer;
+        existing.username = item.username;
+        existing.config = item.config;
+        existing.code = item.code;
+
+        existing.resume();
+      } else {
+        this.add(item);
+      }
+    });
+
+    this._ids = nextIds;
   }
 }

@@ -49,7 +49,9 @@ export class App {
     const clientId = App.getMetadata('client_id');
 
     if ('undefined' === typeof clientId) {
-      return 'undefined';
+      hilog.warn(LogDomain.UTILS, 'utils/app', 'metadata 中不存在 client_id');
+
+      return '';
     }
 
     App._clientId = clientId

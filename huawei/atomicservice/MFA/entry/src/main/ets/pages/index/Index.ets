@@ -14,7 +14,6 @@ import { AppPagesName, LogDomain } from '../../App';
 import { SortRequestItem, Totp } from '../../api/Totp';
 import { scanBarcode } from '@kit.ScanKit';
 import { User } from '../../models/User';
-import { User as UserApi } from '../../api/User';
 
 @ObservedV2
 export class IndexGuideState {
@@ -40,22 +39,12 @@ export struct Index {
   private draggedIndex: number = -1;
   private snapshotIds: string[] = [];
   @Local
-  private itemsRuntime: ItemsRuntime = new ItemsRuntime();
+  private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
   private user: User =
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
   private scroller: ListScroller = new ListScroller();
   private swipeActionId?: string;
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
-
-  @Monitor('authorization.accessToken')
-  async onAuthorizationChange(): Promise<void> {
-    hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '监测到认证信息发生变化');
-
-    const user = await UserApi.detail();
-
-    this.user.phone = user.phone;
-    this.user.config = user.config;
-  }
 
   build() {
     NavDestination() {
@@ -74,9 +63,11 @@ export struct Index {
             return;
           }
 
-          this.refresh();
-
-          this.isRefreshing = false;
+          this.refresh().catch(() => {
+            // 失败已由重试对话框提示，仅避免 unhandled rejection
+          }).finally(() => {
+            this.isRefreshing = false;
+          });
         })
         .refreshOffset(64)
         .pullToRefresh(true)
@@ -130,12 +121,15 @@ export struct Index {
         return;
       }
 
-      this.refresh();
+      this.refresh().catch(() => {
+        // 失败已由重试对话框提示，仅避免 unhandled rejection
+      });
     })
     .onHidden(() => {
       hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '页面隐藏');
 
-      this.itemsRuntime.clear();
+      // 仅暂停定时器，保留运行时实例以便返回时原地增量刷新
+      this.itemsRuntime.stopAll();
     })
   }
 
@@ -556,8 +550,17 @@ export struct Index {
   }
 
   private async addByScan(): Promise<void> {
-    const result = await scanBarcode.startScanForResult(this.getUIContext().getHostContext());
-    const uri = result.originalValue;
+    let uri: string;
+
+    try {
+      const result = await scanBarcode.startScanForResult(this.getUIContext().getHostContext());
+
+      uri = result.originalValue;
+    } catch (e) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '扫码取消或失败: %{public}s', JSON.stringify(e));
+
+      return;
+    }
 
     hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果: %{public}s', uri);
 
@@ -573,12 +576,10 @@ export struct Index {
   }
 
   private async refresh(): Promise<void> {
-    this.itemsRuntime.clear();
-
     const items =
       await Dialog.execute(() => this.loadingDialog($r('app.string.loading')), () => Totp.all(),
         () => this.fetchFailedDialog(() => this.refresh()));
 
-    this.itemsRuntime = new ItemsRuntime(items.values());
+    this.itemsRuntime.reload(items.values());
   }
 }

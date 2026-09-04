@@ -1,3 +1,4 @@
+import { authentication } from '@kit.AccountKit';
 import { AdvancedDialogV2Button, AlertDialogV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
 import { Card, CardItem } from '../../components/Card';
 import { User } from '../../models/User';
@@ -25,14 +26,8 @@ struct Detail {
           .autoResize(false)
           .interpolation(ImageInterpolation.High)
           .borderRadius(10)
-          .onClick(async () => {
-            const credential =
-              await Authorization.authenticateWithHuaweiID(['profile'], this.getUIContext().getHostContext());
-
-            hilog.info(LogDomain.PAGES, AppPagesName.USER_DETAIL, '授权获取的用户信息: %{public}s',
-              JSON.stringify(credential));
-
-            this.editAvatar(credential.avatarUri!);
+          .onClick(() => {
+            this.changeAvatar();
           })
 
         Card({
@@ -42,13 +37,13 @@ struct Detail {
               value: this.user.config.nickname ?? $r('app.string.default_nickname'),
               eventClick: {
                 action: async () => {
-                  const credential =
-                    await Authorization.authenticateWithHuaweiID(['profile'], this.getUIContext().getHostContext());
+                  const credential = await this.authorizeProfile();
 
-                  hilog.info(LogDomain.PAGES, AppPagesName.USER_DETAIL, '授权获取的用户信息: %{public}s',
-                    JSON.stringify(credential));
+                  if (!credential?.nickName) {
+                    return this.user.config.nickname ?? '';
+                  }
 
-                  return await this.editNickName(credential.nickName!);
+                  return await this.editNickName(credential.nickName);
                 },
               }
             }),
@@ -88,6 +83,45 @@ struct Detail {
     .title($r('app.string.user_detail_page_name'))
   }
 
+  // 请求华为账号 profile 授权，失败或用户取消时返回 undefined
+  private async authorizeProfile(): Promise<authentication.AuthorizationWithHuaweiIDCredential | undefined> {
+    let credential: authentication.AuthorizationWithHuaweiIDCredential;
+
+    try {
+      credential =
+        await Authorization.authenticateWithHuaweiID(['profile'], this.getUIContext().getHostContext());
+    } catch (e) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.USER_DETAIL, '华为账号授权失败或已取消: %{public}s', JSON.stringify(e));
+
+      return undefined;
+    }
+
+    hilog.info(LogDomain.PAGES, AppPagesName.USER_DETAIL, '授权获取的用户信息: %{public}s',
+      JSON.stringify(credential));
+
+    return credential;
+  }
+
+  private async changeAvatar(): Promise<void> {
+    const credential = await this.authorizeProfile();
+
+    if (!credential?.avatarUri) {
+      return;
+    }
+
+    try {
+      await Dialog.execute(
+        () => this.loadingDialog(),
+        () => UserApi.editAvatar(credential.avatarUri),
+        () => this.editConfirmDialog(() => this.editAvatar(credential.avatarUri)),
+      );
+
+      this.user.config.avatar = credential.avatarUri;
+    } catch (e) {
+      // 用户取消重试，保持原头像
+    }
+  }
+
   @Builder
   loadingDialog() {
     LoadingDialogV2({
@@ -100,6 +134,9 @@ struct Detail {
     AlertDialogV2({
       primaryTitle: $r('app.string.user_detail_page_edit_failed'),
       content: $r('app.string.is_retry'),
+      primaryButton: new AdvancedDialogV2Button({
+        content: $r('app.string.cancel'),
+      }),
       secondaryButton: new AdvancedDialogV2Button({
         content: $r('app.string.retry'),
         role: ButtonRole.ERROR,
@@ -109,24 +146,33 @@ struct Detail {
   }
 
   private async editAvatar(avatarUri: string): Promise<void> {
-    await Dialog.execute(
-      () => this.loadingDialog(),
-      () => UserApi.editAvatar(avatarUri),
-      () => this.editConfirmDialog(() => this.editAvatar(avatarUri)),
-    );
+    try {
+      await Dialog.execute(
+        () => this.loadingDialog(),
+        () => UserApi.editAvatar(avatarUri),
+        () => this.editConfirmDialog(() => this.editAvatar(avatarUri)),
+      );
 
-    this.user.config.avatar = avatarUri;
+      this.user.config.avatar = avatarUri;
+    } catch (e) {
+      // 用户取消重试，保持原头像
+    }
   }
 
   private async editNickName(nickName: string): Promise<string> {
-    await Dialog.execute(
-      () => this.loadingDialog(),
-      () => UserApi.editNickname(nickName),
-      () => this.editConfirmDialog(() => this.editNickName(nickName)),
-    );
+    try {
+      await Dialog.execute(
+        () => this.loadingDialog(),
+        () => UserApi.editNickname(nickName),
+        () => this.editConfirmDialog(() => this.editNickName(nickName)),
+      );
 
-    this.user.config.nickname = nickName;
+      this.user.config.nickname = nickName;
 
-    return nickName;
+      return nickName;
+    } catch (e) {
+      // 用户取消重试，保持原昵称
+      return this.user.config.nickname ?? '';
+    }
   }
 }
