@@ -1,5 +1,6 @@
 const STORAGE = {
   TOKEN_BUNDLE: "token_bundle",
+  TOTP_CACHE: "totp_cache",
 };
 
 const URL = {
