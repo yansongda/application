@@ -6,7 +6,6 @@ const PATH = {
   EDIT_USERNAME: "/api/v1/totp/edit/username",
   DELETE: "/api/v1/totp/delete",
   SORT: "/api/v1/totp/sort",
-  SECRETS: "/api/v1/totp/secrets",
 };
 
 export { PATH };

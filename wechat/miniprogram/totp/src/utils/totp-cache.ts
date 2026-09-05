@@ -1,9 +1,8 @@
-import api from "@api/totp";
 import { STORAGE } from "@constant/app";
 import { PATH } from "@constant/totp";
 import http from "@utils/http";
 import logger from "@utils/logger";
-import type { CacheItem, SecretItem, TotpCache } from "types/totp";
+import type { CacheItem, Item, TotpCache } from "types/totp";
 
 const readCache = (): TotpCache | null => {
   try {
@@ -152,49 +151,19 @@ const getServerClockOffset = (
 };
 
 const syncFromRemote = async (): Promise<TotpCache> => {
-  const items = await api.all();
-
-  // 密钥下发接口需读取响应头 Date 计算时钟偏移，故直连 http.postWithHeader 而非 api.secrets()。
-  const { data: secrets, header } = await http.postWithHeader<SecretItem[]>(
-    PATH.SECRETS,
+  // /all 响应已携带 config.secret（PR #162 review 方案 A），单接口完成同步并取 Date 头计算时钟偏移。
+  const { data: items, header } = await http.postWithHeader<Item[]>(
+    PATH.ALL,
     {},
   );
 
-  const secretById = new Map(secrets.map((secret) => [secret.id, secret]));
-  const cacheItems: CacheItem[] = [];
-
-  // 以 /all 的 id 集为基准，items 顺序沿用 /all 返回序。
-  for (const item of items) {
-    const secretItem = secretById.get(item.id);
-
-    if (typeof secretItem === "undefined") {
-      // 仅 /all 有的条目保留但 secret 缺失，算码时展示占位符。
-      cacheItems.push({
-        id: item.id,
-        issuer: item.issuer,
-        username: item.username,
-        secret: "",
-        period: item.config.period,
-      });
-
-      continue;
-    }
-
-    secretById.delete(item.id);
-
-    cacheItems.push({
-      id: item.id,
-      issuer: item.issuer,
-      username: item.username,
-      secret: secretItem.secret,
-      period: secretItem.period,
-    });
-  }
-
-  // /secrets 多出的 id 忽略。
-  for (const id of secretById.keys()) {
-    logger.warning("同步 TOTP 密钥时发现未知条目，已忽略", id);
-  }
+  const cacheItems: CacheItem[] = items.map((item) => ({
+    id: item.id,
+    issuer: item.issuer,
+    username: item.username,
+    secret: item.config.secret,
+    period: item.config.period,
+  }));
 
   let clockOffset = getServerClockOffset(header);
 

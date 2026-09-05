@@ -12,7 +12,6 @@ import type {
   EditIssuerRequest,
   EditUsernameRequest,
   Item,
-  SecretItem,
 } from "types/totp";
 
 interface SortRequest {
@@ -49,16 +48,6 @@ const create = async (uri: string) => {
     logger.error("创建 TOTP 失败", e);
 
     throw new HttpError(CODE.HTTP_API_TOTP_CREATE, error.getErrorMessage(e));
-  }
-};
-
-const secrets = async () => {
-  try {
-    return await http.post<SecretItem[]>(PATH.SECRETS, {});
-  } catch (e: unknown) {
-    logger.error("查询 TOTP 密钥失败", e);
-
-    throw new HttpError(CODE.HTTP_API_TOTP_SECRETS, error.getErrorMessage(e));
   }
 };
 
@@ -116,5 +105,4 @@ export default {
   editUsername,
   deleteTotp,
   sort,
-  secrets,
 };
