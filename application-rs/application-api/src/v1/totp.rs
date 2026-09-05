@@ -3,7 +3,7 @@ use salvo::{Depot, Request, handler};
 use crate::request::Validator;
 use crate::request::totp::{
     CreateRequest, DeleteRequest, DetailRequest, DetailResponse, EditIssuerRequest,
-    EditUsernameRequest, SortRequest,
+    EditUsernameRequest, SecretResponse, SecretsRequest, SortRequest,
 };
 use crate::response::Resp;
 use crate::response::Response;
@@ -32,6 +32,19 @@ pub async fn all(depot: &mut Depot) -> Resp<Vec<DetailResponse>> {
         .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
     Ok(Response::success(service::totp::all(access_token).await?))
+}
+
+#[handler]
+pub async fn secrets(request: &mut Request, depot: &mut Depot) -> Resp<Vec<SecretResponse>> {
+    let access_token = depot
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
+
+    request.parse_json::<SecretsRequest>().await?.validate()?;
+
+    Ok(Response::success(
+        service::totp::secrets(access_token).await?,
+    ))
 }
 
 #[handler]

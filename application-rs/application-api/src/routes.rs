@@ -63,6 +63,7 @@ fn api_v1_totp() -> Router {
         .hoop(authorization)
         .push(Router::with_path("/all").post(v1::totp::all))
         .push(Router::with_path("/detail").post(v1::totp::detail))
+        .push(Router::with_path("/secrets").post(v1::totp::secrets))
         .push(Router::with_path("/create").post(v1::totp::create))
         .push(Router::with_path("/sort").post(v1::totp::sort))
         .push(

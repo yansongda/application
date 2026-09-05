@@ -214,3 +214,31 @@ impl Validator for SortRequest {
             .collect()
     }
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SecretsRequest {}
+
+impl Validator for SecretsRequest {
+    type Data = ();
+
+    fn validate(&self) -> application_kernel::result::Result<Self::Data> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct SecretResponse {
+    pub id: String,
+    pub secret: String,
+    pub period: u64,
+}
+
+impl From<Totp> for SecretResponse {
+    fn from(totp: Totp) -> Self {
+        Self {
+            id: totp.id.to_string(),
+            secret: totp.config.secret.clone(),
+            period: totp.config.period,
+        }
+    }
+}

@@ -1,5 +1,6 @@
 use crate::request::totp::{
-    DetailResponse, EditIssuerRequestParams, EditUsernameRequestParams, SortItemParams,
+    DetailResponse, EditIssuerRequestParams, EditUsernameRequestParams, SecretResponse,
+    SortItemParams,
 };
 use application_database::account::access_token;
 use application_database::tool::totp;
@@ -14,6 +15,12 @@ pub async fn all(access_token: &access_token::AccessToken) -> Result<Vec<DetailR
     totp.into_iter()
         .map(std::convert::TryInto::try_into)
         .collect()
+}
+
+pub async fn secrets(access_token: &access_token::AccessToken) -> Result<Vec<SecretResponse>> {
+    let totps = totp::all(access_token.user_id).await?;
+
+    Ok(totps.into_iter().map(SecretResponse::from).collect())
 }
 
 pub async fn sort(
