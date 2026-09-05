@@ -1,11 +1,11 @@
-// Task 0 契约 spike：otpauth@9.5.2 RFC 向量断言（deno 兼容形式，留档）
+// Task 0 契约 spike：otpauth@9.5.2 RFC 向量断言（bun 形式）
 //
-// 正式验收命令（deno 安装后需补跑）：
-//   cd <repo根> && deno run -A --no-lock docs/evidence/totp-local-compute/task-0-vector-assert.ts
-//   （--no-lock 必须：repo 根无 deno.lock，不带该 flag 会在 repo 根生成 deno.lock，触发 F1 白名单核查 FAIL）
+// 正式验收命令：
+//   cd docs/evidence/totp-local-compute && bun install && bun run task-0-vector-assert.ts
 //
-// 本轮实际执行（deno 未安装）：node 等价脚本 task-0-vector-assert.node.mjs，
-// import `npm pack otpauth@9.5.2` 解包目录的 dist/otpauth.esm.min.js，断言逻辑与本文件完全一致。
+// 历史备注：原为 deno 兼容形式（import "npm:otpauth@9.5.2"），deno 未安装未执行；
+// 2026-09-05 Task 1.5 包管理器 deno→bun 迁移后以上述 bun 命令正式验收。
+// node 等价脚本 task-0-vector-assert.node.mjs 保留留档，断言逻辑与本文件一致。
 // 详见同目录 task-0-contract-snapshot.md。
 //
 // 断言来源：
@@ -14,7 +14,7 @@
 //   b) RFC 4226 Appendix D（SHA1/6位，counter=1 → 287082；timestamp=59000ms/period=30 → counter=1）
 //      https://datatracker.ietf.org/doc/html/rfc4226#appendix-D
 // stdout 输出两行 PASS/FAIL。
-import { TOTP } from "npm:otpauth@9.5.2";
+import { TOTP } from "otpauth";
 
 // base32("12345678901234567890") = GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ（RFC 6238/4226 共用测试密钥）
 const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";

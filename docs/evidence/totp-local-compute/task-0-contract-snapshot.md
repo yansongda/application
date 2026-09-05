@@ -92,3 +92,40 @@ $ grep -n "static parse" dist/otpauth.d.ts
 - **偏差 2（环境，主会话已裁定）**：测试环境 token 未提供，子项 2 未实测、子项 3 仅近似探测。
 - **补充授权（主会话裁定，超出原 todo 范围）**：repo 根 `.gitignore` 末尾追加 4 行根级锚定条目（`/docs/implementation/`、`/docs/evidence/`、`/docs/learning/`、`/docs/totp-local-compute.md`；必须带前导斜杠，因 `application-rs/docs/util-http-refactor.md` 是已跟踪文件，裸 `docs/` 会误伤子目录）。追加后 `git status --porcelain` 不再出现 `?? docs/`。
 - commit：本轮一次性 commit，仅含根 `.gitignore` + `docs/evidence/totp-local-compute/` 新建文件，message `docs(totp): TOTP 本地算码契约 spike 快照与向量验证`。
+
+# 2026-09-05 22:25:00 主会话（main agent）亲自验证 Task 0 —— PASS
+
+1. **向量断言亲自复现**（不信任 worker 输出）：`/tmp` 重新 `npm pack otpauth@9.5.2` + 解包 + `node task-0-vector-assert.node.mjs` → stdout 两行 `PASS`，exit=0；脚本内容级审查通过（与 deno 留档脚本断言逻辑一致，期望值与 RFC 6238 App-B / RFC 4226 App-D 原文相符）。复现后 tarball/解包目录已清理。
+2. **otpauth 三点核验亲自复现**：main=`./dist/otpauth.node.cjs` ✅；`grep -c node:crypto dist/otpauth.esm.min.js`=0 ✅；`dist/otpauth.d.ts:456` `export { HOTP, Secret, TOTP, URI, version }` + `static parse` 命中 ✅（/tmp 验证后清理）。
+3. **.gitignore 生效亲自确认**：`git status --porcelain` 空输出（`?? docs/` 消失）；追加为根级锚定 4 行，`application-rs/docs/util-http-refactor.md`（已跟踪）不受影响。
+4. **commit 隔离亲自确认**：`git show --stat f8db6ae` 仅 `.gitignore` + Task 0 evidence 三件套（4 files, +178）。
+5. **快照审查**：1-5 小节齐全、子项 2/3 显式标注"未实测（无 token）"、原始输出在案。
+6. **deno 形式验收欠账**（环境性，已在 learning 记录）：deno 安装后补跑 `cd <repo根> && deno run -A --no-lock docs/evidence/totp-local-compute/task-0-vector-assert.ts`。
+
+**结论：Task 0 验证通过（硬性项全过；token 相关软依赖项按 plan 标注未实测）。**
+
+# 2026-09-05 22:36:00 主会话裁定 + 本轮执行：验收方式 deno→bun 升级，正式验收补跑 PASS
+
+用户指令（本机有 bun 1.4.1，deno 确认未安装）：全仓 deno → bun，Task 0 验收欠账以 bun 形式补跑（Task 1.5）。脚本改动仅两处，断言逻辑零改动：
+
+1. **新建 `package.json`**（同目录）：`{"name": "totp-local-compute-evidence", "private": true, "type": "module", "dependencies": {"otpauth": "9.5.2"}}`（pinned 无 ^）。
+2. **`task-0-vector-assert.ts`**：`import { TOTP } from "npm:otpauth@9.5.2"` → `import { TOTP } from "otpauth"`（bun 不支持 npm: 前缀）；文件头验收命令改为 `cd docs/evidence/totp-local-compute && bun install && bun run task-0-vector-assert.ts`，删除"deno 安装后补跑"旧表述。断言体（RFC 6238 App-B 8 位 `94287082`、RFC 4226 App-D 6 位 `287082`、base32 secret、`generate({timestamp})` ms 语义）原样未动。
+
+正式验收输出（bun 1.4.1）：
+
+```
+$ cd docs/evidence/totp-local-compute && bun install && bun run task-0-vector-assert.ts
+bun install v1.4.1 (4661e494f)
+Resolving dependencies
+Resolved, downloaded and extracted [8]
+Saved lockfile
+
++ otpauth@9.5.2
+
+2 packages installed [1198.00ms]
+PASS
+PASS
+exit=0
+```
+
+两行 `PASS` 与 Task 0 spike（node + npm pack 等价路径）及 RFC 原文期望值一致 → **Task 0 向量断言的 bun 形式正式验收通过，deno 验收欠账结清**。本轮 bun install 在本目录生成 bun.lock / node_modules（目录已被 `/docs/evidence/` gitignore，不入库）。
