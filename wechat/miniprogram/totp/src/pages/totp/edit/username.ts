@@ -1,5 +1,6 @@
 import api from "@api/totp";
 import error from "@utils/error";
+import { updateItemFields } from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
 import type { EditUsernameRequest } from "types/totp";
@@ -39,6 +40,8 @@ Page({
         id: this.data.id,
         username: e.detail.value.username,
       } as EditUsernameRequest);
+
+      updateItemFields(this.data.id, { username: e.detail.value.username });
 
       Toast({
         message: "修改成功",

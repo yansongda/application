@@ -1,7 +1,7 @@
-import api from "@api/totp";
 import { substr } from "@utils/string";
+import { readCache, syncFromRemote } from "@utils/totp-cache";
 import Toast from "tdesign-miniprogram/toast/index";
-import type { Item } from "types/totp";
+import type { CacheItem } from "types/totp";
 import type { Tap } from "types/wechat";
 
 interface Query {
@@ -20,7 +20,8 @@ Page({
     username: "",
     config: { period: 30 },
   },
-  response: {} as Item,
+  // gotoEdit 仅依赖 issuer/username 传参，故 response 只需这两个字段。
+  response: { issuer: "", username: "" },
   onLoad(query: Query) {
     this.data.id = query.id || "0";
   },
@@ -33,35 +34,61 @@ Page({
       preventScrollThrough: true,
     });
 
-    api
-      .detail(this.data.id)
-      .then((response: Item) => {
-        this.response = response;
+    const item = readCache()?.items.find(
+      (cacheItem) => cacheItem.id === this.data.id,
+    );
 
-        Toast({
-          message: "加载成功",
-          theme: "success",
-          duration: 100,
-          direction: "column",
-        });
+    if (typeof item !== "undefined") {
+      this.applyItem(item);
 
-        this.setData({
-          id: response.id,
-          issuer: substr(response.issuer),
-          username: substr(response.username),
-          config: response.config,
-        });
+      return;
+    }
+
+    // 本地缓存未命中（首次使用或缓存异常）：同步远端后重查。
+    syncFromRemote()
+      .then(() => {
+        const fresh = readCache()?.items.find(
+          (cacheItem) => cacheItem.id === this.data.id,
+        );
+
+        if (typeof fresh === "undefined") {
+          this.showLoadError();
+
+          return;
+        }
+
+        this.applyItem(fresh);
       })
       .catch(() => {
-        Toast({
-          message: "加载失败",
-          theme: "error",
-          duration: 100,
-          direction: "column",
-        });
-
-        this.setData({ dialogVisible: true });
+        this.showLoadError();
       });
+  },
+  applyItem(item: CacheItem) {
+    Toast({
+      message: "加载成功",
+      theme: "success",
+      duration: 100,
+      direction: "column",
+    });
+
+    this.response = { issuer: item.issuer, username: item.username };
+
+    this.setData({
+      id: item.id,
+      issuer: substr(item.issuer),
+      username: substr(item.username),
+      config: { period: item.period },
+    });
+  },
+  showLoadError() {
+    Toast({
+      message: "加载失败",
+      theme: "error",
+      duration: 100,
+      direction: "column",
+    });
+
+    this.setData({ dialogVisible: true });
   },
   async gotoEdit(e: Tap<Dataset, Dataset>) {
     let url = "";
