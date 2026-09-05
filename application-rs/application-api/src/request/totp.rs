@@ -30,6 +30,7 @@ pub struct DetailResponse {
 
 #[derive(Debug, Serialize)]
 pub struct DetailResponseConfig {
+    pub secret: String,
     pub period: u64,
 }
 
@@ -53,6 +54,7 @@ impl TryFrom<Totp> for DetailResponse {
 impl From<TotpConfig> for DetailResponseConfig {
     fn from(config: TotpConfig) -> Self {
         Self {
+            secret: config.secret.clone(),
             period: config.period,
         }
     }

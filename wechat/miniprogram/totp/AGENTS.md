@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-该目录是「TOTP安全码」微信小程序前端，使用 TypeScript 与微信小程序原生目录结构。**包管理器固定为 Deno**（非 pnpm/npm/yarn）。
+该目录是「TOTP安全码」微信小程序前端，使用 TypeScript 与微信小程序原生目录结构。**包管理器固定为 Bun**（非 pnpm/npm/yarn/deno）。
 
 小程序工程根目录为 `wechat/miniprogram/totp/`，其中真正的小程序源码位于 `src/`（由 `project.config.json` 中 `miniprogramRoot: "src/"` 指定）。
 
@@ -12,7 +12,7 @@
 wechat/miniprogram/totp/
   src/                         # 小程序业务代码（miniprogramRoot）
   package.json                 # 脚本定义与依赖声明
-  deno.lock                    # Deno 锁文件（必须提交）
+  bun.lock                     # Bun 锁文件（必须提交）
   biome.json                   # 格式化与 lint 配置
   tsconfig.json                # TypeScript 配置
   project.config.json          # 微信开发者工具配置
@@ -30,21 +30,21 @@ wechat/miniprogram/totp/
 
 ## 包管理与依赖
 
-- **包管理器**：Deno（不是 pnpm）
-- **锁文件**：`deno.lock`（必须提交）
-- **安装依赖**：`deno install`
-- **依赖解析**：Deno 通过 `package.json` 的 `dependencies` / `devDependencies` 自动创建 `node_modules/` 并保持 `deno.lock` 同步
+- **包管理器**：Bun（不是 pnpm）
+- **锁文件**：`bun.lock`（必须提交）
+- **安装依赖**：`bun install`
+- **依赖解析**：Bun 通过 `package.json` 的 `dependencies` / `devDependencies` 自动创建 `node_modules/` 并保持 `bun.lock` 同步
 
 ## 构建 / 检查命令
 
-所有命令在 `wechat/miniprogram/totp/` 目录下执行，使用 `deno task`：
+所有命令在 `wechat/miniprogram/totp/` 目录下执行，使用 `bun run`：
 
 ```bash
-deno install                    # 安装依赖（首次或依赖变更后）
-deno task biome:check           # 格式化与 lint 检查
-deno task biome:fix             # 自动修复
-deno task biome:fix-unsafe      # 自动修复（含不安全修复）
-deno task typecheck             # TypeScript 类型检查（tsc --noEmit）
+bun install                     # 安装依赖（首次或依赖变更后）
+bun run biome:check             # 格式化与 lint 检查
+bun run biome:fix               # 自动修复
+bun run biome:fix-unsafe        # 自动修复（含不安全修复）
+bun run typecheck               # TypeScript 类型检查（tsc --noEmit）
 ```
 
 ## 代码风格规范
@@ -52,7 +52,7 @@ deno task typecheck             # TypeScript 类型检查（tsc --noEmit）
 - 使用 `biome` 做格式化与 lint，配置文件为 `wechat/miniprogram/totp/biome.json`
 - `biome` 覆盖范围以 `biome.json` 中的 `files.includes` 为准（`src/**/*`），并排除 `src/miniprogram_npm/**/*`
 - 默认使用空格缩进，JavaScript/TypeScript 字符串使用双引号
-- 提交前优先运行 `deno task biome:check`，需要自动修复时运行 `deno task biome:fix`
+- 提交前优先运行 `bun run biome:check`，需要自动修复时运行 `bun run biome:fix`
 
 ## 开发约束
 
@@ -63,9 +63,9 @@ deno task typecheck             # TypeScript 类型检查（tsc --noEmit）
 
 ## CI 与提交流程
 
-- 前端 CI 检查为：`deno install && deno task biome:check && deno task typecheck`
+- 前端 CI 检查为：`bun install && bun run biome:check && bun run typecheck`
 - 禁止提交：`node_modules/`、`src/miniprogram_npm/`、`project.private.config.json`、`.idea/`、`.vscode/`
-- 必须提交：`deno.lock`
+- 必须提交：`bun.lock`
 
 ## 联动开发说明
 
@@ -75,4 +75,4 @@ deno task typecheck             # TypeScript 类型检查（tsc --noEmit）
 ## NOTES
 
 - 与 `yansongda` 主小程序共享 `utils/error.ts`、`utils/logger.ts`、`utils/string.ts`、`models/error.ts`、`types/http.d.ts` 等代码，但当前无正式共享包，分别独立维护。
-- 当前 CI 已接入 `deno task biome:check` 与 `deno task typecheck`。
+- 当前 CI 已接入 `bun run biome:check` 与 `bun run typecheck`。

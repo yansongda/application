@@ -107,11 +107,11 @@ const handleTokenExpired = async <T>(
   originalRequest: Request,
   code: number,
   message: string,
-  isRetry?: boolean,
+  opts: { isRetry?: boolean; withHeader?: boolean } = {},
 ): Promise<T> => {
   // Single-retry guard: if we already retried once after a refresh —
   // reject immediately to prevent an infinite loop.
-  if (isRetry) {
+  if (opts.isRetry) {
     return Promise.reject(new HttpError(code, message));
   }
 
@@ -130,12 +130,15 @@ const handleTokenExpired = async <T>(
 
   const retryRequest = cloneRequest(originalRequest);
 
-  return request<T>(retryRequest, { isRetry: true });
+  return request<T>(retryRequest, {
+    isRetry: true,
+    withHeader: opts.withHeader,
+  });
 };
 
 const request = <T>(
   req: Request,
-  opts: { isRetry?: boolean } = {},
+  opts: { isRetry?: boolean; withHeader?: boolean } = {},
 ): Promise<T> => {
   const preserved = cloneRequest(req);
 
@@ -148,7 +151,7 @@ const request = <T>(
 const wxRequest = <T>(
   req: Request,
   preserved: Request,
-  opts: { isRetry?: boolean } = {},
+  opts: { isRetry?: boolean; withHeader?: boolean } = {},
 ): Promise<T> => {
   logger.info("请求接口", req.url);
 
@@ -161,7 +164,11 @@ const wxRequest = <T>(
       method: req.method || "GET",
       success: (res: WxRequestSuccess<T>) => {
         if (Number(res.data.code) === 0) {
-          resolve(res.data.data);
+          resolve(
+            opts.withHeader
+              ? ({ data: res.data.data, header: res.header } as T)
+              : res.data.data,
+          );
           return;
         }
 
@@ -170,7 +177,7 @@ const wxRequest = <T>(
             preserved,
             Number(res.data.code),
             res.data.message,
-            opts.isRetry,
+            opts,
           ).then(resolve, reject);
           return;
         }
@@ -196,8 +203,18 @@ const post = <T>(url: string, data?: RequestData): Promise<T> => {
   return request<T>({ url, data, method: "POST" } as Request);
 };
 
+const postWithHeader = <T>(
+  url: string,
+  data?: RequestData,
+): Promise<{ data: T; header: Record<string, string | undefined> }> => {
+  return request<{ data: T; header: Record<string, string | undefined> }>(
+    { url, data, method: "POST" } as Request,
+    { withHeader: true },
+  );
+};
+
 const get = <T>(url: string, query?: RequestQuery): Promise<T> => {
   return request<T>({ url, query, method: "GET" } as Request);
 };
 
-export default { request, post, get };
+export default { request, post, get, postWithHeader };

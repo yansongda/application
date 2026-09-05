@@ -1,5 +1,5 @@
-import api from "@api/totp";
-import type { HttpError } from "@models/error";
+import { computeCode } from "@utils/totp";
+import { readCache } from "@utils/totp-cache";
 
 Component({
   properties: {
@@ -7,7 +7,7 @@ Component({
     itemId: String,
     username: String,
     issuer: String,
-    code: String,
+    secret: String,
     period: {
       type: Number,
       value: 30,
@@ -15,6 +15,7 @@ Component({
   },
 
   data: {
+    code: "",
     remainSeconds: 0,
     refreshCodeTimeoutIdentity: -1,
     countdownIntervalIdentity: -1,
@@ -22,6 +23,7 @@ Component({
 
   lifetimes: {
     attached() {
+      this.computeCode();
       this.countdownRefresh();
     },
     detached() {
@@ -31,6 +33,7 @@ Component({
 
   pageLifetimes: {
     show() {
+      this.computeCode();
       this.countdownRefresh();
     },
     hide() {
@@ -39,6 +42,27 @@ Component({
   },
 
   methods: {
+    computeCode() {
+      const secret = this.data.secret;
+
+      if (!secret) {
+        this.setData({ code: "------" });
+        this.triggerEvent("message", "验证码计算失败");
+
+        return;
+      }
+
+      try {
+        const offset = readCache()?.clock_offset ?? 0;
+
+        this.setData({
+          code: computeCode(secret, this.data.period, Date.now() + offset),
+        });
+      } catch (_e: unknown) {
+        this.setData({ code: "------" });
+        this.triggerEvent("message", "验证码计算失败");
+      }
+    },
     countdownRefresh() {
       this.clear();
 
@@ -47,7 +71,7 @@ Component({
       const remainSeconds = period - (now.getSeconds() % period);
 
       this.data.refreshCodeTimeoutIdentity = setTimeout(() => {
-        this.refreshCode(this.data.itemId);
+        this.computeCode();
         this.countdownRefresh();
       }, remainSeconds * 1000);
 
@@ -60,14 +84,6 @@ Component({
         }
         this.setData({ remainSeconds: countdown });
       }, 1000);
-    },
-    refreshCode(id: string) {
-      api
-        .detail(id)
-        .then((response) => this.setData({ code: response.code }))
-        .catch((e: HttpError) =>
-          this.triggerEvent("message", `更新验证码失败：${e.message}`),
-        );
     },
     detail() {
       this.triggerEvent("detail", this.data.itemId);
