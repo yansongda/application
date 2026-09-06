@@ -76,3 +76,4 @@ bun run typecheck               # TypeScript 类型检查（tsc --noEmit）
 
 - 与 `yansongda` 主小程序共享 `utils/error.ts`、`utils/logger.ts`、`utils/string.ts`、`models/error.ts`、`types/http.d.ts` 等代码，但当前无正式共享包，分别独立维护。
 - 当前 CI 已接入 `bun run biome:check` 与 `bun run typecheck`。
+- `src/vendor/` 内为 otpauth 官方 dist 产物质样拷贝（实际加载源），与 `package.json` 中固定精确版本号（无 caret）必须同步升级，升级步骤见 `src/vendor/README.md`；禁止改用包 main 入口（node:crypto 依赖）。

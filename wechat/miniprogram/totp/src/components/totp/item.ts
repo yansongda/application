@@ -67,8 +67,12 @@ Component({
       this.clear();
 
       const period = this.data.period ?? 30;
-      const now = new Date();
-      const remainSeconds = period - (now.getSeconds() % period);
+      // 以 clock_offset 校准后的服务器时钟对齐周期边界，保证「倒计时归零」与
+      // 「验证码翻转」在同一时刻发生；epoch 秒取模对任意时区与任意周期均成立
+      // （原 getSeconds() 方案存在时区偏移非周期倍数时的固有偏差，且未吸收 offset）。
+      const offset = readCache()?.clock_offset ?? 0;
+      const alignedSeconds = Math.floor((Date.now() + offset) / 1000);
+      const remainSeconds = period - (alignedSeconds % period);
 
       this.data.refreshCodeTimeoutIdentity = setTimeout(() => {
         this.computeCode();

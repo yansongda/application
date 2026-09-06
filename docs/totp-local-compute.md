@@ -61,7 +61,7 @@ wechat/miniprogram/totp/
 ├── src/types/totp.d.ts                       [改] ItemConfig 增加 secret；CacheItem / TotpCache 类型
 ├── src/api/totp.ts                           [改] create() 返回类型 null → Item；detail() 保留不再被 item 调用
 ├── src/utils/http.ts                         [改] 增量新增 postWithHeader()（读 Date 头），现有行为零变化
-├── src/utils/totp.ts                         [新] otpauth 封装：URI 解析 + 本地算码（强制 SHA1+6位）
+├── src/utils/totp.ts                         [新] otpauth 封装：本地算码（强制 SHA1+6位）
 ├── src/utils/totp-cache.ts                   [新] 本地缓存读写/同步/时间偏移
 ├── src/components/totp/item.ts               [改] 本地算码替代 api.detail 周期末取码（仅列表页使用）
 ├── src/pages/totp/index.ts / index.wxml      [改] 缓存渲染 + create/delete/sort 更新缓存；组件绑定调整
@@ -113,7 +113,7 @@ storage key `TOTP_CACHE`（值 `totp_cache`，与现有 `TOKEN_BUNDLE` 并列，
 | 时机 | 动作 |
 |------|------|
 | 列表页 onShow 且登录态就绪（复用 `ensureAuthenticated`，`utils/app.ts` 单飞已验证） | 全量同步：单接口 `/all`（响应携带 secret）→ **整体覆写**缓存；顺序沿用 `/all` 返回序（后端 `order by sort desc, id asc`——已验证） |
-| create 成功 | 用 `DetailResponse.id` + 本地解析的 secret/period 乐观写入缓存（issuer 取本地解析值，空则"未知发行方"） → 后台再全量同步校正（对冲本地解析与后端入库的差异） |
+| create 成功 | 直接用 create 响应（DetailResponse：id/issuer/username/config.secret/config.period，即服务端入库值）乐观写入缓存 → finally `loadItems()` 全量同步校正 |
 | edit issuer/username 成功 | 直接更新缓存对应字段 |
 | delete 成功 | 直接移除缓存条目 |
 | sort 成功 | 本地按新顺序重排缓存 |
@@ -145,11 +145,11 @@ compute_code(item, now = Date.now() + clock_offset):
     return totp.generate({ timestamp: now })
 ```
 
-取码路径变化：现状 `components/totp/item.ts` 是列表页**唯一的取码路径**（组件持有 `itemId`，周期末调 `api.detail`——已验证；详情页不展示验证码，见 3.4）。改造后组件新增 `secret` property（由列表页从缓存传入），周期末本地重算，倒计时对齐逻辑（`remainSeconds = period - (now.getSeconds() % period)`）不变。失败兜底：secret 缺失/算码异常 → code 显示 `------` + 现有 `message` 事件提示。
+取码路径变化：现状 `components/totp/item.ts` 是列表页**唯一的取码路径**（组件持有 `itemId`，周期末调 `api.detail`——已验证；详情页不展示验证码，见 3.4）。改造后组件新增 `secret` property（由列表页从缓存传入），周期末本地重算；倒计时对齐逻辑改为以 `clock_offset` 校准后的服务器时钟计算（epoch 秒取模，对任意时区与任意周期均成立，保证「倒计时归零」与「验证码翻转」同一时刻；2026-09-06 review 修订，原为本地 `getSeconds()` 取模且未吸收 offset）。失败兜底：secret 缺失/算码异常 → code 显示 `------` + 现有 `message` 事件提示。
 
 ### 3.4 关键流程变化
 
-**创建**：扫码 → **本地解析 URI**（`utils/totp.ts`，基于 otpauth `URI.parse` 解析，暂存 secret/period）→ `api.create(uri)` 原样发后端（**契约零改动**）→ 成功后取返回的 id 乐观写缓存 → 背景全量同步校正。本地解析仅用于乐观展示，服务端 `/all` 数据为最终校正源。
+**创建**：扫码 → `api.create(uri)` 原样发后端（**契约零改动**）→ 成功后直接以 create 响应（DetailResponse，含 config.secret/period，即服务端入库值）乐观写缓存 → finally `loadItems()` 全量同步兜底。**前端不做 URI 解析**（2026-09-06 review 修订：删除 parseUri，消除 otpauth URI.parse 与后端 from_url_unchecked 两套解析器的语义差异及解析失败误报问题）。
 
 **详情页**：现状为纯信息展示页（issuer/username/period，无验证码、不使用 item 组件——已验证 `detail/index.wxml`）。改造后仅把数据源从 `api.detail` 换成缓存读取（miss 则触发一次同步再读；仍 miss 走现有错误 dialog），并**同步维护 `this.response`**（`gotoEdit` 依赖它向编辑页传参，`detail/index.ts` 已验证）。不涉及本地算码。
 
@@ -164,7 +164,7 @@ compute_code(item, now = Date.now() + clock_offset):
 | 主小程序 | `/all` 响应新增 `config.secret` 字段向后兼容（未知字段被忽略），主小程序代码零改动 |
 | 旧版小程序共存 | `/all` 响应新增字段向后兼容，旧版不使用 secret 字段、不受影响 |
 | 包体积 | otpauth 自包含 ESM `dist/otpauth.esm.min.js` 27.6KB（实测，noble-hashes 已内联、0 处 node:crypto），主包 2MB 限制内 |
-| 引入方式 | **主路径 vendor**：`dist/otpauth.esm.min.js` 复制入 `src/vendor/`（+ 基名匹配的 `otpauth.esm.min.d.ts` 供 typecheck——tsconfig `allowJs: true`，旁车必须与 import 基名一致；并在 `biome.json` 排除 `src/vendor`）。原因（2026-09-05 实测）：包 `main` 指向 `dist/otpauth.node.cjs` 且顶层 `require('node:crypto')`，微信 packNpm 按 main 解析必然运行时失败；esm/umd 构建自包含无该依赖。package.json 仍声明 otpauth 依赖（bun.lock 锁定；typecheck 类型由 sidecar 提供），不经构建 npm 加载 |
+| 引入方式 | **主路径 vendor**：`dist/otpauth.esm.min.js` 复制入 `src/vendor/`（+ 基名匹配的 `otpauth.esm.min.d.ts` 供 typecheck——tsconfig `allowJs: true`，旁车必须与 import 基名一致；并在 `biome.json` 排除 `src/vendor`）。原因（2026-09-05 实测）：包 `main` 指向 `dist/otpauth.node.cjs` 且顶层 `require('node:crypto')`，微信 packNpm 按 main 解析必然运行时失败；esm/umd 构建自包含无该依赖。package.json 仍声明 otpauth 依赖但**固定精确版本（无 caret，2026-09-06 review 修订）**，与 `src/vendor/` 内产物版本强制同步（升级步骤见 `src/vendor/README.md`；typecheck 类型由 sidecar 提供），不经构建 npm 加载 |
 | Bun 工具链 | 项目为 package.json + bun.lock（无 deno.json）；`bun install` 更新锁文件与 node_modules |
 
 **库选型**（对比调研结论，来源官方 npm/GitHub 与社区实践）：
@@ -264,7 +264,6 @@ otpauth 9.5.2 包实测（2026-09-05 npm 实装）: main=./dist/otpauth.node.cjs
 otpauth JS 与 totp-rs 对短 secret / 非标准 URI 的算码一致性（Task 0 向量 + 环境对照）
 vendor ESM 在微信 devtools/真机的加载与运行（Task 0 冒烟；wx.request 响应 header 键大小写各平台不一，已按大小写不敏感处理）
 /api/v1/totp/* 响应的 Date 头可用性（Task 0 curl -i）
-otpauth URI.parse 对极短 secret 的接受范围
 ```
 
 ## 附录 B：调研依据
@@ -277,5 +276,6 @@ otpauth URI.parse 对极短 secret 的接受范围
 
 ## 修订记录
 
+- 2026-09-06：PR #162 review 第二轮——create 乐观写入改用 create 响应字段（删除前端 parseUri/URI 解析）；倒计时以 clock_offset 对齐的 epoch 秒计算；otpauth 依赖固定精确版本并新增 src/vendor/README.md 同步约束。
 - 2026-09-05：PR #162 review 后修订（方案 A）——/all 响应携带 secret（DetailResponseConfig +secret），移除 /secrets 接口；前端同步改单接口。
 - 2026-09-05：设计文档随方案 A 更新后正式入库；同分支已将包管理器从 Deno 迁移至 Bun，文中工具链表述同步更新。

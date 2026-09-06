@@ -6,7 +6,6 @@ import { ensureAuthenticated } from "@utils/app";
 import error from "@utils/error";
 import logger from "@utils/logger";
 import { substr } from "@utils/string";
-import { parseUri } from "@utils/totp";
 import {
   applySort,
   readCache,
@@ -140,14 +139,14 @@ Page({
     api
       .create(scan.result)
       .then((item) => {
-        const parsed = parseUri(scan.result);
-
+        // 直接用 create 响应（即服务端入库值）乐观写入缓存，
+        // 避免前端二次解析 URI 与后端 from_url_unchecked 的语义差异。
         upsertItem({
           id: item.id,
-          issuer: parsed.issuer || "未知发行方",
-          username: parsed.username,
-          secret: parsed.secret,
-          period: parsed.period,
+          issuer: item.issuer,
+          username: item.username,
+          secret: item.config.secret,
+          period: item.config.period,
         });
       })
       .catch((e: HttpError) =>
