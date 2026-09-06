@@ -109,17 +109,17 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v7
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: |
-          deno install
+          bun install
       - name: Run biome check
         run: |
-          deno task biome:check
+          bun run biome:check
       - name: Run type check
         run: |
-          deno task typecheck
+          bun run typecheck
 
   lint-frontend-totp:
     name: "Frontend: Lint (TOTP)"
@@ -130,14 +130,14 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v7
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: |
-          deno install
+          bun install
       - name: Run biome check
         run: |
-          deno task biome:check
+          bun run biome:check
       - name: Run type check
         run: |
-          deno task typecheck
+          bun run typecheck

@@ -49,10 +49,10 @@
         >
           <app-totp-item
             itemId="{{ item.id }}"
-            period="{{ item.config.period }}"
+            period="{{ item.period }}"
             issuer="{{ item.issuer }}"
             username="{{ item.username }}"
-            code="{{ item.code }}"
+            secret="{{ item.secret }}"
           />
           <view class="sort-mask" />
         </view>
@@ -66,10 +66,10 @@
         wx:for-index="index"
         wx:for-item="item"
         itemId="{{ item.id }}"
-        period="{{ item.config.period }}"
+        period="{{ item.period }}"
         issuer="{{ item.issuer }}"
         username="{{ item.username }}"
-        code="{{ item.code }}"
+        secret="{{ item.secret }}"
         bind:message="itemMessage"
         bind:detail="itemDetail"
         bind:delete="itemDelete" 

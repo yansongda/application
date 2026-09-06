@@ -3,11 +3,20 @@ import { CODE } from "@constant/error";
 import type { HttpError } from "@models/error";
 import { WeixinError } from "@models/error";
 import { ensureAuthenticated } from "@utils/app";
+import error from "@utils/error";
+import logger from "@utils/logger";
 import { substr } from "@utils/string";
+import {
+  applySort,
+  readCache,
+  removeItem,
+  syncFromRemote,
+  upsertItem,
+} from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
-import Toast from "tdesign-miniprogram/toast/index";
+import Toast, { hideToast } from "tdesign-miniprogram/toast/index";
 import type {
-  Item,
+  CacheItem,
   ItemDeleteEvent,
   ItemDetailEvent,
   ItemMessageEvent,
@@ -18,9 +27,9 @@ Page({
     isError: false,
     dialogVisible: false,
     currentItemId: "0",
-    items: [] as Item[],
+    items: [] as CacheItem[],
     isSortMode: false,
-    dragItems: [] as (Item & { y: number; translateY: number })[],
+    dragItems: [] as (CacheItem & { y: number; translateY: number })[],
     draggingIndex: -1,
     isDragging: false,
     touchStartY: 0,
@@ -58,6 +67,13 @@ Page({
     this.onShow();
   },
   loadItems() {
+    const cache = readCache();
+
+    // 优先用本地缓存渲染，避免等待网络时验证码区域空白。
+    if (cache !== null) {
+      this.renderItems(cache.items);
+    }
+
     Toast({
       message: "加载中...",
       theme: "loading",
@@ -66,9 +82,8 @@ Page({
       preventScrollThrough: true,
     });
 
-    api
-      .all()
-      .then((response) => {
+    syncFromRemote()
+      .then((fresh) => {
         Toast({
           message: "加载成功",
           theme: "success",
@@ -76,15 +91,17 @@ Page({
           direction: "column",
         });
 
-        this.setData({
-          items: response.map((item) => ({
-            ...item,
-            issuer: substr(item.issuer, 7),
-            username: substr(item.username, 50),
-          })),
-        });
+        this.renderItems(fresh.items);
       })
-      .catch((e: HttpError) => {
+      .catch((e: unknown) => {
+        if (cache !== null) {
+          // 已有本地缓存兜底：保持缓存渲染，静默降级。
+          logger.warning("同步 TOTP 列表失败，已使用本地缓存渲染", e);
+          hideToast();
+
+          return;
+        }
+
         this.setData({ isError: true });
 
         Toast({
@@ -95,12 +112,21 @@ Page({
         });
 
         Message.error({
-          content: `加载失败：${e.message}`,
+          content: `加载失败：${error.getErrorMessage(e)}`,
           duration: 5000,
           offset: [20, 32],
           context: this,
         });
       });
+  },
+  renderItems(items: CacheItem[]) {
+    this.setData({
+      items: items.map((item) => ({
+        ...item,
+        issuer: substr(item.issuer, 7),
+        username: substr(item.username, 50),
+      })),
+    });
   },
   async create() {
     this.isCreating = true;
@@ -112,6 +138,17 @@ Page({
 
     api
       .create(scan.result)
+      .then((item) => {
+        // 直接用 create 响应（即服务端入库值）乐观写入缓存，
+        // 避免前端二次解析 URI 与后端 from_url_unchecked 的语义差异。
+        upsertItem({
+          id: item.id,
+          issuer: item.issuer,
+          username: item.username,
+          secret: item.config.secret,
+          period: item.config.period,
+        });
+      })
       .catch((e: HttpError) =>
         Message.error({
           content: e.message,
@@ -148,6 +185,9 @@ Page({
   dialogConfirm() {
     api
       .deleteTotp(this.data.currentItemId)
+      .then(() => {
+        removeItem(this.data.currentItemId);
+      })
       .catch((e: HttpError) =>
         Message.error({
           content: `删除失败：${e.message}`,
@@ -241,13 +281,13 @@ Page({
   saveSort() {
     const reorderedItems = this.data.dragItems.map((di) => {
       const { y: _y, translateY: _t, ...rest } = di;
-      return rest as Item;
+      return rest as CacheItem;
     });
     this.exitSortMode();
     this.onSortChange({ detail: reorderedItems });
   },
 
-  onSortChange(e: { detail: Item[] }) {
+  onSortChange(e: { detail: CacheItem[] }) {
     const originalItems = this.data.items.slice();
     const reorderedItems = e.detail;
     const sortItems = reorderedItems.map((item, index) => ({
@@ -258,6 +298,7 @@ Page({
     api
       .sort(sortItems)
       .then(() => {
+        applySort(reorderedItems.map((item) => item.id));
         this.setData({ items: reorderedItems });
       })
       .catch((err: HttpError) => {
