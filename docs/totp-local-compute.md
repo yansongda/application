@@ -276,6 +276,8 @@ vendor ESM 在微信 devtools/真机的加载与运行（Task 0 冒烟；wx.requ
 
 ## 修订记录
 
+- 2026-09-06：移除 clock_offset 服务器时钟校准，取码与倒计时直接使用本地时间；连带删除 http.postWithHeader（withHeader 透传）与缓存 synced_at 字段。正文 3.5 节 clock_offset 设计已废弃，仅留档。旧缓存中的多余字段被自然忽略，无需迁移。
+
 - 2026-09-06：devtools 实测确认 npm 直构（包名 import + 构建 npm）不可用——packNpm 引擎无法解析包 main（.cjs 后缀告警 entry file not found），devtools 实测加载失败；vendor 引入方式维持，实验代码已回退。
 
 - 2026-09-06：PR #162 review 第二轮——create 乐观写入改用 create 响应字段（删除前端 parseUri/URI 解析）；倒计时以 clock_offset 对齐的 epoch 秒计算；otpauth 依赖固定精确版本并新增 src/vendor/README.md 同步约束。

@@ -14,11 +14,7 @@ const readCache = (): TotpCache | null => {
 
     const cache = raw as TotpCache;
 
-    if (
-      typeof cache.synced_at !== "number" ||
-      typeof cache.clock_offset !== "number" ||
-      !Array.isArray(cache.items)
-    ) {
+    if (!Array.isArray(cache.items)) {
       logger.warning("TOTP 本地缓存结构异常，已忽略");
 
       return null;
@@ -38,13 +34,7 @@ const writeCache = (cache: TotpCache): void => {
 
 const upsertItem = (item: CacheItem): void => {
   // 缓存不存在时以空缓存为底座承接新条目。
-  const cache =
-    readCache() ??
-    ({
-      synced_at: Date.now(),
-      clock_offset: 0,
-      items: [],
-    } as TotpCache);
+  const cache: TotpCache = readCache() ?? { items: [] };
 
   const index = cache.items.findIndex((i) => i.id === item.id);
 
@@ -122,40 +112,9 @@ const applySort = (orderedIds: string[]): void => {
   writeCache(cache);
 };
 
-const getServerClockOffset = (
-  header: Record<string, string | undefined>,
-): number => {
-  // wx.request 各平台响应头键大小写不一，需大小写不敏感查找 Date。
-  let dateValue: string | undefined;
-
-  for (const key of Object.keys(header)) {
-    if (key.toLowerCase() === "date") {
-      dateValue = header[key];
-      break;
-    }
-  }
-
-  if (typeof dateValue !== "string" || dateValue === "") {
-    return 0;
-  }
-
-  const serverTime = Date.parse(dateValue);
-
-  if (Number.isNaN(serverTime)) {
-    logger.warning("服务器时间解析失败", dateValue);
-
-    return 0;
-  }
-
-  return Math.round(serverTime - Date.now());
-};
-
 const syncFromRemote = async (): Promise<TotpCache> => {
-  // /all 响应已携带 config.secret（PR #162 review 方案 A），单接口完成同步并取 Date 头计算时钟偏移。
-  const { data: items, header } = await http.postWithHeader<Item[]>(
-    PATH.ALL,
-    {},
-  );
+  // /all 响应已携带 config.secret（PR #162 review 方案 A），单接口完成同步。
+  const items = await http.post<Item[]>(PATH.ALL, {});
 
   const cacheItems: CacheItem[] = items.map((item) => ({
     id: item.id,
@@ -165,17 +124,7 @@ const syncFromRemote = async (): Promise<TotpCache> => {
     period: item.config.period,
   }));
 
-  let clockOffset = getServerClockOffset(header);
-
-  if (Math.abs(clockOffset) > 60000) {
-    logger.warning("服务器时钟偏移过大，已忽略", clockOffset);
-
-    clockOffset = 0;
-  }
-
   const cache: TotpCache = {
-    synced_at: Date.now(),
-    clock_offset: clockOffset,
     items: cacheItems,
   };
 
@@ -186,7 +135,6 @@ const syncFromRemote = async (): Promise<TotpCache> => {
 
 export {
   applySort,
-  getServerClockOffset,
   readCache,
   removeItem,
   syncFromRemote,

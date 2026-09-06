@@ -57,7 +57,5 @@ export interface CacheItem {
 }
 
 export interface TotpCache {
-  synced_at: number;
-  clock_offset: number;
   items: CacheItem[];
 }

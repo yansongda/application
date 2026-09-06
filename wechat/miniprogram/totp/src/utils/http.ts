@@ -107,7 +107,7 @@ const handleTokenExpired = async <T>(
   originalRequest: Request,
   code: number,
   message: string,
-  opts: { isRetry?: boolean; withHeader?: boolean } = {},
+  opts: { isRetry?: boolean } = {},
 ): Promise<T> => {
   // Single-retry guard: if we already retried once after a refresh —
   // reject immediately to prevent an infinite loop.
@@ -132,13 +132,12 @@ const handleTokenExpired = async <T>(
 
   return request<T>(retryRequest, {
     isRetry: true,
-    withHeader: opts.withHeader,
   });
 };
 
 const request = <T>(
   req: Request,
-  opts: { isRetry?: boolean; withHeader?: boolean } = {},
+  opts: { isRetry?: boolean } = {},
 ): Promise<T> => {
   const preserved = cloneRequest(req);
 
@@ -151,7 +150,7 @@ const request = <T>(
 const wxRequest = <T>(
   req: Request,
   preserved: Request,
-  opts: { isRetry?: boolean; withHeader?: boolean } = {},
+  opts: { isRetry?: boolean } = {},
 ): Promise<T> => {
   logger.info("请求接口", req.url);
 
@@ -164,11 +163,7 @@ const wxRequest = <T>(
       method: req.method || "GET",
       success: (res: WxRequestSuccess<T>) => {
         if (Number(res.data.code) === 0) {
-          resolve(
-            opts.withHeader
-              ? ({ data: res.data.data, header: res.header } as T)
-              : res.data.data,
-          );
+          resolve(res.data.data);
           return;
         }
 
@@ -203,18 +198,8 @@ const post = <T>(url: string, data?: RequestData): Promise<T> => {
   return request<T>({ url, data, method: "POST" } as Request);
 };
 
-const postWithHeader = <T>(
-  url: string,
-  data?: RequestData,
-): Promise<{ data: T; header: Record<string, string | undefined> }> => {
-  return request<{ data: T; header: Record<string, string | undefined> }>(
-    { url, data, method: "POST" } as Request,
-    { withHeader: true },
-  );
-};
-
 const get = <T>(url: string, query?: RequestQuery): Promise<T> => {
   return request<T>({ url, query, method: "GET" } as Request);
 };
 
-export default { request, post, get, postWithHeader };
+export default { request, post, get };

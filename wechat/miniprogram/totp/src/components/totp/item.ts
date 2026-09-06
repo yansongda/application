@@ -1,5 +1,4 @@
 import { computeCode } from "@utils/totp";
-import { readCache } from "@utils/totp-cache";
 
 Component({
   properties: {
@@ -53,10 +52,8 @@ Component({
       }
 
       try {
-        const offset = readCache()?.clock_offset ?? 0;
-
         this.setData({
-          code: computeCode(secret, this.data.period, Date.now() + offset),
+          code: computeCode(secret, this.data.period, Date.now()),
         });
       } catch (_e: unknown) {
         this.setData({ code: "------" });
@@ -67,11 +64,9 @@ Component({
       this.clear();
 
       const period = this.data.period ?? 30;
-      // 以 clock_offset 校准后的服务器时钟对齐周期边界，保证「倒计时归零」与
-      // 「验证码翻转」在同一时刻发生；epoch 秒取模对任意时区与任意周期均成立
-      // （原 getSeconds() 方案存在时区偏移非周期倍数时的固有偏差，且未吸收 offset）。
-      const offset = readCache()?.clock_offset ?? 0;
-      const alignedSeconds = Math.floor((Date.now() + offset) / 1000);
+      // 以 epoch 秒取模对齐周期边界，保证「倒计时归零」与「验证码翻转」在同一
+      // 时刻发生；对任意时区与任意周期均成立。
+      const alignedSeconds = Math.floor(Date.now() / 1000);
       const remainSeconds = period - (alignedSeconds % period);
 
       this.data.refreshCodeTimeoutIdentity = setTimeout(() => {
