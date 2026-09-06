@@ -11,6 +11,8 @@
 
 包的 main 入口指向 `dist/otpauth.node.cjs`，顶层 `require('node:crypto')`，微信小程序运行时与 packNpm 均无法加载；ESM 构建自包含可直接 import。背景见仓库 `docs/totp-local-compute.md` 3.5 节。
 
+**2026-09-06 已实测确认 npm 直构不可用，请勿尝试改回**：packNpm 引擎（与 devtools「构建 npm」同源）无法解析包 main（`.cjs` 后缀被错误处理为 `otpauth.node.cjs.js`，告警 `Npm package entry file not found`）；devtools 内以包名 import + 构建 npm 实测加载失败。
+
 ## 版本同步约束（重要）
 
 - 当前版本：**9.5.2**。运行时实际加载的是本目录文件；`node_modules` 中的包与 `package.json` 依赖声明仅用于锁文件与版本记录。

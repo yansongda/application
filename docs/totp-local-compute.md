@@ -164,7 +164,7 @@ compute_code(item, now = Date.now() + clock_offset):
 | 主小程序 | `/all` 响应新增 `config.secret` 字段向后兼容（未知字段被忽略），主小程序代码零改动 |
 | 旧版小程序共存 | `/all` 响应新增字段向后兼容，旧版不使用 secret 字段、不受影响 |
 | 包体积 | otpauth 自包含 ESM `dist/otpauth.esm.min.js` 27.6KB（实测，noble-hashes 已内联、0 处 node:crypto），主包 2MB 限制内 |
-| 引入方式 | **主路径 vendor**：`dist/otpauth.esm.min.js` 复制入 `src/vendor/`（+ 基名匹配的 `otpauth.esm.min.d.ts` 供 typecheck——tsconfig `allowJs: true`，旁车必须与 import 基名一致；并在 `biome.json` 排除 `src/vendor`）。原因（2026-09-05 实测）：包 `main` 指向 `dist/otpauth.node.cjs` 且顶层 `require('node:crypto')`，微信 packNpm 按 main 解析必然运行时失败；esm/umd 构建自包含无该依赖。package.json 仍声明 otpauth 依赖但**固定精确版本（无 caret，2026-09-06 review 修订）**，与 `src/vendor/` 内产物版本强制同步（升级步骤见 `src/vendor/README.md`；typecheck 类型由 sidecar 提供），不经构建 npm 加载 |
+| 引入方式 | **主路径 vendor**：`dist/otpauth.esm.min.js` 复制入 `src/vendor/`（+ 基名匹配的 `otpauth.esm.min.d.ts` 供 typecheck——tsconfig `allowJs: true`，旁车必须与 import 基名一致；并在 `biome.json` 排除 `src/vendor`）。原因：包 `main` 指向 `dist/otpauth.node.cjs` 且顶层 `require('node:crypto')`。**2026-09-06 已实测确认 npm 直构不可用**：`miniprogram-ci packNpmManually`（与 devtools「构建 npm」同引擎）将 main 解析为 `otpauth.node.cjs.js` 并告警 `Npm package entry file not found`；devtools 内改用包名 import + 构建 npm 实测加载失败。esm/umd 构建自包含无该依赖。package.json 仍声明 otpauth 依赖但**固定精确版本（无 caret，2026-09-06 review 修订）**，与 `src/vendor/` 内产物版本强制同步（升级步骤见 `src/vendor/README.md`；typecheck 类型由 sidecar 提供），不经构建 npm 加载 |
 | Bun 工具链 | 项目为 package.json + bun.lock（无 deno.json）；`bun install` 更新锁文件与 node_modules |
 
 **库选型**（对比调研结论，来源官方 npm/GitHub 与社区实践）：
@@ -275,6 +275,8 @@ vendor ESM 在微信 devtools/真机的加载与运行（Task 0 冒烟；wx.requ
 - 库体积实测：jsdelivr 文件清单（otpauth 完整 ESM 27.6KB min；jsSHA sha1.mjs 8.8KB）
 
 ## 修订记录
+
+- 2026-09-06：devtools 实测确认 npm 直构（包名 import + 构建 npm）不可用——packNpm 引擎无法解析包 main（.cjs 后缀告警 entry file not found），devtools 实测加载失败；vendor 引入方式维持，实验代码已回退。
 
 - 2026-09-06：PR #162 review 第二轮——create 乐观写入改用 create 响应字段（删除前端 parseUri/URI 解析）；倒计时以 clock_offset 对齐的 epoch 秒计算；otpauth 依赖固定精确版本并新增 src/vendor/README.md 同步约束。
 - 2026-09-05：PR #162 review 后修订（方案 A）——/all 响应携带 secret（DetailResponseConfig +secret），移除 /secrets 接口；前端同步改单接口。
