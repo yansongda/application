@@ -2,6 +2,17 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.0] - 2026-09-07
+
+### Added
+
+- TOTP 验证码改为本地离线计算，引入 otpauth 本地生成验证码，无需每次请求后端 (#162)
+
+### Changed
+
+- 移除 clock_offset 时钟校准，取码与倒计时改用本地时间 (#163)
+- 包管理器由 Deno 迁移至 Bun (#162)
+
 ## [1.0.1] - 2026-08-29
 
 ### Fixed
