@@ -1,4 +1,4 @@
-use crate::http::{self, Body};
+use crate::{self as http, Body};
 use application_kernel::result::{ErrorCode, Result};
 use serde::Deserialize;
 use serde_json::Value;
