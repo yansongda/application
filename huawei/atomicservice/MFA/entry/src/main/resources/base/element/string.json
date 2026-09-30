@@ -193,6 +193,14 @@
       "value": "设置发行方"
     },
     {
+      "name": "index_edit_issuer_unknown",
+      "value": "未知发行方"
+    },
+    {
+      "name": "index_edit_username_unknown",
+      "value": "未知用户名"
+    },
+    {
       "name": "index_edit_username_page_title",
       "value": "设置用户名"
     },

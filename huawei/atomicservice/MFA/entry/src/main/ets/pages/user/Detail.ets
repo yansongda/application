@@ -7,6 +7,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Dialog } from '../../utils/PromptAction';
 import { User as UserApi } from '../../api/User';
 import { AppPagesName, LogDomain } from '../../App';
+import { displayOr } from '../../utils/Display';
 
 @Builder
 export function builder() {
@@ -15,17 +16,21 @@ export function builder() {
 
 @ComponentV2
 struct Detail {
+  @Local
   private user: User =
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
 
   build() {
     NavDestination() {
       Column({ space: $r('app.integer.column_space') }) {
-        Image(this.user.config.avatar ?? $r('app.media.default_avatar'))
+        Image(displayOr(this.user.config.avatar, $r('app.media.default_avatar')))
           .width('25%')
           .autoResize(false)
           .interpolation(ImageInterpolation.High)
           .borderRadius(10)
+          .onError(() => {
+            hilog.warn(LogDomain.PAGES, AppPagesName.USER_DETAIL, '头像加载失败，保持当前展示');
+          })
           .onClick(() => {
             this.changeAvatar();
           })
@@ -34,7 +39,7 @@ struct Detail {
           items: [
             new CardItem({
               title: $r('app.string.user_detail_page_nickname'),
-              value: this.user.config.nickname ?? $r('app.string.default_nickname'),
+              value: displayOr(this.user.config.nickname, $r('app.string.default_nickname')),
               eventClick: {
                 action: async (): Promise<string | undefined> => {
                   const credential = await this.authorizeProfile();
@@ -50,7 +55,7 @@ struct Detail {
             }),
             new CardItem({
               title: $r('app.string.user_detail_page_slogan'),
-              value: this.user.config.slogan ?? $r('app.string.default_slogan'),
+              value: displayOr(this.user.config.slogan, $r('app.string.default_slogan')),
               eventClick: {
                 action: AppPagesName.USER_EDIT_SLOGAN,
               },
@@ -107,7 +112,9 @@ struct Detail {
     const credential = await this.authorizeProfile();
     const avatarUri = credential?.avatarUri;
 
-    if ('undefined' === typeof avatarUri) {
+    if ('undefined' === typeof avatarUri || 0 === avatarUri.length) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.USER_DETAIL, '华为账号未返回头像，保持原头像');
+
       return;
     }
 
@@ -119,6 +126,8 @@ struct Detail {
       );
 
       this.user.config.avatar = avatarUri;
+
+      hilog.info(LogDomain.PAGES, AppPagesName.USER_DETAIL, '头像已更新，uri 长度: %{public}d', avatarUri.length);
     } catch (e) {
       // 用户取消重试，保持原头像
     }

@@ -13,6 +13,7 @@ import { AppPagesName, LogDomain } from '../../App';
 import { SortRequestItem, Totp } from '../../api/Totp';
 import { scanBarcode } from '@kit.ScanKit';
 import { User } from '../../models/User';
+import { displayOr } from '../../utils/Display';
 import { IndexGuideState } from '../../models/Guide';
 import { IndexGuide } from '../../components/IndexGuide';
 import { TotpCard } from '../../components/TotpCard';
@@ -37,6 +38,7 @@ export struct Index {
   private isFetching: boolean = false;
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
+  @Local
   private user: User =
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
   private scroller: ListScroller = new ListScroller();
@@ -143,13 +145,16 @@ export struct Index {
   @Builder
   title() {
     Row() {
-      Image(this.user.config.avatar ?? $r('app.media.default_avatar'))
+      Image(displayOr(this.user.config.avatar, $r('app.media.default_avatar')))
         .width($r('app.integer.avatar_size'))
         .height($r('app.integer.avatar_size'))
         .autoResize(true)
         .interpolation(ImageInterpolation.Medium)
         .margin({ right: 10 })
         .borderRadius($r('app.integer.card_radius'))
+        .onError(() => {
+          hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '头像加载失败，保持当前展示');
+        })
         .onClick(() => {
           this.pages.pushPathByName(AppPagesName.USER_DETAIL, null);
         })

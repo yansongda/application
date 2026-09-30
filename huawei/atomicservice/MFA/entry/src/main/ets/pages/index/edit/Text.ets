@@ -1,3 +1,4 @@
+import { application } from '@kit.AbilityKit';
 import { AppStorageV2, KeyboardAvoidMode, LoadingDialogV2 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Totp } from '../../../api/Totp';
@@ -137,10 +138,24 @@ struct EditText {
     return this.isIssuer ? AppPagesName.INDEX_EDIT_ISSUER : AppPagesName.INDEX_EDIT_USERNAME;
   }
 
+  // 空输入时回退到默认文案（走 string 资源，避免在代码里硬编码中文）
+  private fallbackValue(): string {
+    const value = this.isIssuer ? $r('app.string.index_edit_issuer_unknown') :
+      $r('app.string.index_edit_username_unknown');
+
+    try {
+      return application.getApplicationContext().resourceManager.getStringSync(value.id);
+    } catch (e) {
+      hilog.warn(LogDomain.PAGES, this.logPage(), '读取默认文案失败: %{public}s', JSON.stringify(e));
+
+      return '';
+    }
+  }
+
   private async submit(): Promise<void> {
     const id = this.runtime?.id ?? 'unknown';
     // 输入为空时回退到默认文案，避免把空值提交给服务端
-    const value = this.draft.length > 0 ? this.draft : (this.isIssuer ? '未知发行方' : '未知用户名');
+    const value = this.draft.length > 0 ? this.draft : this.fallbackValue();
 
     hilog.info(LogDomain.PAGES, this.logPage(), '修改后的值: %{public}s', value);
 
