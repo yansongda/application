@@ -63,7 +63,7 @@ struct Detail {
           items: [
             new CardItem({
               title: $r('app.string.user_detail_page_phone'),
-              value: '敬请期待',
+              value: $r('app.string.user_detail_page_coming_soon'),
             }),
           ]
         })
@@ -97,7 +97,7 @@ struct Detail {
       return undefined;
     }
 
-    hilog.info(LogDomain.PAGES, AppPagesName.USER_DETAIL, '授权获取的用户信息: %{public}s',
+    hilog.info(LogDomain.PAGES, AppPagesName.USER_DETAIL, '授权获取的用户信息: %{private}s',
       JSON.stringify(credential));
 
     return credential;

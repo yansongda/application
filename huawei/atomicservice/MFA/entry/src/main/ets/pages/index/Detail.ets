@@ -23,7 +23,7 @@ struct Detail {
             .height(2)
             .color($r('app.color.brand'))
 
-          Text(this.runtime?.code ?? 'NaN')
+          Text(this.runtime?.code ?? $r('app.string.index_detail_page_value_unknown'))
             .textAlign(TextAlign.Center)
             .fontSize(70)
             .margin({ top: 20 })
@@ -34,12 +34,12 @@ struct Detail {
           items: [
             new CardItem({
               title: $r('app.string.index_page_issuer'),
-              value: this.runtime?.issuer ?? 'NaN',
+              value: this.runtime?.issuer ?? $r('app.string.index_detail_page_value_unknown'),
               eventClick: { action: AppPagesName.INDEX_EDIT_ISSUER, params: this.runtime },
             }),
             new CardItem({
               title: $r('app.string.index_page_username'),
-              value: this.runtime?.username ?? 'NaN',
+              value: this.runtime?.username ?? $r('app.string.index_detail_page_value_unknown'),
               eventClick: { action: AppPagesName.INDEX_EDIT_USERNAME, params: this.runtime },
             }),
           ]

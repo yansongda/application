@@ -130,7 +130,7 @@ export class Authorization {
   async login(): Promise<Authorization> {
     const credential = await Authorization.loginWithHuaweiID();
 
-    hilog.info(LogDomain.MODELS, 'models/auth', '认证信息, credential: %{public}s, client_id: %{public}s',
+    hilog.info(LogDomain.MODELS, 'models/auth', '认证信息, credential: %{private}s',
       JSON.stringify(credential));
 
     if ('undefined' === typeof credential) {

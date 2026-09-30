@@ -23,7 +23,7 @@ export class User {
       return response.data.data;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async editAvatar(avatar: string): Promise<void> {
@@ -37,7 +37,7 @@ export class User {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async editNickname(nickname: string): Promise<void> {
@@ -51,7 +51,7 @@ export class User {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async editSlogan(slogan: string): Promise<void> {
@@ -65,7 +65,7 @@ export class User {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async delete(): Promise<void> {
@@ -76,6 +76,6 @@ export class User {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 }

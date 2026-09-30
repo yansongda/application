@@ -72,6 +72,8 @@ struct Slogan {
 
                 this.pages.pop({ value: this.slogan } as IJumpCallbackResult);
               } catch (e) {
+                hilog.warn(LogDomain.PAGES, AppPagesName.USER_EDIT_SLOGAN, '修改 Slogan 失败: %{public}s',
+                  JSON.stringify(e));
               }
             })
         }

@@ -64,6 +64,8 @@ struct Issuer {
 
                 this.pages.pop({ value: issuer } as IJumpCallbackResult);
               } catch (e) {
+                hilog.warn(LogDomain.PAGES, AppPagesName.INDEX_EDIT_ISSUER, '修改发行方失败: %{public}s',
+                  JSON.stringify(e));
               }
             })
         }

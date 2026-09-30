@@ -123,7 +123,7 @@ struct Index {
               const uri =
                 `otpauth://totp/${label}?secret=${this.secret}&issuer=${encodeURIComponent(this.issuer)}&period=${period}`;
 
-              hilog.info(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建: %{public}s', uri);
+              hilog.info(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建: %{private}s', uri);
 
               try {
                 await Toast.execute(
@@ -134,6 +134,8 @@ struct Index {
 
                 this.pages.pop();
               } catch (e) {
+                hilog.warn(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建 TOTP 失败: %{public}s',
+                  JSON.stringify(e));
               }
             })
         }

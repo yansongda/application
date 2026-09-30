@@ -64,6 +64,8 @@ struct Username {
 
                 this.pages.pop({ value: username } as IJumpCallbackResult);
               } catch (e) {
+                hilog.warn(LogDomain.PAGES, AppPagesName.INDEX_EDIT_USERNAME, '修改用户名失败: %{public}s',
+                  JSON.stringify(e));
               }
             })
         }

@@ -39,7 +39,7 @@ export class AccessToken {
       return response.data.data;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async loginRefresh(clientId: string,
@@ -56,6 +56,6 @@ export class AccessToken {
       return response.data.data;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 }

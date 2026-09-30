@@ -104,7 +104,7 @@ export class ItemRuntime {
     this.schedule();
   }
 
-  // 恢复定时器（如退后台后回前台），仅在验证码缺失时补拉一次，页面刷新时仍以服务端数据为准
+  // 恢复定时器（如退后台后回前台）：仅重启计时，仅在验证码缺失时补拉一次，避免每个条目各发一次详情请求
   resume() {
     if (this._timeoutId !== undefined) {
       return;
@@ -129,7 +129,7 @@ export class ItemRuntime {
     clearTimeout(this._timeoutId)
     clearInterval(this._intervalId)
 
-    this._code = undefined;
+    // 保留最后一次验证码：回前台/滚回屏幕时立即可见，新验证码由页面刷新或周期到达时获取
     this._progress = undefined;
     this._timeoutId = undefined;
     this._intervalId = undefined;

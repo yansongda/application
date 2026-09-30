@@ -30,14 +30,14 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   config.headers['Authorization'] = authorization().accessToken;
 
   hilog.info(LogDomain.UTILS, 'utils/http',
-    '发送 http 请求，url: %{public}s, method: %{public}s, headers: %{public}s, request body: %{public}s', config.url,
+    '发送 http 请求，url: %{private}s, method: %{private}s, headers: %{private}s, request body: %{private}s', config.url,
     config.method,
     JSON.stringify(config.headers), JSON.stringify(config.data));
 
   return config;
 }, (e: AxiosError) => {
   hilog.error(LogDomain.UTILS, 'utils/http',
-    '发送 http 请求失败，message: %{public}s, url: %{public}s, method: %{public}s, headers: %{public}s, request body: %{public}s',
+    '发送 http 请求失败，message: %{private}s, url: %{private}s, method: %{private}s, headers: %{private}s, request body: %{private}s',
     e.message,
     e.config?.url, e.config?.method, JSON.stringify(e.config?.headers), JSON.stringify(e.config?.data));
 
@@ -47,6 +47,7 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     message =
       application.getApplicationContext().resourceManager.getStringSync($r('app.string.error_http_request_failed').id)
   } catch (e) {
+    hilog.warn(LogDomain.UTILS, 'utils/http', '获取请求失败提示文案失败: %{public}s', JSON.stringify(e));
   }
 
   return Promise.reject(new HttpError(message));
@@ -54,7 +55,7 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 http.interceptors.response.use((response: AxiosResponse): AxiosResponse => {
   hilog.info(LogDomain.UTILS, 'utils/http',
-    '接收 http 请求响应，url: %{public}s, method: %{public}s, response body: %{public}s, time: %{public}s',
+    '接收 http 请求响应，url: %{private}s, method: %{private}s, response body: %{private}s, time: %{private}s',
     response.config.url,
     response.config.method, JSON.stringify(response.data), JSON.stringify(response.performanceTiming));
 
@@ -73,7 +74,7 @@ http.interceptors.response.use((response: AxiosResponse): AxiosResponse => {
   return response;
 }, (e: AxiosError) => {
   hilog.error(LogDomain.UTILS, 'utils/http',
-    '接收 http 请求失败，code: %{public}s, message: %{public}s, url: %{public}s, method: %{public}s, request body: %{public}s, response body: %{public}s',
+    '接收 http 请求失败，code: %{private}s, message: %{private}s, url: %{private}s, method: %{private}s, request body: %{private}s, response body: %{private}s',
     e.code, e.message, e.config?.url, e.config?.method, JSON.stringify(e.config?.data), JSON.stringify(e.response?.data)
   );
 
@@ -83,6 +84,7 @@ http.interceptors.response.use((response: AxiosResponse): AxiosResponse => {
     message =
       application.getApplicationContext().resourceManager.getStringSync($r('app.string.error_http_response_failed').id)
   } catch (e) {
+    hilog.warn(LogDomain.UTILS, 'utils/http', '获取响应失败提示文案失败: %{public}s', JSON.stringify(e));
   }
 
   return Promise.reject(new HttpError(message));

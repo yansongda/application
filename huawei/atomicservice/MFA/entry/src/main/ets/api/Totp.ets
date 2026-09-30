@@ -40,15 +40,15 @@ export interface SortRequestItem {
 }
 
 export class Totp {
-  static async all(): Promise<Set<AllResponse>> {
-    const response: AxiosResponse<Response<Set<AllResponse>>> =
-      await http.post<Set<AllResponse>, AxiosResponse<Response<Set<AllResponse>>>, null>('api/v1/totp/all');
+  static async all(): Promise<AllResponse[]> {
+    const response: AxiosResponse<Response<AllResponse[]>> =
+      await http.post<AllResponse[], AxiosResponse<Response<AllResponse[]>>, null>('api/v1/totp/all');
 
     if (0 === response.data?.code && response.data.data) {
       return response.data.data;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async create(uri: string): Promise<CreateResponse> {
@@ -62,7 +62,7 @@ export class Totp {
       return response.data.data;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async detail(id: string): Promise<DetailResponse> {
@@ -76,7 +76,7 @@ export class Totp {
       return response.data.data;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async editIssuer(id: string, issuer: string): Promise<void> {
@@ -91,7 +91,7 @@ export class Totp {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async editUsername(id: string, username: string): Promise<void> {
@@ -106,7 +106,7 @@ export class Totp {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async delete(id: string): Promise<void> {
@@ -120,7 +120,7 @@ export class Totp {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async sort(items: Array<SortRequestItem>): Promise<void> {
@@ -134,6 +134,6 @@ export class Totp {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 }

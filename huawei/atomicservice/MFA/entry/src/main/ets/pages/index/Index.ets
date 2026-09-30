@@ -8,7 +8,6 @@ import {
   SymbolGlyphModifier
 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { Authorization } from '../../models/Auth';
 import { Dialog, Toast } from '../../utils/PromptAction';
 import { AppPagesName, LogDomain } from '../../App';
 import { SortRequestItem, Totp } from '../../api/Totp';
@@ -16,6 +15,8 @@ import { scanBarcode } from '@kit.ScanKit';
 import { User } from '../../models/User';
 
 const GUIDE_STEPS: number = 4;
+// 服务端未返回周期/进度时的兜底值（秒）
+const DEFAULT_PERIOD: number = 30;
 
 @ObservedV2
 export class IndexGuideState {
@@ -32,9 +33,6 @@ export function builder() {
 export struct Index {
   @Local guideState: IndexGuideState = PersistenceV2.globalConnect({ type: IndexGuideState, defaultCreator: () => new IndexGuideState() })!;
   @Local
-  authorization: Authorization =
-    PersistenceV2.globalConnect({ type: Authorization, defaultCreator: () => new Authorization() })!;
-  @Local
   private isRefreshing: boolean = false;
   @Local
   private isSortMode: boolean = false;
@@ -44,6 +42,8 @@ export struct Index {
   @Local
   private guideIndex: number = 0;
   private snapshotIds: string[] = [];
+  // 请求去重：避免 onActive 与下拉刷新并发发起 Totp.all()
+  private isFetching: boolean = false;
   private guideSwiper: SwiperController = new SwiperController();
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
@@ -58,7 +58,11 @@ export struct Index {
       Stack({ alignContent: Alignment.BottomEnd }) {
         Refresh({ refreshing: this.isRefreshing!! }) {
           if (this.itemsRuntime.ids.length <= 0) {
-            this.guide()
+            if (this.isGuideVisible) {
+              this.guide()
+            } else {
+              this.empty()
+            }
           } else {
             this.main()
           }
@@ -81,13 +85,9 @@ export struct Index {
 
         if (!this.isSortMode && !this.isGuideVisible) {
           Button({ type: ButtonType.Circle }) {
-            Row() {
-              Text() {
-                SymbolSpan($r('sys.symbol.plus'))
-                  .fontSize(35)
-                  .fontColor([$r('sys.color.font_on_primary')])
-              }
-            }
+            SymbolGlyph($r('sys.symbol.plus'))
+              .fontSize($r('app.float.fab_icon_font_size'))
+              .fontColor([$r('sys.color.font_on_primary')])
           }
           .backgroundColor($r('app.color.brand'))
           .fontColor($r('sys.color.font_on_primary'))
@@ -97,7 +97,7 @@ export struct Index {
             left: $r('app.integer.page_padding'),
             right: $r('app.integer.page_padding')
           })
-          .margin({ bottom: 50, right: 50 })
+          .margin({ bottom: $r('app.integer.page_margin'), right: $r('app.integer.page_margin') })
           .bindMenu([
             {
               value: $r('app.string.index_index_page_add_by_scan'),
@@ -144,17 +144,17 @@ export struct Index {
   title() {
     Row() {
       Image(this.user.config.avatar ?? $r('app.media.default_avatar'))
-        .width(30)
-        .height(30)
+        .width($r('app.integer.avatar_size'))
+        .height($r('app.integer.avatar_size'))
         .autoResize(true)
         .interpolation(ImageInterpolation.Medium)
         .margin({ right: 10 })
-        .borderRadius(10)
+        .borderRadius($r('app.integer.card_radius'))
         .onClick(() => {
           this.pages.pushPathByName(AppPagesName.USER_DETAIL, null);
         })
 
-      Text($r("app.string.app_name_short")).fontWeight(FontWeight.Bold).fontSize(30)
+      Text($r("app.string.app_name_short")).fontWeight(FontWeight.Bold).fontSize($r('app.float.title_font_size'))
     }
     .width('100%')
     .height('100%')
@@ -163,79 +163,80 @@ export struct Index {
   }
 
   @Builder
-  guide() {
-    if (!this.isGuideVisible) {
-      Column() {
-        Text() {
-          SymbolSpan($r('sys.symbol.exclamationmark_circle'))
-        }
-        .fontSize(50)
-
-        Text($r('app.string.index_index_page_data_empty'))
-          .margin({ top: 10 })
+  empty() {
+    Column() {
+      Text() {
+        SymbolSpan($r('sys.symbol.exclamationmark_circle'))
       }
-      .margin({ top: $r('app.integer.page_margin') })
-      .width('100%')
-      .height('100%')
-    } else {
-      Column() {
-        Swiper(this.guideSwiper) {
-          this.guideStep($r('sys.symbol.lock_shield'), $r('app.string.index_guide_page_step_security_title'))
-          this.guideActionStep($r('sys.symbol.qrcode'), $r('app.string.index_guide_page_step_scan_title'),
-            $r('app.string.index_index_page_add_by_scan'), (): void => {
-              this.addByScan();
-            })
-          this.guideActionStep($r('sys.symbol.doc_plaintext_and_pencil'),
-            $r('app.string.index_guide_page_step_input_title'),
-            $r('app.string.index_index_page_add_by_input'), (): void => {
-              this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
-            })
-          this.guideStep($r('sys.symbol.checkmark'), $r('app.string.index_guide_page_step_refresh_title'))
-        }
-        .indicator(new DotIndicator().color($r('sys.color.font_tertiary')).selectedColor($r('app.color.brand')))
-        .loop(false)
-        .layoutWeight(1)
-        .onChange((index: number): void => {
-          this.guideIndex = index;
-        })
+      .fontSize($r('app.float.empty_icon_font_size'))
 
-        Row() {
-          Button($r('app.string.index_guide_page_skip'))
-            .type(ButtonType.Normal)
-            .backgroundColor(Color.Transparent)
-            .fontColor($r('sys.color.font_secondary'))
-            .visibility(this.guideIndex >= GUIDE_STEPS - 1 ? Visibility.None : Visibility.Visible)
-            .onClick(() => {
-              this.isGuideVisible = false;
-            })
-
-          Blank()
-
-          Button(this.guideIndex >= GUIDE_STEPS - 1 ? $r('app.string.index_guide_page_start') :
-            $r('app.string.index_guide_page_next'))
-            .type(ButtonType.Capsule)
-            .backgroundColor($r('app.color.brand'))
-            .fontColor($r('sys.color.font_on_primary'))
-            .onClick(() => {
-              if (this.guideIndex >= GUIDE_STEPS - 1) {
-                this.isGuideVisible = false;
-
-                return;
-              }
-
-              this.guideSwiper.showNext();
-            })
-        }
-        .width('100%')
-        .padding({
-          left: $r('app.integer.page_padding'),
-          right: $r('app.integer.page_padding'),
-          bottom: $r('app.integer.page_padding')
-        })
-      }
-      .width('100%')
-      .height('100%')
+      Text($r('app.string.index_index_page_data_empty'))
+        .margin({ top: 10 })
     }
+    .margin({ top: $r('app.integer.page_margin') })
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  guide() {
+    Column() {
+      Swiper(this.guideSwiper) {
+        this.guideStep($r('sys.symbol.lock_shield'), $r('app.string.index_guide_page_step_security_title'))
+        this.guideActionStep($r('sys.symbol.qrcode'), $r('app.string.index_guide_page_step_scan_title'),
+          $r('app.string.index_index_page_add_by_scan'), (): void => {
+            this.addByScan();
+          })
+        this.guideActionStep($r('sys.symbol.doc_plaintext_and_pencil'),
+          $r('app.string.index_guide_page_step_input_title'),
+          $r('app.string.index_index_page_add_by_input'), (): void => {
+            this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
+          })
+        this.guideStep($r('sys.symbol.checkmark'), $r('app.string.index_guide_page_step_refresh_title'))
+      }
+      .indicator(new DotIndicator().color($r('sys.color.font_tertiary')).selectedColor($r('app.color.brand')))
+      .loop(false)
+      .layoutWeight(1)
+      .onChange((index: number): void => {
+        this.guideIndex = index;
+      })
+
+      Row() {
+        Button($r('app.string.index_guide_page_skip'))
+          .type(ButtonType.Normal)
+          .backgroundColor(Color.Transparent)
+          .fontColor($r('sys.color.font_secondary'))
+          .visibility(this.guideIndex >= GUIDE_STEPS - 1 ? Visibility.None : Visibility.Visible)
+          .onClick(() => {
+            this.isGuideVisible = false;
+          })
+
+        Blank()
+
+        Button(this.guideIndex >= GUIDE_STEPS - 1 ? $r('app.string.index_guide_page_start') :
+          $r('app.string.index_guide_page_next'))
+          .type(ButtonType.Capsule)
+          .backgroundColor($r('app.color.brand'))
+          .fontColor($r('sys.color.font_on_primary'))
+          .onClick(() => {
+            if (this.guideIndex >= GUIDE_STEPS - 1) {
+              this.isGuideVisible = false;
+
+              return;
+            }
+
+            this.guideSwiper.showNext();
+          })
+      }
+      .width('100%')
+      .padding({
+        left: $r('app.integer.page_padding'),
+        right: $r('app.integer.page_padding'),
+        bottom: $r('app.integer.page_padding')
+      })
+    }
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
@@ -244,12 +245,12 @@ export struct Index {
       Text() {
         SymbolSpan(icon)
       }
-      .fontSize(100)
+      .fontSize($r('app.float.guide_icon_font_size'))
       .fontColor($r('app.color.brand'))
 
       Text(title)
         .margin({ top: 30 })
-        .fontSize(20)
+        .fontSize($r('app.float.subtitle_font_size'))
         .fontWeight(FontWeight.Bold)
         .textAlign(TextAlign.Center)
     }
@@ -265,12 +266,12 @@ export struct Index {
       Text() {
         SymbolSpan(icon)
       }
-      .fontSize(100)
+      .fontSize($r('app.float.guide_icon_font_size'))
       .fontColor($r('app.color.brand'))
 
       Text(title)
         .margin({ top: 30 })
-        .fontSize(20)
+        .fontSize($r('app.float.subtitle_font_size'))
         .fontWeight(FontWeight.Bold)
         .textAlign(TextAlign.Center)
 
@@ -307,7 +308,7 @@ export struct Index {
   header() {
     Row() {
       Text($r('app.string.index_index_page_total', this.itemsRuntime.ids.length))
-        .fontSize(13)
+        .fontSize($r('app.float.caption_font_size'))
         .fontColor($r('sys.color.font_tertiary'))
 
       Blank()
@@ -319,7 +320,7 @@ export struct Index {
         .padding({ left: 0, right: 0 })
         .backgroundColor(Color.Transparent)
         .fontColor($r('app.color.brand'))
-        .fontSize(14)
+        .fontSize($r('app.float.body_font_size'))
         .onClick(() => {
           if (this.isSortMode) {
             this.saveSort().catch(() => {
@@ -345,7 +346,7 @@ export struct Index {
   sortTip() {
     Row() {
       Text($r('app.string.index_index_page_sort_tip'))
-        .fontSize(12)
+        .fontSize($r('app.float.caption_smaller_font_size'))
         .fontColor($r('sys.color.font_tertiary'))
     }
     .width('100%')
@@ -359,57 +360,10 @@ export struct Index {
       Repeat<string>(this.itemsRuntime.ids)
         .each((ri: RepeatItem<string>) => {
           ListItem() {
-            Column() {
-              Row() {
-                if (this.isSortMode) {
-                  SymbolGlyph($r('sys.symbol.line_3_horizontal'))
-                    .fontSize(24)
-                    .fontColor([$r('sys.color.font_tertiary')])
-                    .margin({ right: 10 })
-                }
-
-                Column() {
-                  Column() {
-                    Text(this.itemsRuntime.get(ri.item.valueOf()).issuer)
-                      .fontSize(30)
-                      .fontColor($r('sys.color.font_secondary'))
-                      .textAlign(TextAlign.Center)
-                      .maxLines(1)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  }
-
-                  Column() {
-                    Text(this.itemsRuntime.get(ri.item.valueOf()).username)
-                      .fontSize(12)
-                      .fontColor($r('sys.color.font_tertiary'))
-                      .textAlign(TextAlign.Center)
-                      .maxLines(2)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  }
-                  .margin({ top: 5 })
-                }
-                .layoutWeight(4)
-
-                Column() {
-                  Text(this.itemsRuntime.get(ri.item.valueOf()).code)
-                    .fontSize(50)
-                }
-                .layoutWeight(6)
-              }
-              .height(98)
-              .padding({ left: $r('app.integer.page_padding_smaller'), right: $r('app.integer.page_padding_smaller') })
-
-              Progress({
-                value: this.itemsRuntime.get(ri.item.valueOf()).progress ?? 30,
-                total: this.itemsRuntime.get(ri.item.valueOf()).config?.period ?? 30,
-                type: ProgressType.Linear,
-              })
-                .height(2)
-                .color($r('app.color.brand'))
-            }
+            this.itemCard(this.itemsRuntime.get(ri.item.valueOf()))
           }
-          .borderRadius(10)
-          .height(100)
+          .borderRadius($r('app.integer.card_radius'))
+          .height($r('app.integer.card_height'))
           .backgroundColor($r('sys.color.background_primary'))
           .swipeAction(this.isSortMode ? undefined : {
             end: {
@@ -445,6 +399,58 @@ export struct Index {
     }
     .width('100%')
     .layoutWeight(1)
+  }
+
+  @Builder
+  itemCard(runtime: ItemRuntime) {
+    Column() {
+      Row() {
+        if (this.isSortMode) {
+          SymbolGlyph($r('sys.symbol.line_3_horizontal'))
+            .fontSize($r('app.float.icon_font_size'))
+            .fontColor([$r('sys.color.font_tertiary')])
+            .margin({ right: 10 })
+        }
+
+        Column() {
+          Column() {
+            Text(runtime.issuer)
+              .fontSize($r('app.float.title_font_size'))
+              .fontColor($r('sys.color.font_secondary'))
+              .textAlign(TextAlign.Center)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+
+          Column() {
+            Text(runtime.username)
+              .fontSize($r('app.float.caption_smaller_font_size'))
+              .fontColor($r('sys.color.font_tertiary'))
+              .textAlign(TextAlign.Center)
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .margin({ top: 5 })
+        }
+        .layoutWeight(4)
+
+        Column() {
+          Text(runtime.code ?? '')
+            .fontSize($r('app.float.code_font_size'))
+        }
+        .layoutWeight(6)
+      }
+      .height($r('app.integer.card_content_height'))
+      .padding({ left: $r('app.integer.page_padding_smaller'), right: $r('app.integer.page_padding_smaller') })
+
+      Progress({
+        value: runtime.progress ?? DEFAULT_PERIOD,
+        total: runtime.config?.period ?? DEFAULT_PERIOD,
+        type: ProgressType.Linear,
+      })
+        .height($r('app.integer.card_progress_height'))
+        .color($r('app.color.brand'))
+    }
   }
 
   @Builder
@@ -642,11 +648,21 @@ export struct Index {
   }
 
   private async refresh(): Promise<void> {
-    const items =
-      await Dialog.execute(() => this.loadingDialog($r('app.string.loading')), () => Totp.all(),
-        () => this.fetchFailedDialog(() => this.refresh()));
+    if (this.isFetching) {
+      return;
+    }
 
-    this.itemsRuntime.reload(items.values());
-    this.decideGuide();
+    this.isFetching = true;
+
+    try {
+      const items =
+        await Dialog.execute(() => this.loadingDialog($r('app.string.loading')), () => Totp.all(),
+          () => this.fetchFailedDialog(() => this.refresh()));
+
+      this.itemsRuntime.reload(items.values());
+      this.decideGuide();
+    } finally {
+      this.isFetching = false;
+    }
   }
 }

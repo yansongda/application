@@ -105,6 +105,10 @@
       "value": "详情"
     },
     {
+      "name": "index_detail_page_value_unknown",
+      "value": "—"
+    },
+    {
       "name": "index_create_page_title",
       "value": "手动创建"
     },
@@ -219,6 +223,10 @@
     {
       "name": "user_detail_page_edit_failed",
       "value": "修改失败"
+    },
+    {
+      "name": "user_detail_page_coming_soon",
+      "value": "敬请期待"
     },
     {
       "name": "user_detail_page_delete_account",
