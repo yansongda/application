@@ -3,7 +3,6 @@ export interface IItem {
   issuer: string;
   username: string;
   code: string;
-  sort: number;
   config: IItemConfig;
 }
 

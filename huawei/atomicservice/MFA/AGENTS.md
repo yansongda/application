@@ -77,5 +77,5 @@ MFA/
 
 - `entry/src/main/ets/ability/` 目录包含 `EntryAbility.ets`（UIAbility 入口），上表已补充。
 - `code-linter.json5` 包含 `@security/no-unsafe-*` 系列规则，修改加密/安全相关逻辑前请先确认不会触发 lint 错误。
-- `build-profile.json5` 中的签名配置使用本地绝对路径与明文密码，仅用于本地开发，禁止用于生产。
+- `build-profile.json5` 中的签名配置使用本机绝对路径引用证书/Profile/密钥库，签名口令为 DevEco 加密后的**密文**（非明文，换机通常不可直接复用）；证书与密钥库本体不入库，仅用于本地开发，禁止用于生产。
 - 当前仓库 CI 未包含华为前端的构建/lint 检查。

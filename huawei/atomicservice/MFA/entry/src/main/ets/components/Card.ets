@@ -67,7 +67,10 @@ export struct Card {
       if ('function' === typeof item.eventClick.action) {
         const result: string | undefined = await item.eventClick.action();
 
-        item.callback({ value: result ?? '' } as IJumpCallbackResult);
+        // 返回 undefined 表示本次操作未产生变更，保持卡片已有显示内容
+        if ('undefined' !== typeof result) {
+          item.callback({ value: result } as IJumpCallbackResult);
+        }
       }
     })
   }

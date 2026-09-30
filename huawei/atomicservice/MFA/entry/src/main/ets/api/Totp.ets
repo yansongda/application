@@ -39,9 +39,6 @@ export interface SortRequestItem {
   sort: number;
 }
 
-
-export interface SortResponse {}
-
 export class Totp {
   static async all(): Promise<Set<AllResponse>> {
     const response: AxiosResponse<Response<Set<AllResponse>>> =
@@ -127,8 +124,8 @@ export class Totp {
   }
 
   static async sort(items: Array<SortRequestItem>): Promise<void> {
-    const response: AxiosResponse<Response<SortResponse>> =
-      await http.post<SortResponse, AxiosResponse<Response<SortResponse>>, SortRequest>('api/v1/totp/sort',
+    const response: AxiosResponse<Response<void>> =
+      await http.post<void, AxiosResponse<Response<void>>, SortRequest>('api/v1/totp/sort',
         {
           items,
         });

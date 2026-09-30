@@ -129,6 +129,62 @@
       "value": "请输入正确的更新周期（正整数秒）"
     },
     {
+      "name": "index_index_page_add_by_scan",
+      "value": "扫码添加"
+    },
+    {
+      "name": "index_index_page_add_by_input",
+      "value": "输入添加"
+    },
+    {
+      "name": "index_index_page_total",
+      "value": "总计 %d 个账号"
+    },
+    {
+      "name": "index_index_page_edit",
+      "value": "编辑"
+    },
+    {
+      "name": "index_index_page_sort_tip",
+      "value": "长按并拖动可调整顺序"
+    },
+    {
+      "name": "index_index_page_sort_mode_done",
+      "value": "完成"
+    },
+    {
+      "name": "index_index_page_sort_failed",
+      "value": "排序失败，已恢复原顺序"
+    },
+    {
+      "name": "index_guide_page_step_security_title",
+      "value": "MFA 验证器保护账号安全"
+    },
+    {
+      "name": "index_guide_page_step_scan_title",
+      "value": "扫描二维码即可快速添加"
+    },
+    {
+      "name": "index_guide_page_step_input_title",
+      "value": "也可以手动输入密钥添加"
+    },
+    {
+      "name": "index_guide_page_step_refresh_title",
+      "value": "验证码按更新周期自动刷新"
+    },
+    {
+      "name": "index_guide_page_skip",
+      "value": "跳过"
+    },
+    {
+      "name": "index_guide_page_next",
+      "value": "下一步"
+    },
+    {
+      "name": "index_guide_page_start",
+      "value": "开始使用"
+    },
+    {
       "name": "index_edit_issuer_page_title",
       "value": "设置发行方"
     },

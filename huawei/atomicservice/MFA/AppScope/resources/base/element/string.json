@@ -10,7 +10,7 @@
     },
     {
       "name": "app_description",
-      "value": "多因子双重认证（MFA）服务，目前支持 TOTP 算法，为您提供简单、可靠、纯粹的双重认证解决方案。"
+      "value": "多因子双重认证（MFA）服务，为您提供简单、可靠、纯粹的双重认证服务体验。"
     },
     {
       "name": "default_nickname",

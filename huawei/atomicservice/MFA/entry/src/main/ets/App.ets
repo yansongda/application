@@ -25,7 +25,6 @@ export enum AppEnv {
 
 export enum AppPagesName {
   LOGIN = 'login',
-  GUIDE = 'guide',
   HOME = 'home',
   INDEX = 'index',
   INDEX_CREATE = 'index/create',

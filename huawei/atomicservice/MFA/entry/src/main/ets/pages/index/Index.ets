@@ -15,8 +15,11 @@ import { SortRequestItem, Totp } from '../../api/Totp';
 import { scanBarcode } from '@kit.ScanKit';
 import { User } from '../../models/User';
 
+const GUIDE_STEPS: number = 4;
+
 @ObservedV2
 export class IndexGuideState {
+  // 引导页是否已不再展示（持久化）：点过「跳过/开始使用」，或已自动展示过一次
   @Trace isSkipped: boolean = false;
 }
 
@@ -35,9 +38,13 @@ export struct Index {
   private isRefreshing: boolean = false;
   @Local
   private isSortMode: boolean = false;
+  // 本次进入是否展示引导页（内存态；持久化标记只记录「已不再展示」，避免写入标记后立刻把引导页隐藏）
   @Local
-  private draggedIndex: number = -1;
+  private isGuideVisible: boolean = false;
+  @Local
+  private guideIndex: number = 0;
   private snapshotIds: string[] = [];
+  private guideSwiper: SwiperController = new SwiperController();
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
   private user: User =
@@ -72,7 +79,7 @@ export struct Index {
         .refreshOffset(64)
         .pullToRefresh(true)
 
-        if (!this.isSortMode) {
+        if (!this.isSortMode && !this.isGuideVisible) {
           Button({ type: ButtonType.Circle }) {
             Row() {
               Text() {
@@ -93,14 +100,14 @@ export struct Index {
           .margin({ bottom: 50, right: 50 })
           .bindMenu([
             {
-              value: '扫码添加',
+              value: $r('app.string.index_index_page_add_by_scan'),
               symbolIcon: new SymbolGlyphModifier($r('sys.symbol.line_viewfinder')),
               action: () => {
                 this.addByScan();
               },
             },
             {
-              value: '输入添加',
+              value: $r('app.string.index_index_page_add_by_input'),
               symbolIcon: new SymbolGlyphModifier($r('sys.symbol.doc_plaintext_and_pencil')),
               action: () => {
                 this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
@@ -136,59 +143,18 @@ export struct Index {
   @Builder
   title() {
     Row() {
-      if (this.isSortMode) {
-        Text("拖拽排序中")
-          .fontWeight(FontWeight.Bold)
-          .fontSize(20)
-          .layoutWeight(1)
-
-        Button("完成")
-          .type(ButtonType.Capsule)
-          .backgroundColor($r('app.color.brand'))
-          .fontColor($r('sys.color.font_on_primary'))
-          .onClick(async () => {
-            const reqItems: SortRequestItem[] = [];
-            const len = this.itemsRuntime.ids.length;
-            this.itemsRuntime.ids.forEach((id: string, idx: number): void => {
-              reqItems.push({ id: id, sort: len - 1 - idx });
-            });
-
-            try {
-              await Dialog.execute(() => this.loadingDialog(), () => Totp.sort(reqItems));
-
-              this.isSortMode = false;
-            } catch (e) {
-              this.itemsRuntime.restore(this.snapshotIds);
-              Toast.show({ message: '排序失败: ' + e.message, duration: 3000 });
-            }
-          })
-      } else {
-        Image(this.user.config.avatar ?? $r('app.media.default_avatar'))
-          .width(30)
-          .height(30)
-          .autoResize(true)
-          .interpolation(ImageInterpolation.Medium)
-          .margin({ right: 10 })
-          .borderRadius(10)
-          .onClick(() => {
-            this.pages.pushPathByName(AppPagesName.USER_DETAIL, null);
-          })
-
-        Text($r("app.string.app_name_short")).fontWeight(FontWeight.Bold).fontSize(30)
-
-        Blank()
-
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.arrow_up_arrow_down'))
-            .fontSize(24)
-            .fontColor([$r('sys.color.font_primary')])
-        }
-        .backgroundColor(Color.Transparent)
+      Image(this.user.config.avatar ?? $r('app.media.default_avatar'))
+        .width(30)
+        .height(30)
+        .autoResize(true)
+        .interpolation(ImageInterpolation.Medium)
+        .margin({ right: 10 })
+        .borderRadius(10)
         .onClick(() => {
-          this.isSortMode = true;
-          this.snapshotIds = [...this.itemsRuntime.ids];
+          this.pages.pushPathByName(AppPagesName.USER_DETAIL, null);
         })
-      }
+
+      Text($r("app.string.app_name_short")).fontWeight(FontWeight.Bold).fontSize(30)
     }
     .width('100%')
     .height('100%')
@@ -198,7 +164,7 @@ export struct Index {
 
   @Builder
   guide() {
-    if (this.guideState.isSkipped) {
+    if (!this.isGuideVisible) {
       Column() {
         Text() {
           SymbolSpan($r('sys.symbol.exclamationmark_circle'))
@@ -212,105 +178,60 @@ export struct Index {
       .width('100%')
       .height('100%')
     } else {
-      Stack({ alignContent: Alignment.TopEnd }) {
-        Stepper() {
-          StepperItem() {
-            Column() {
-              Text() {
-                SymbolSpan($r('sys.symbol.shield'))
-              }
-              .fontSize(100)
-              .fontColor([$r('app.color.brand')])
-              
-              Text("MFA 验证器保护账号安全")
-                .margin({ top: 30 })
-                .fontSize(20)
-                .fontWeight(FontWeight.Bold)
-            }
-            .width('100%')
-            .height('100%')
-            .justifyContent(FlexAlign.Center)
-          }
-          .nextLabel('下一步')
-          .prevLabel('上一步')
-          
-          StepperItem() {
-            Column() {
-              Text() {
-                SymbolSpan($r('sys.symbol.qrcode'))
-              }
-              .fontSize(100)
-              .fontColor([$r('app.color.brand')])
-              
-              Button("扫码添加")
-                .margin({ top: 30 })
-                .onClick(() => {
-                  this.addByScan();
-                })
-            }
-            .width('100%')
-            .height('100%')
-            .justifyContent(FlexAlign.Center)
-          }
-          .nextLabel('下一步')
-          .prevLabel('上一步')
-          
-          StepperItem() {
-            Column() {
-              Text() {
-                SymbolSpan($r('sys.symbol.doc_plaintext_and_pencil'))
-              }
-              .fontSize(100)
-              .fontColor([$r('app.color.brand')])
-              
-              Button("手动输入")
-                .margin({ top: 30 })
-                .onClick(() => {
-                  this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
-                })
-            }
-            .width('100%')
-            .height('100%')
-            .justifyContent(FlexAlign.Center)
-          }
-          .nextLabel('下一步')
-          .prevLabel('上一步')
-          
-          StepperItem() {
-            Column() {
-              Text() {
-                SymbolSpan($r('sys.symbol.checkmark'))
-              }
-              .fontSize(100)
-              .fontColor([$r('app.color.brand')])
-              
-              Text("验证码每 30 秒刷新")
-                .margin({ top: 30 })
-                .fontSize(20)
-                .fontWeight(FontWeight.Bold)
-            }
-            .width('100%')
-            .height('100%')
-            .justifyContent(FlexAlign.Center)
-          }
-          .nextLabel('开始使用')
-          .prevLabel('上一步')
+      Column() {
+        Swiper(this.guideSwiper) {
+          this.guideStep($r('sys.symbol.lock_shield'), $r('app.string.index_guide_page_step_security_title'))
+          this.guideActionStep($r('sys.symbol.qrcode'), $r('app.string.index_guide_page_step_scan_title'),
+            $r('app.string.index_index_page_add_by_scan'), (): void => {
+              this.addByScan();
+            })
+          this.guideActionStep($r('sys.symbol.doc_plaintext_and_pencil'),
+            $r('app.string.index_guide_page_step_input_title'),
+            $r('app.string.index_index_page_add_by_input'), (): void => {
+              this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
+            })
+          this.guideStep($r('sys.symbol.checkmark'), $r('app.string.index_guide_page_step_refresh_title'))
         }
-        .onFinish(() => {
-          this.guideState.isSkipped = true;
+        .indicator(new DotIndicator().color($r('sys.color.font_tertiary')).selectedColor($r('app.color.brand')))
+        .loop(false)
+        .layoutWeight(1)
+        .onChange((index: number): void => {
+          this.guideIndex = index;
         })
-        .onSkip(() => {
-          this.guideState.isSkipped = true;
+
+        Row() {
+          Button($r('app.string.index_guide_page_skip'))
+            .type(ButtonType.Normal)
+            .backgroundColor(Color.Transparent)
+            .fontColor($r('sys.color.font_secondary'))
+            .visibility(this.guideIndex >= GUIDE_STEPS - 1 ? Visibility.None : Visibility.Visible)
+            .onClick(() => {
+              this.isGuideVisible = false;
+            })
+
+          Blank()
+
+          Button(this.guideIndex >= GUIDE_STEPS - 1 ? $r('app.string.index_guide_page_start') :
+            $r('app.string.index_guide_page_next'))
+            .type(ButtonType.Capsule)
+            .backgroundColor($r('app.color.brand'))
+            .fontColor($r('sys.color.font_on_primary'))
+            .onClick(() => {
+              if (this.guideIndex >= GUIDE_STEPS - 1) {
+                this.isGuideVisible = false;
+
+                return;
+              }
+
+              this.guideSwiper.showNext();
+            })
+        }
+        .width('100%')
+        .padding({
+          left: $r('app.integer.page_padding'),
+          right: $r('app.integer.page_padding'),
+          bottom: $r('app.integer.page_padding')
         })
-        
-        Button("跳过")
-          .type(ButtonType.Normal)
-          .backgroundColor(Color.Transparent)
-          .fontColor($r('sys.color.font_secondary'))
-          .margin({ top: 20, right: 20 })
-          .onClick(() => {
-            this.guideState.isSkipped = true;
-          })
       }
       .width('100%')
       .height('100%')
@@ -318,19 +239,122 @@ export struct Index {
   }
 
   @Builder
-  dragPreview(id: string) {
+  guideStep(icon: Resource, title: Resource) {
     Column() {
-      Text(this.itemsRuntime.get(id).issuer)
-        .fontSize(30)
-        .fontColor($r('sys.color.font_secondary'))
+      Text() {
+        SymbolSpan(icon)
+      }
+      .fontSize(100)
+      .fontColor($r('app.color.brand'))
+
+      Text(title)
+        .margin({ top: 30 })
+        .fontSize(20)
+        .fontWeight(FontWeight.Bold)
+        .textAlign(TextAlign.Center)
     }
-    .padding(10)
-    .borderRadius(10)
-    .backgroundColor($r('sys.color.background_primary'))
+    .width('100%')
+    .height('100%')
+    .padding({ left: $r('app.integer.page_padding'), right: $r('app.integer.page_padding') })
+    .justifyContent(FlexAlign.Center)
+  }
+
+  @Builder
+  guideActionStep(icon: Resource, title: Resource, actionText: Resource, action: () => void) {
+    Column() {
+      Text() {
+        SymbolSpan(icon)
+      }
+      .fontSize(100)
+      .fontColor($r('app.color.brand'))
+
+      Text(title)
+        .margin({ top: 30 })
+        .fontSize(20)
+        .fontWeight(FontWeight.Bold)
+        .textAlign(TextAlign.Center)
+
+      Button(actionText)
+        .type(ButtonType.Capsule)
+        .backgroundColor($r('app.color.brand'))
+        .fontColor($r('sys.color.font_on_primary'))
+        .margin({ top: 30 })
+        .onClick(action)
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: $r('app.integer.page_padding'), right: $r('app.integer.page_padding') })
+    .justifyContent(FlexAlign.Center)
   }
 
   @Builder
   main() {
+    Column() {
+      this.header()
+
+      if (this.isSortMode) {
+        this.sortTip()
+      }
+
+      this.items()
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  // 排序入口与列表统计放在内容区（与微信小程序一致）：胶囊占据顶部右侧，标题栏不适合再放控件
+  @Builder
+  header() {
+    Row() {
+      Text($r('app.string.index_index_page_total', this.itemsRuntime.ids.length))
+        .fontSize(13)
+        .fontColor($r('sys.color.font_tertiary'))
+
+      Blank()
+
+      Button(this.isSortMode ? $r('app.string.index_index_page_sort_mode_done') :
+        $r('app.string.index_index_page_edit'))
+        .type(ButtonType.Normal)
+        .height(32)
+        .padding({ left: 0, right: 0 })
+        .backgroundColor(Color.Transparent)
+        .fontColor($r('app.color.brand'))
+        .fontSize(14)
+        .onClick(() => {
+          if (this.isSortMode) {
+            this.saveSort().catch(() => {
+              // 失败已由 Toast 提示，仅避免 unhandled rejection
+            });
+
+            return;
+          }
+
+          this.enterSortMode();
+        })
+    }
+    .width('100%')
+    .padding({
+      left: $r('app.integer.page_padding'),
+      right: $r('app.integer.page_padding'),
+      top: $r('app.integer.page_padding_smaller'),
+      bottom: $r('app.integer.page_padding_smaller')
+    })
+  }
+
+  @Builder
+  sortTip() {
+    Row() {
+      Text($r('app.string.index_index_page_sort_tip'))
+        .fontSize(12)
+        .fontColor($r('sys.color.font_tertiary'))
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .padding({ bottom: $r('app.integer.page_padding_smaller') })
+  }
+
+  @Builder
+  items() {
     List({ scroller: this.scroller }) {
       Repeat<string>(this.itemsRuntime.ids)
         .each((ri: RepeatItem<string>) => {
@@ -395,25 +419,6 @@ export struct Index {
             },
             edgeEffect: SwipeEdgeEffect.None,
           })
-          .onDragStart((event: DragEvent, extraParams: string): DragItemInfo | undefined => {
-            if (!this.isSortMode) {
-              return undefined;
-            }
-
-            this.draggedIndex = ri.index;
-
-            return { builder: (): void => { this.dragPreview(ri.item.valueOf()) } };
-          })
-          .onDrop((event: DragEvent, extraParams: string) => {
-            if (!this.isSortMode) {
-              return;
-            }
-            let targetIndex = ri.index;
-            if (this.draggedIndex !== -1 && this.draggedIndex !== targetIndex) {
-              this.itemsRuntime.move(this.draggedIndex, targetIndex);
-              this.draggedIndex = -1;
-            }
-          })
           .onAttach(() => {
             this.itemsRuntime.start(ri.item.valueOf());
           })
@@ -428,10 +433,18 @@ export struct Index {
               new ItemRuntime(this.itemsRuntime.get(ri.item.valueOf())))
           })
         })
+        // 键值需稳定唯一，拖拽落位动画依赖它（缺省时 Repeat 会生成随机键值）
+        .key((id: string): string => id)
+        // 拖拽排序由框架接管：仅排序态开启，长按浮起后拖动，离手时在回调中同步数据顺序
+        .onMove(this.isSortMode ? (from: number, to: number): void => {
+          hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '拖拽排序: %{public}d -> %{public}d', from, to);
+
+          this.itemsRuntime.move(from, to);
+        } : undefined)
       .virtualScroll({ totalCount: this.itemsRuntime.ids.length })
     }
     .width('100%')
-    .height('100%')
+    .layoutWeight(1)
   }
 
   @Builder
@@ -550,10 +563,16 @@ export struct Index {
   }
 
   private async addByScan(): Promise<void> {
+    const context = this.getUIContext().getHostContext();
+
+    if ('undefined' === typeof context) {
+      return;
+    }
+
     let uri: string;
 
     try {
-      const result = await scanBarcode.startScanForResult(this.getUIContext().getHostContext());
+      const result = await scanBarcode.startScanForResult(context);
 
       uri = result.originalValue;
     } catch (e) {
@@ -570,9 +589,56 @@ export struct Index {
           () => Totp.create(uri));
 
       this.itemsRuntime.add(data);
+      this.decideGuide();
     } catch (e) {
       await Dialog.open(() => this.addFailedDialog(e.message));
     }
+  }
+
+  private enterSortMode(): void {
+    this.isSortMode = true;
+    this.snapshotIds = [...this.itemsRuntime.ids];
+  }
+
+  private async saveSort(): Promise<void> {
+    const reqItems: SortRequestItem[] = [];
+    const len = this.itemsRuntime.ids.length;
+
+    this.itemsRuntime.ids.forEach((id: string, idx: number): void => {
+      reqItems.push({ id: id, sort: len - 1 - idx });
+    });
+
+    try {
+      await Dialog.execute(() => this.loadingDialog(), () => Totp.sort(reqItems));
+
+      this.isSortMode = false;
+    } catch (e) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '排序失败: %{public}s', JSON.stringify(e));
+
+      // 服务端未变更，回滚到进入排序模式时的顺序
+      this.itemsRuntime.restore(this.snapshotIds);
+
+      Toast.show({ message: $r('app.string.index_index_page_sort_failed'), duration: 3000 });
+    } finally {
+      this.snapshotIds = [];
+    }
+  }
+
+  // 空数据时只首次展示引导页：决定展示的同时立刻持久化标记，之后数据仍为空也只展示空状态
+  private decideGuide(): void {
+    if (this.itemsRuntime.ids.length > 0) {
+      this.isGuideVisible = false;
+
+      return;
+    }
+
+    if (this.isGuideVisible || this.guideState.isSkipped) {
+      return;
+    }
+
+    this.isGuideVisible = true;
+    this.guideState.isSkipped = true;
+    PersistenceV2.save(IndexGuideState);
   }
 
   private async refresh(): Promise<void> {
@@ -581,5 +647,6 @@ export struct Index {
         () => this.fetchFailedDialog(() => this.refresh()));
 
     this.itemsRuntime.reload(items.values());
+    this.decideGuide();
   }
 }

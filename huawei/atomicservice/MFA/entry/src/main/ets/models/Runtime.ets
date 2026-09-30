@@ -1,4 +1,3 @@
-import { HashMap } from '@kit.ArkTS';
 import { IItem, IItemConfig } from '../types/Item';
 import { AppStorageV2 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -17,7 +16,7 @@ export class ItemRuntime {
   }
 
   static empty(): ItemRuntime {
-    return new ItemRuntime({ id: '', issuer: '', username: '', code: '', sort: 0, config: { period: 30 } });
+    return new ItemRuntime({ id: '', issuer: '', username: '', code: '', config: { period: 30 } });
   }
 
   private _id: string;
@@ -87,23 +86,7 @@ export class ItemRuntime {
 
   private _timeoutId: number | undefined;
 
-  public get timeoutId(): number | undefined {
-    return this._timeoutId;
-  }
-
-  public set timeoutId(value: number | undefined) {
-    this._timeoutId = value;
-  }
-
   private _intervalId: number | undefined;
-
-  public get intervalId(): number | undefined {
-    return this._intervalId;
-  }
-
-  public set intervalId(value: number | undefined) {
-    this._intervalId = value;
-  }
 
   start() {
     this.stop();
@@ -121,7 +104,7 @@ export class ItemRuntime {
     this.schedule();
   }
 
-  // 恢复定时器（如退后台后回前台），不额外发起网络请求，验证码由页面刷新时统一拉取
+  // 恢复定时器（如退后台后回前台），仅在验证码缺失时补拉一次，页面刷新时仍以服务端数据为准
   resume() {
     if (this._timeoutId !== undefined) {
       return;
@@ -131,6 +114,12 @@ export class ItemRuntime {
 
     if (allPathName.includes(AppPagesName.LOGIN.toString())) {
       return;
+    }
+
+    if ('undefined' === typeof this._code) {
+      this.freshCode().catch(() => {
+        // 失败已通过 Toast 提示，这里仅避免 unhandled rejection
+      });
     }
 
     this.schedule();
@@ -190,14 +179,14 @@ export class ItemRuntime {
 
 @ObservedV2
 export class ItemsRuntime {
-  private _runtimes: HashMap<string, ItemRuntime> = new HashMap();
+  private _runtimes: Map<string, ItemRuntime> = new Map();
 
   constructor(items: undefined | Array<IItem> | Iterable<IItem> = undefined) {
     if ('undefined' === typeof items) {
       return;
     }
 
-    for (const item of Array.from(items).sort((a: IItem, b: IItem): number => b.sort - a.sort)) {
+    for (const item of Array.from(items)) {
       this.add(item);
     }
   }
@@ -235,15 +224,11 @@ export class ItemsRuntime {
       this._ids = [...this._ids];
     }
 
-    this._runtimes.remove(id);
+    this._runtimes.delete(id);
   }
 
   get(id: string): ItemRuntime {
     return this._runtimes.get(id) ?? ItemRuntime.empty();
-  }
-
-  clear() {
-    [...this._ids].forEach((id: string): void => this.delete(id));
   }
 
   add(item: IItem): ItemRuntime {
@@ -286,9 +271,9 @@ export class ItemsRuntime {
     this._ids = [...ids];
   }
 
-  // 以服务端数据原地刷新：更新已有条目（保留运行中的定时器，不额外拉码）、增删差异条目并按服务端顺序重排
+  // 以服务端数据原地刷新：顺序以服务端返回为准，更新已有条目（保留运行中的定时器）、增删差异条目
   reload(items: Iterable<IItem>) {
-    const nextItems = Array.from(items).sort((a: IItem, b: IItem): number => b.sort - a.sort);
+    const nextItems = Array.from(items);
     const nextIds = nextItems.map((item: IItem): string => item.id);
 
     [...this._ids]

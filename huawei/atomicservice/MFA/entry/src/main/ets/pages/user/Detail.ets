@@ -36,11 +36,12 @@ struct Detail {
               title: $r('app.string.user_detail_page_nickname'),
               value: this.user.config.nickname ?? $r('app.string.default_nickname'),
               eventClick: {
-                action: async () => {
+                action: async (): Promise<string | undefined> => {
                   const credential = await this.authorizeProfile();
 
+                  // 授权失败或用户取消，返回 undefined 保持原有昵称显示
                   if (!credential?.nickName) {
-                    return this.user.config.nickname ?? '';
+                    return undefined;
                   }
 
                   return await this.editNickName(credential.nickName);
@@ -104,19 +105,20 @@ struct Detail {
 
   private async changeAvatar(): Promise<void> {
     const credential = await this.authorizeProfile();
+    const avatarUri = credential?.avatarUri;
 
-    if (!credential?.avatarUri) {
+    if ('undefined' === typeof avatarUri) {
       return;
     }
 
     try {
       await Dialog.execute(
         () => this.loadingDialog(),
-        () => UserApi.editAvatar(credential.avatarUri),
-        () => this.editConfirmDialog(() => this.editAvatar(credential.avatarUri)),
+        () => UserApi.editAvatar(avatarUri),
+        () => this.editConfirmDialog(() => this.editAvatar(avatarUri)),
       );
 
-      this.user.config.avatar = credential.avatarUri;
+      this.user.config.avatar = avatarUri;
     } catch (e) {
       // 用户取消重试，保持原头像
     }
@@ -159,7 +161,7 @@ struct Detail {
     }
   }
 
-  private async editNickName(nickName: string): Promise<string> {
+  private async editNickName(nickName: string): Promise<string | undefined> {
     try {
       await Dialog.execute(
         () => this.loadingDialog(),
@@ -171,8 +173,8 @@ struct Detail {
 
       return nickName;
     } catch (e) {
-      // 用户取消重试，保持原昵称
-      return this.user.config.nickname ?? '';
+      // 用户取消重试，返回 undefined 保持原有昵称显示
+      return undefined;
     }
   }
 }

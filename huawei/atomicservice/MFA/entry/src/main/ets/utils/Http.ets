@@ -1,26 +1,13 @@
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from '@ohos/axios';
-import { App, AppEnv, AppPagesName, HttpDomain, LogDomain } from '../App';
+import { App, AppEnv, HttpDomain, LogDomain } from '../App';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Authorization, State } from '../models/Auth';
-import { AppStorageV2, PersistenceV2 } from '@kit.ArkUI';
+import { PersistenceV2 } from '@kit.ArkUI';
 import { application } from '@kit.AbilityKit';
-import { LoginPageParams } from '../pages/Login';
+import { redirectLoginPage } from './Nav';
 
 const authorization =
   (): Authorization => PersistenceV2.globalConnect({ type: Authorization, defaultCreator: () => new Authorization() })!;
-const pages = (): NavPathStack => AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
-
-// 跳转到登录页重新认证，已在登录页时忽略，避免重复入栈
-const redirectLoginPage = (state: State): void => {
-  const allPathName = pages().getAllPathName();
-
-  if (allPathName.includes(AppPagesName.LOGIN.toString())) {
-    return;
-  }
-
-  pages().pushPathByName(AppPagesName.LOGIN, { forceAuthorizationState: state } as LoginPageParams);
-};
-
 const url = (): string => {
   const env = App.env;
 

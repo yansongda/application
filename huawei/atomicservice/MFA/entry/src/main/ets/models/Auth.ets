@@ -61,14 +61,16 @@ export class Authorization {
       authenticateWithHuaweiIDResponse =
         await (new authentication.AuthenticationController(context)).executeRequest(request);
     } catch (error) {
-      // 对于元服务来说，不太可能出现异常，因为元服务必须是登录状态。
-      hilog.error(LogDomain.MODELS, 'models/auth', '元服务登录出错: %{public}s', JSON.stringify(error))
+      // 元服务虽要求已登录，但仍可能因 App 指纹校验失败、网络异常、用户取消等原因抛错
+      hilog.error(LogDomain.MODELS, 'models/auth', '华为账号授权失败(authenticateWithHuaweiID): %{public}s',
+        JSON.stringify(error))
 
       return Promise.reject();
     }
 
     if (authenticateWithHuaweiIDResponse.state && request.state !== authenticateWithHuaweiIDResponse.state) {
-      hilog.error(LogDomain.MODELS, 'models/auth', '登录失败，state 不同: %{public}s != %{public}s',
+      hilog.error(LogDomain.MODELS, 'models/auth',
+        '华为账号授权失败(authenticateWithHuaweiID)，state 不同: %{public}s != %{public}s',
         authenticateWithHuaweiIDResponse.state, request.state);
 
       return Promise.reject();
@@ -89,14 +91,16 @@ export class Authorization {
       loginWithHuaweiIDResponse =
         await (new authentication.AuthenticationController()).executeRequest(request);
     } catch (error) {
-      // 对于元服务来说，不太可能出现异常，因为元服务必须是登录状态。
-      hilog.error(LogDomain.MODELS, 'models/auth', '元服务登录出错: %{public}s', JSON.stringify(error))
+      // 元服务虽要求已登录，但仍可能因 App 指纹校验失败、网络异常、用户取消等原因抛错
+      hilog.error(LogDomain.MODELS, 'models/auth', '华为账号登录失败(loginWithHuaweiID): %{public}s',
+        JSON.stringify(error))
 
       return Promise.reject();
     }
 
     if (loginWithHuaweiIDResponse.state && request.state !== loginWithHuaweiIDResponse.state) {
-      hilog.error(LogDomain.MODELS, 'models/auth', '登录失败，state 不同: %{public}s != %{public}s',
+      hilog.error(LogDomain.MODELS, 'models/auth',
+        '华为账号登录失败(loginWithHuaweiID)，state 不同: %{public}s != %{public}s',
         loginWithHuaweiIDResponse.state, request.state);
 
       return Promise.reject();

@@ -111,9 +111,9 @@ struct Index {
                 return;
               }
 
-              const period = Number.parseInt(this.period);
+              const period = Number(this.period);
 
-              if (Number.isNaN(period) || period <= 0) {
+              if (!Number.isInteger(period) || period <= 0) {
                 Toast.show({ message: $r('app.string.index_create_page_period_error') });
 
                 return;
