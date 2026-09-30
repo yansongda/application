@@ -1,4 +1,9 @@
-// 展示兜底：后端可能返回空串（''），直接用 `??` 会当成「有值」而展示为空白，这里统一按「无值」处理
-export function displayOr(value: string | undefined, fallback: Resource): ResourceStr {
-  return 'undefined' === typeof value || 0 === value.length ? fallback : value;
+// 展示兜底：后端/持久化可能给出 null 或空串（''）。
+// 注意：`??` 能挡住 null/undefined 但挡不住空串，`typeof === 'undefined'` 又漏掉 null，两者都要判。
+export function displayOr(value: string | null | undefined, fallback: Resource): ResourceStr {
+  if ('undefined' === typeof value || null === value || 0 === value.length) {
+    return fallback;
+  }
+
+  return value;
 }

@@ -110,9 +110,9 @@ struct Detail {
 
   private async changeAvatar(): Promise<void> {
     const credential = await this.authorizeProfile();
-    const avatarUri = credential?.avatarUri;
+    const avatarUri: string | null | undefined = credential?.avatarUri;
 
-    if ('undefined' === typeof avatarUri || 0 === avatarUri.length) {
+    if ('undefined' === typeof avatarUri || null === avatarUri || 0 === avatarUri.length) {
       hilog.warn(LogDomain.PAGES, AppPagesName.USER_DETAIL, '华为账号未返回头像，保持原头像');
 
       return;
