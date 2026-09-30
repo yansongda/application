@@ -43,7 +43,7 @@ const detail = async (id: string) => {
 
 const create = async (uri: string) => {
   try {
-    return await http.post<null>(PATH.CREATE, { uri } as CreateRequest);
+    return await http.post<Item>(PATH.CREATE, { uri } as CreateRequest);
   } catch (e: unknown) {
     logger.error("创建 TOTP 失败", e);
 

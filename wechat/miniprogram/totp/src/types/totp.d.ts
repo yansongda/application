@@ -10,6 +10,7 @@ export interface Item {
 }
 
 export interface ItemConfig {
+  secret: string;
   period: number;
 }
 
@@ -45,4 +46,16 @@ export interface ItemDetailEvent {
 
 export interface ItemDeleteEvent {
   detail: string;
+}
+
+export interface CacheItem {
+  id: string;
+  issuer: string;
+  username: string;
+  secret: string;
+  period: number;
+}
+
+export interface TotpCache {
+  items: CacheItem[];
 }

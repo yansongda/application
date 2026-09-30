@@ -107,11 +107,11 @@ const handleTokenExpired = async <T>(
   originalRequest: Request,
   code: number,
   message: string,
-  isRetry?: boolean,
+  opts: { isRetry?: boolean } = {},
 ): Promise<T> => {
   // Single-retry guard: if we already retried once after a refresh —
   // reject immediately to prevent an infinite loop.
-  if (isRetry) {
+  if (opts.isRetry) {
     return Promise.reject(new HttpError(code, message));
   }
 
@@ -130,7 +130,9 @@ const handleTokenExpired = async <T>(
 
   const retryRequest = cloneRequest(originalRequest);
 
-  return request<T>(retryRequest, { isRetry: true });
+  return request<T>(retryRequest, {
+    isRetry: true,
+  });
 };
 
 const request = <T>(
@@ -170,7 +172,7 @@ const wxRequest = <T>(
             preserved,
             Number(res.data.code),
             res.data.message,
-            opts.isRetry,
+            opts,
           ).then(resolve, reject);
           return;
         }

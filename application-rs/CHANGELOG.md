@@ -1,3 +1,13 @@
+## [1.21.0] - 2026-09-07
+
+### Added
+
+- feat(api): TOTP 详情接口响应新增 `secret` 字段，支持小程序验证码本地离线计算 (#162) ([1b1364e](https://github.com/yansongda/application/commit/1b1364e))
+
+### Changed
+
+- refactor(application-rs): 重命名 `application-util` 为 `application-http`，无行为变化 (#161) ([aa2dcf8](https://github.com/yansongda/application/commit/aa2dcf8))
+
 ## [1.20.0] - 2026-08-29
 
 ### Added
