@@ -3,8 +3,7 @@ import { Config, User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
 import { AppPagesName } from '../../App';
 import { Toast } from '../../utils/PromptAction';
-import { AppStorageV2, PersistenceV2 } from '@kit.ArkUI';
-import { loadingDialog } from '../../utils/Dialogs';
+import { AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
 
 @Builder
 export function builder() {
@@ -52,7 +51,7 @@ struct Delete {
               try {
                 await Toast.execute(
                   () => UserApi.delete(),
-                  (): void => { loadingDialog(); },
+                  () => this.loadingDialog(),
                   $r('app.string.operation_success'),
                 );
               } catch (e) {
@@ -88,4 +87,10 @@ struct Delete {
     .title($r('app.string.user_detail_page_delete_account'))
   }
 
+  @Builder
+  loadingDialog(content?: Resource) {
+    LoadingDialogV2({
+      content: content ?? $r('app.string.handling'),
+    })
+  }
 }

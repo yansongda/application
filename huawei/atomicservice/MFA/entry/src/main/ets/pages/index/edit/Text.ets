@@ -1,10 +1,9 @@
-import { AppStorageV2, KeyboardAvoidMode } from '@kit.ArkUI';
+import { AppStorageV2, KeyboardAvoidMode, LoadingDialogV2 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Totp } from '../../../api/Totp';
 import { AppPagesName, LogDomain } from '../../../App';
 import { IJumpCallbackResult } from '../../../components/Card';
 import { ItemRuntime } from '../../../models/Runtime';
-import { loadingDialog } from '../../../utils/Dialogs';
 import { Toast } from '../../../utils/PromptAction';
 
 // 编辑页路由参数：显式携带编辑模式，避免依赖路由名推断导致误写字段
@@ -100,6 +99,13 @@ struct EditText {
   }
 
   @Builder
+  loadingDialog() {
+    LoadingDialogV2({
+      content: $r('app.string.handling'),
+    })
+  }
+
+  @Builder
   titleBuilder() {
     Row() {
       Text(this.title)
@@ -141,7 +147,7 @@ struct EditText {
     try {
       await Toast.execute(
         () => this.isIssuer ? Totp.editIssuer(id, value) : Totp.editUsername(id, value),
-        (): void => { loadingDialog(); },
+        () => this.loadingDialog(),
         $r('app.string.operation_success'),
       );
 

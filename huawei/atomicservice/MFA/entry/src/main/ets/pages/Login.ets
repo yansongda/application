@@ -1,9 +1,10 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../App';
 import { Authorization, State } from '../models/Auth';
-import { AppStorageV2, PersistenceV2 } from '@kit.ArkUI';
+import {
+  AdvancedDialogV2Button, AlertDialogV2, AppStorageV2, LoadingDialogV2, PersistenceV2
+} from '@kit.ArkUI';
 import { Dialog } from '../utils/PromptAction';
-import { loadingDialog, retryDialog } from '../utils/Dialogs';
 import { User } from '../models/User';
 import { User as UserApi } from '../api/User';
 
@@ -70,6 +71,29 @@ struct Login {
     });
   }
 
+  @Builder
+  loadingDialog() {
+    LoadingDialogV2({
+      content: $r('app.string.login_page_login'),
+    })
+  }
+
+  @Builder
+  loginConfirmDialog(action: () => void) {
+    AlertDialogV2({
+      primaryTitle: $r('app.string.home_page_login_failed_title'),
+      content: $r('app.string.is_retry'),
+      primaryButton: new AdvancedDialogV2Button({
+        content: $r('app.string.cancel'),
+      }),
+      secondaryButton: new AdvancedDialogV2Button({
+        content: $r('app.string.retry'),
+        role: ButtonRole.ERROR,
+        action
+      }),
+    })
+  }
+
   private async auth(type: AuthType): Promise<void> {
     this.lastAuthType = type;
     this.failed = false;
@@ -77,17 +101,14 @@ struct Login {
     try {
       if (AuthType.LOGIN === type) {
         await Dialog.execute(
-          (): void => { loadingDialog($r('app.string.login_page_login')); },
+          () => this.loadingDialog(),
           () => this.authorization.login(),
-          (): void => {
-            retryDialog($r('app.string.home_page_login_failed_title'), $r('app.string.is_retry'),
-              () => this.auth(type));
-          }
+          () => this.loginConfirmDialog(() => this.auth(type))
         );
       }
 
       if (AuthType.LOGIN_REFRESH === type) {
-        const dialogId = await Dialog.open((): void => { loadingDialog($r('app.string.login_page_login')); });
+        const dialogId = await Dialog.open(() => this.loadingDialog());
 
         try {
           await this.authorization.refresh(this.authorization.refreshToken);

@@ -3,6 +3,7 @@ import {
   AdvancedDialogV2Button,
   AlertDialogV2,
   AppStorageV2,
+  LoadingDialogV2,
   PersistenceV2,
   SymbolGlyphModifier
 } from '@kit.ArkUI';
@@ -15,7 +16,6 @@ import { User } from '../../models/User';
 import { IndexGuideState } from '../../models/Guide';
 import { IndexGuide } from '../../components/IndexGuide';
 import { TotpCard } from '../../components/TotpCard';
-import { failedDialog, loadingDialog, retryDialog } from '../../utils/Dialogs';
 
 @Builder
 export function builder() {
@@ -331,6 +331,25 @@ export struct Index {
   }
 
   @Builder
+  loadingDialog(content?: Resource) {
+    LoadingDialogV2({
+      content: content ?? $r('app.string.handling'),
+    })
+  }
+
+  @Builder
+  addFailedDialog(content: string) {
+    AlertDialogV2({
+      primaryTitle: $r('app.string.index_index_page_add_failed_title'),
+      content,
+      primaryButton: new AdvancedDialogV2Button({
+        content: $r('app.string.ok'),
+        role: ButtonRole.ERROR,
+      }),
+    })
+  }
+
+  @Builder
   deleteDialog() {
     AlertDialogV2({
       primaryTitle: $r('app.string.index_index_page_delete_title'),
@@ -347,7 +366,7 @@ export struct Index {
           }
 
           try {
-            const dialogId = await Dialog.open((): void => { loadingDialog(); });
+            const dialogId = await Dialog.open(() => this.loadingDialog());
 
             await Totp.delete(this.swipeActionId);
             this.itemsRuntime.delete(this.swipeActionId);
@@ -355,11 +374,37 @@ export struct Index {
 
             Dialog.close(dialogId);
           } catch (e) {
-            await Dialog.open((): void => {
-              failedDialog($r('app.string.index_index_page_delete_failed_title'), e.message);
-            });
+            await Dialog.open(() => this.deleteFailedDialog(e.message));
           }
         }
+      }),
+    })
+  }
+
+  @Builder
+  deleteFailedDialog(content: string) {
+    AlertDialogV2({
+      primaryTitle: $r('app.string.index_index_page_delete_failed_title'),
+      content,
+      primaryButton: new AdvancedDialogV2Button({
+        content: $r('app.string.ok'),
+        role: ButtonRole.ERROR,
+      }),
+    })
+  }
+
+  @Builder
+  fetchFailedDialog(action: () => void) {
+    AlertDialogV2({
+      primaryTitle: $r('app.string.index_index_page_fetch_failed_title'),
+      content: $r('app.string.index_index_page_delete_failed_content'),
+      primaryButton: new AdvancedDialogV2Button({
+        content: $r('app.string.cancel'),
+      }),
+      secondaryButton: new AdvancedDialogV2Button({
+        content: $r('app.string.retry'),
+        role: ButtonRole.ERROR,
+        action,
       }),
     })
   }
@@ -387,15 +432,13 @@ export struct Index {
 
     try {
       const data =
-        await Dialog.execute((): void => { loadingDialog($r('app.string.handling')); },
+        await Dialog.execute(() => this.loadingDialog($r('app.string.handling')),
           () => Totp.create(uri));
 
       this.itemsRuntime.add(data);
       this.decideGuide();
     } catch (e) {
-      await Dialog.open((): void => {
-        failedDialog($r('app.string.index_index_page_add_failed_title'), e.message);
-      });
+      await Dialog.open(() => this.addFailedDialog(e.message));
     }
   }
 
@@ -413,7 +456,7 @@ export struct Index {
     });
 
     try {
-      await Dialog.execute((): void => { loadingDialog(); }, () => Totp.sort(reqItems));
+      await Dialog.execute(() => this.loadingDialog(), () => Totp.sort(reqItems));
 
       this.isSortMode = false;
     } catch (e) {
@@ -454,11 +497,8 @@ export struct Index {
 
     try {
       const items =
-        await Dialog.execute((): void => { loadingDialog($r('app.string.loading')); }, () => Totp.all(),
-          (): void => {
-            retryDialog($r('app.string.index_index_page_fetch_failed_title'),
-              $r('app.string.index_index_page_delete_failed_content'), () => this.refresh());
-          });
+        await Dialog.execute(() => this.loadingDialog($r('app.string.loading')), () => Totp.all(),
+          () => this.fetchFailedDialog(() => this.refresh()));
 
       this.itemsRuntime.reload(items.values());
       this.decideGuide();
