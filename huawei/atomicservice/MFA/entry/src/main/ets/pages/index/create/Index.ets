@@ -1,4 +1,5 @@
-import { AppStorageV2, LoadingDialogV2 } from '@kit.ArkUI';
+import { AppStorageV2 } from '@kit.ArkUI';
+import { loadingDialog } from '../../../utils/Dialogs';
 import { CardInput, CardInputItem } from '../../../components/Card';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../../../App';
@@ -128,7 +129,7 @@ struct Index {
               try {
                 await Toast.execute(
                   () => Totp.create(uri),
-                  () => this.loadingDialog(),
+                  (): void => { loadingDialog(); },
                   $r('app.string.operation_success'),
                 );
 
@@ -146,10 +147,4 @@ struct Index {
     .title($r('app.string.index_create_page_title'))
   }
 
-  @Builder
-  loadingDialog(content?: Resource) {
-    LoadingDialogV2({
-      content: content ?? $r('app.string.handling'),
-    })
-  }
 }

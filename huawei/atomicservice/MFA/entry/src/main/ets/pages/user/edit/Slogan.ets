@@ -1,5 +1,6 @@
 import { Toast } from '../../../utils/PromptAction';
-import { AppStorageV2, KeyboardAvoidMode, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
+import { AppStorageV2, KeyboardAvoidMode, PersistenceV2 } from '@kit.ArkUI';
+import { loadingDialog } from '../../../utils/Dialogs';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../../../App';
 import { User as UserApi } from '../../../api/User';
@@ -63,7 +64,7 @@ struct Slogan {
               try {
                 await Toast.execute(
                   () => UserApi.editSlogan(this.slogan),
-                  () => this.loadingDialog(),
+                  (): void => { loadingDialog(); },
                   $r('app.string.operation_success'),
                 );
 
@@ -100,10 +101,4 @@ struct Slogan {
     .alignItems(VerticalAlign.Center)
   }
 
-  @Builder
-  loadingDialog(content?: Resource) {
-    LoadingDialogV2({
-      content: content ?? $r('app.string.handling'),
-    })
-  }
 }

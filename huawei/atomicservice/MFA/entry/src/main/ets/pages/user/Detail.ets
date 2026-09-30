@@ -1,10 +1,11 @@
 import { authentication } from '@kit.AccountKit';
-import { AdvancedDialogV2Button, AlertDialogV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
+import { PersistenceV2 } from '@kit.ArkUI';
 import { Card, CardItem } from '../../components/Card';
 import { User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Dialog } from '../../utils/PromptAction';
+import { loadingDialog, retryDialog } from '../../utils/Dialogs';
 import { User as UserApi } from '../../api/User';
 import { AppPagesName, LogDomain } from '../../App';
 
@@ -113,9 +114,12 @@ struct Detail {
 
     try {
       await Dialog.execute(
-        () => this.loadingDialog(),
+        (): void => { loadingDialog(); },
         () => UserApi.editAvatar(avatarUri),
-        () => this.editConfirmDialog(() => this.editAvatar(avatarUri)),
+        (): void => {
+          retryDialog($r('app.string.user_detail_page_edit_failed'), $r('app.string.is_retry'),
+            () => this.editAvatar(avatarUri));
+        },
       );
 
       this.user.config.avatar = avatarUri;
@@ -124,35 +128,15 @@ struct Detail {
     }
   }
 
-  @Builder
-  loadingDialog() {
-    LoadingDialogV2({
-      content: $r('app.string.handling'),
-    })
-  }
-
-  @Builder
-  editConfirmDialog(action: () => void) {
-    AlertDialogV2({
-      primaryTitle: $r('app.string.user_detail_page_edit_failed'),
-      content: $r('app.string.is_retry'),
-      primaryButton: new AdvancedDialogV2Button({
-        content: $r('app.string.cancel'),
-      }),
-      secondaryButton: new AdvancedDialogV2Button({
-        content: $r('app.string.retry'),
-        role: ButtonRole.ERROR,
-        action
-      }),
-    })
-  }
-
   private async editAvatar(avatarUri: string): Promise<void> {
     try {
       await Dialog.execute(
-        () => this.loadingDialog(),
+        (): void => { loadingDialog(); },
         () => UserApi.editAvatar(avatarUri),
-        () => this.editConfirmDialog(() => this.editAvatar(avatarUri)),
+        (): void => {
+          retryDialog($r('app.string.user_detail_page_edit_failed'), $r('app.string.is_retry'),
+            () => this.editAvatar(avatarUri));
+        },
       );
 
       this.user.config.avatar = avatarUri;
@@ -164,9 +148,12 @@ struct Detail {
   private async editNickName(nickName: string): Promise<string | undefined> {
     try {
       await Dialog.execute(
-        () => this.loadingDialog(),
+        (): void => { loadingDialog(); },
         () => UserApi.editNickname(nickName),
-        () => this.editConfirmDialog(() => this.editNickName(nickName)),
+        (): void => {
+          retryDialog($r('app.string.user_detail_page_edit_failed'), $r('app.string.is_retry'),
+            () => this.editNickName(nickName));
+        },
       );
 
       this.user.config.nickname = nickName;
