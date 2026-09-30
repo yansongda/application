@@ -141,8 +141,9 @@ struct Login {
     try {
       const user = await UserApi.detail();
 
-      this.user.phone = user.phone;
-      this.user.config = user.config;
+      // 必须逐字段原地更新：user 是接口返回的普通 JSON 对象，
+      // 整体替换 this.user.config 会让被观测的 Config 实例失效，后续修改不再刷新 UI
+      this.user.apply(user);
     } catch (e) {
       hilog.warn(LogDomain.PAGES, AppPagesName.LOGIN, '获取用户信息失败: %{public}s', JSON.stringify(e));
     }
