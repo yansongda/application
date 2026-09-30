@@ -25,7 +25,8 @@ export function builder() {
 
 @ComponentV2
 export struct Index {
-  @Local guideState: IndexGuideState = PersistenceV2.globalConnect({ type: IndexGuideState, defaultCreator: () => new IndexGuideState() })!;
+  @Local guideState: IndexGuideState =
+    PersistenceV2.globalConnect({ type: IndexGuideState, defaultCreator: () => new IndexGuideState() })!;
   @Local
   private isRefreshing: boolean = false;
   @Local
@@ -293,7 +294,7 @@ export struct Index {
 
           this.itemsRuntime.move(from, to);
         } : undefined)
-      .virtualScroll({ totalCount: this.itemsRuntime.ids.length })
+        .virtualScroll({ totalCount: this.itemsRuntime.ids.length })
     }
     .width('100%')
     .layoutWeight(1)

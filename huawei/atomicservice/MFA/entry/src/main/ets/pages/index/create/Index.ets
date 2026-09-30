@@ -121,7 +121,8 @@ struct Index {
 
               const label = `${encodeURIComponent(this.issuer)}:${encodeURIComponent(this.username)}`;
               const uri =
-                `otpauth://totp/${label}?secret=${this.secret}&issuer=${encodeURIComponent(this.issuer)}&period=${period}`;
+                `otpauth://totp/${label}?secret=${this.secret}&issuer=${encodeURIComponent(
+                  this.issuer)}&period=${period}`;
 
               hilog.info(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建: %{private}s', uri);
 

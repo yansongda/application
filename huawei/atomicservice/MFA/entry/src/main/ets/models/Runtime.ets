@@ -19,7 +19,13 @@ export class ItemRuntime {
   }
 
   static empty(): ItemRuntime {
-    return new ItemRuntime({ id: '', issuer: '', username: '', code: '', config: { period: DEFAULT_PERIOD } });
+    return new ItemRuntime({
+      id: '',
+      issuer: '',
+      username: '',
+      code: '',
+      config: { period: DEFAULT_PERIOD }
+    });
   }
 
   private _id: string;
@@ -88,7 +94,6 @@ export class ItemRuntime {
   }
 
   private _timeoutId: number | undefined;
-
   private _intervalId: number | undefined;
 
   start() {

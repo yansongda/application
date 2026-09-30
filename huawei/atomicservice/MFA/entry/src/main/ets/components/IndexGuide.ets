@@ -3,9 +3,12 @@ const GUIDE_STEPS: number = 4;
 // 空数据时的引导页（纯展示组件）：是否展示由父组件决定，跳过/开始通过 onDismiss 上报，添加动作由父组件执行
 @ComponentV2
 export struct IndexGuide {
-  @Event onScan: () => void = () => {};
-  @Event onInput: () => void = () => {};
-  @Event onDismiss: () => void = () => {};
+  @Event onScan: () => void = () => {
+  };
+  @Event onInput: () => void = () => {
+  };
+  @Event onDismiss: () => void = () => {
+  };
   @Local
   private guideIndex: number = 0;
   private swiper: SwiperController = new SwiperController();

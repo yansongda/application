@@ -46,7 +46,8 @@ export class Authorization {
     return this._expiredAt;
   }
 
-  static async authenticateWithHuaweiID(scopes?: string[], context?: Context): Promise<authentication.AuthorizationWithHuaweiIDCredential> {
+  static async authenticateWithHuaweiID(scopes?: string[],
+    context?: Context): Promise<authentication.AuthorizationWithHuaweiIDCredential> {
     const request =
       new authentication.HuaweiIDProvider().createAuthorizationWithHuaweiIDRequest();
 
