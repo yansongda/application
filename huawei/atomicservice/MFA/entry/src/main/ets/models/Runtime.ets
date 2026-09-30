@@ -5,6 +5,9 @@ import { AppPagesName, LogDomain } from '../App';
 import { Toast } from '../utils/PromptAction';
 import { Totp } from '../api/Totp';
 
+// 服务端未返回周期/进度时的兜底值（秒）
+export const DEFAULT_PERIOD: number = 30;
+
 @ObservedV2
 export class ItemRuntime {
   constructor(item: IItem | ItemRuntime) {
@@ -16,7 +19,7 @@ export class ItemRuntime {
   }
 
   static empty(): ItemRuntime {
-    return new ItemRuntime({ id: '', issuer: '', username: '', code: '', config: { period: 30 } });
+    return new ItemRuntime({ id: '', issuer: '', username: '', code: '', config: { period: DEFAULT_PERIOD } });
   }
 
   private _id: string;
