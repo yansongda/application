@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@ohos/hypium';
 // 只加载纯计算模块（无系统 kit 依赖），避免本地单测加载 cryptoFramework。
-import { base32Decode, counterToBytes, truncate, zeroPad6 } from '../main/ets/utils/TotpMath';
+import { base32Decode, counterToBytes, truncate, zeroPad6 } from '../main/ets/utils/Totp';
 
 export default function totpCodeTest() {
   describe('totpCodeTest', () => {

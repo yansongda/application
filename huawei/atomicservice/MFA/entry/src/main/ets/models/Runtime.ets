@@ -4,7 +4,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../App';
 import { Toast } from '../utils/PromptAction';
 import { Totp } from '../api/Totp';
-import { TotpCode } from '../utils/TotpCode';
+import { TotpCode } from '../utils/Totp';
 
 // 服务端未返回周期/进度时的兜底值（秒）
 export const DEFAULT_PERIOD: number = 30;
