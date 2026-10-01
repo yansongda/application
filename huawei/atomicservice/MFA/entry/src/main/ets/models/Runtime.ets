@@ -163,7 +163,8 @@ export class ItemRuntime {
       progress--;
 
       if (progress <= 0) {
-        clearInterval(this._intervalId);
+        // 用局部 intervalId 清理自身：rotate() 可能已重建定时器并覆盖实例字段 _intervalId，引用字段会误清新定时器
+        clearInterval(intervalId);
       }
 
       this._progress = progress;
