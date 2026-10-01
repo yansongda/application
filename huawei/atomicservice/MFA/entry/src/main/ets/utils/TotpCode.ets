@@ -20,13 +20,19 @@ export class TotpCode {
 
     // 用通用 'HMAC' 规格导入密钥：官方支持 [1, 32768] 位、短密钥末尾补 0，
     // 兼容任意长度 secret；不得用 'HMAC|SHA1'（该规格要求密钥恰 160 位）。
-    const symKeyGenerator: cryptoFramework.SymKeyGenerator = cryptoFramework.createSymKeyGenerator('HMAC');
-    const symKey: cryptoFramework.SymKey = await symKeyGenerator.convertKey({ data: key });
-    const mac: cryptoFramework.Mac = cryptoFramework.createMac('SHA1');
-    await mac.init(symKey);
-    await mac.update({ data: message });
-    const digest: cryptoFramework.DataBlob = await mac.doFinal();
+    try {
+      const symKeyGenerator: cryptoFramework.SymKeyGenerator = cryptoFramework.createSymKeyGenerator('HMAC');
+      const symKey: cryptoFramework.SymKey = await symKeyGenerator.convertKey({ data: key });
+      const mac: cryptoFramework.Mac = cryptoFramework.createMac('SHA1');
+      await mac.init(symKey);
+      await mac.update({ data: message });
+      const digest: cryptoFramework.DataBlob = await mac.doFinal();
 
-    return zeroPad6(truncate(new Uint8Array(digest.data)));
+      return zeroPad6(truncate(new Uint8Array(digest.data)));
+    } catch (e) {
+      // 端内算码失败：本层不吞错、不打日志、不输出 secret，归一化后抛给调用方，
+      // 由 Runtime.freshCode() 回落 /totp/detail 兜底。
+      throw new Error('端内 TOTP 算码失败');
+    }
   }
 }
