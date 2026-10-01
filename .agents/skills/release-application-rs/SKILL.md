@@ -1,122 +1,122 @@
 ---
 name: release-application-rs
-description: Use when releasing the application-rs Rust backend workspace, bumping workspace version, updating CHANGELOG, or creating Docker image tags
+description: 在发布 application-rs Rust 后端 workspace、提升 workspace 版本号、更新 CHANGELOG 或创建 Docker 镜像 tag 时使用
 ---
 
-# Release Application-RS (Rust Backend)
+# 发布 Application-RS（Rust 后端）
 
-## Overview
+## 概述
 
-The Rust backend in this monorepo is a Cargo workspace that builds a Docker image via GitHub Actions on tag push. It does NOT publish to crates.io (`publish = false`).
+本 monorepo 中的 Rust 后端是一个 Cargo workspace，在 tag 推送时通过 GitHub Actions 构建 Docker 镜像。它**不会**发布到 crates.io（`publish = false`）。
 
-**Core principle:** Bump version & changelog → **Create PR** → **User manually merges** → Tag & push (triggers Docker build).
+**核心原则：** 提升版本号 & 更新 changelog → **创建 PR** → **用户手动合并** → 打 tag & 推送（触发 Docker 构建）。
 
-**⚠️ MUST create PR. Never push directly to main.**
-**⚠️ MUST NOT auto-merge the PR. The user must review and merge manually.**
+**⚠️ 必须创建 PR。绝不直推 main。**
+**⚠️ 绝不能自动合并 PR。必须由用户审核并手动合并。**
 
-## Prerequisites
+## 前置条件
 
-- Git working directory clean
-- On `main` branch
-- All Rust CI checks passing (`cargo check`, `cargo fmt --check`, `cargo clippy`)
+- Git 工作区干净
+- 位于 `main` 分支
+- 所有 Rust CI 检查通过（`cargo check`、`cargo fmt --check`、`cargo clippy`）
 
-## The Process
+## 操作流程
 
-### Step 1: Check Current State
+### 第 1 步：检查当前状态
 
 ```bash
-# Must run from application-rs/ directory
+# 必须在 application-rs/ 目录下执行
 cd application-rs
 
-# Current workspace version
+# 当前 workspace 版本
 grep '^version = ' Cargo.toml
 
-# Recent tags for application-api
+# application-api 最近的 tag
 git tag -l 'application-api/*' | sort -V | tail -5
 
-# Check git status
+# 检查 git 状态
 git status --short
 git branch --show-current
 ```
 
-**Tag format:** `application-api/v<VERSION>` (triggers `.github/workflows/build-image.yml`)
+**Tag 格式：** `application-api/v<VERSION>`（触发 `.github/workflows/build-image.yml`）
 
-**If dirty:** Stop. Commit or stash changes first.
+**若有未提交改动：** 停下来。先提交或 stash。
 
-### Step 2: Bump Version & Update CHANGELOG
+### 第 2 步：提升版本号 & 更新 CHANGELOG
 
-**Determine the version bump by analyzing the actual code diff, not just commit messages.**
+**通过分析实际代码 diff 来决定版本提升，而不是只看 commit message。**
 
 ```bash
 cd application-rs
 
-# Step 1: List commits since last tag (reference only)
+# 第 1 步：列出上个 tag 之后的提交（仅供参考）
 git log <PREV_TAG>..HEAD --oneline
 
-# Step 2: Inspect each commit's actual changes (THIS is what matters)
+# 第 2 步：查看每个提交的实际改动（这才是关键依据）
 git show --stat <commit>
 
-# Step 3: Review the aggregate diff
+# 第 3 步：审查整体 diff
 git diff <PREV_TAG>..HEAD
 ```
 
-**Commit messages are a hint; the diff is the truth.** A `fix:` commit may only touch a comment (no bump needed), while a `chore:` commit may introduce a new API (MINOR bump). Apply SemVer based on **behavioral impact**:
+**commit message 只是线索，diff 才是事实。** 一个 `fix:` 提交可能只改了一处注释（无需提升版本），而一个 `chore:` 提交可能引入了新 API（应提升 MINOR）。根据**行为影响**套用 SemVer：
 
-| What Changed | Version Bump | Example |
+| 改动内容 | 版本提升 | 示例 |
 |--------------|-------------|---------|
-| New user-facing feature / new API / new binary behavior | **MINOR** | `1.13.0` → `1.14.0` |
-| Bug fix with behavior change | **PATCH** | `1.13.0` → `1.13.1` |
-| Pure refactor / comment update / no behavior change | **No bump** or bundle with other changes | Skip if nothing user-visible changed |
-| Breaking change (removed API, changed config format) | **MAJOR** | `1.13.0` → `2.0.0` |
+| 新增面向用户的功能 / 新 API / 新的二进制行为 | **MINOR** | `1.13.0` → `1.14.0` |
+| 有行为变化的缺陷修复 | **PATCH** | `1.13.0` → `1.13.1` |
+| 纯重构 / 注释修改 / 无行为变化 | **不提升** 或与其他改动合并发布 | 若无用户可见变化，可跳过发版 |
+| 破坏性变更（移除 API、改变配置格式） | **MAJOR** | `1.13.0` → `2.0.0` |
 
-**Decision flow:**
+**判定流程：**
 
-1. Does any commit add new user-visible functionality? → **MINOR**
-2. Does any commit fix a bug that users experienced? → **PATCH** (if no MINOR)
-3. Are all changes internal refactors / cleanups? → **PATCH** if bundling, otherwise consider skipping release
-4. Does any commit break backward compatibility? → **MAJOR**
+1. 是否有提交新增了用户可见功能？ → **MINOR**
+2. 是否有提交修复了用户实际遇到的问题？ → **PATCH**（若无 MINOR）
+3. 是否所有改动都是内部重构 / 清理？ → 若打包发布则 **PATCH**，否则可考虑跳过本次发版
+4. 是否有提交破坏向后兼容？ → **MAJOR**
 
-**Update `application-rs/Cargo.toml` (workspace root only):**
+**更新 `application-rs/Cargo.toml`（仅 workspace 根）：**
 
 ```toml
 [workspace.package]
-version = "X.Y.Z"  # Bump this
+version = "X.Y.Z"  # 提升这个版本号
 ```
 
-Since all sub-crates use `version.workspace = true`, only the workspace root needs updating. Always run `cargo update` (or any build command) to regenerate `Cargo.lock`, then commit it.
+由于所有子 crate 都使用 `version.workspace = true`，只需更新 workspace 根。务必运行 `cargo update`（或任意构建命令）以重新生成 `Cargo.lock`，然后提交它。
 
-**Update `application-rs/CHANGELOG.md`:**
+**更新 `application-rs/CHANGELOG.md`：**
 
-Follow [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) format:
+遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式：
 
 ```markdown
 ## [X.Y.Z] - YYYY-MM-DD
 
 ### Added
-- New feature description (#PR) ([commit](https://github.com/yansongda/application/commit/abc123))
+- 新功能描述 (#PR) ([commit](https://github.com/yansongda/application/commit/abc123))
 
 ### Changed
-- Behavior changes (#PR) ([commit](https://github.com/yansongda/application/commit/def456))
+- 行为变更 (#PR) ([commit](https://github.com/yansongda/application/commit/def456))
 
 ### Fixed
-- Bug fixes (#PR) ([commit](https://github.com/yansongda/application/commit/ghi789))
+- 缺陷修复 (#PR) ([commit](https://github.com/yansongda/application/commit/ghi789))
 ```
 
-**Format checklist:**
-- [ ] Version: `## [X.Y.Z] - YYYY-MM-DD` (NOT `## vX.Y.Z`)
-- [ ] Section headers capitalized: `### Added`, `### Changed`, `### Fixed`
-- [ ] Each entry has PR number and commit link
-- [ ] New version added at the **TOP** of the file
+**格式检查清单：**
+- [ ] 版本标题：`## [X.Y.Z] - YYYY-MM-DD`（不是 `## vX.Y.Z`）
+- [ ] 段落标题首字母大写：`### Added`、`### Changed`、`### Fixed`
+- [ ] 每条都带 PR 编号和 commit 链接
+- [ ] 新版本加在文件**最上方**
 
-**Get commits since last release:**
+**获取上次发布以来的提交：**
 ```bash
 cd application-rs
 git log <PREV_TAG>..HEAD --pretty=format:"- %s ([%h](https://github.com/yansongda/application/commit/%h))"
 ```
 
-### Step 3: Verify Rust Code Quality
+### 第 3 步：校验 Rust 代码质量
 
-Before creating PR, ensure all checks pass:
+创建 PR 之前，确保所有检查通过：
 
 ```bash
 cd application-rs
@@ -125,7 +125,7 @@ cargo fmt --all -- --check
 cargo clippy -- -D warnings
 ```
 
-### Step 4: Create PR
+### 第 4 步：创建 PR
 
 ```bash
 git checkout -b release/application-rs-vX.Y.Z
@@ -135,95 +135,95 @@ git push origin release/application-rs-vX.Y.Z
 gh pr create --title "release(application-rs): vX.Y.Z" --body "Release application-rs vX.Y.Z"
 ```
 
-**Wait for the user to manually review and merge the PR. NEVER auto-merge.**
+**等待用户手动审核并合并 PR。绝不自动合并。**
 
-### Step 5: Tag & Push (After PR Merge)
+### 第 5 步：打 Tag & 推送（PR 合并后）
 
 ```bash
 git checkout main && git pull origin main
 
-# Create tag with application-api prefix
+# 创建带 application-api 前缀的 tag
 git tag application-api/vX.Y.Z
 git push origin application-api/vX.Y.Z
 ```
 
-**⚠️ Tag format must match workflow trigger:**
-- The workflow `.github/workflows/build-image.yml` checks `startsWith(github.ref, 'refs/tags/application-api')`
-- Tag format: `application-api/vX.Y.Z`
-- The workflow converts `/` to `-` for Docker image tags automatically
+**⚠️ Tag 格式必须与 workflow 触发条件匹配：**
+- workflow `.github/workflows/build-image.yml` 检查 `startsWith(github.ref, 'refs/tags/application-api')`
+- tag 格式：`application-api/vX.Y.Z`
+- workflow 会自动把 `/` 转换成 `-` 用于 Docker 镜像 tag
 
-### Step 6: Verify Docker Build
+### 第 6 步：验证 Docker 构建
 
-- GitHub Actions: https://github.com/yansongda/application/actions
-- Check that `build-image.yml` workflow runs successfully
-- Images are pushed to: Aliyun, DockerHub, GitHub Container Registry
+- GitHub Actions：https://github.com/yansongda/application/actions
+- 确认 `build-image.yml` workflow 运行成功
+- 镜像推送到：Aliyun、DockerHub、GitHub Container Registry
 
-## Quick Reference
+## 速查表
 
-| Step | Action | Purpose |
+| 步骤 | 操作 | 目的 |
 |------|--------|---------|
-| 1. Check | `git status`, `git tag`, check version | Verify clean state |
-| 2. Bump | Edit `Cargo.toml`, `CHANGELOG.md` | Update version and changelog |
-| 3. Verify | `cargo check`, `cargo fmt`, `cargo clippy` | Ensure code quality |
-| 4. PR | Create PR, wait for merge | Review & approve |
-| 5. Tag | `git tag application-api/vX.Y.Z` | Trigger Docker build |
-| 6. Verify | Check GitHub Actions | Confirm image built |
+| 1. 检查 | `git status`、`git tag`、查看版本号 | 确认状态干净 |
+| 2. 提升 | 编辑 `Cargo.toml`、`CHANGELOG.md` | 更新版本号和 changelog |
+| 3. 校验 | `cargo check`、`cargo fmt`、`cargo clippy` | 确保代码质量 |
+| 4. PR | 创建 PR，等待合并 | 审核与批准 |
+| 5. Tag | `git tag application-api/vX.Y.Z` | 触发 Docker 构建 |
+| 6. 验证 | 检查 GitHub Actions | 确认镜像构建完成 |
 
-## Common Mistakes
+## 常见错误
 
-**Wrong tag format**
-- **Problem:** Tag `v1.0.0` won't trigger the workflow
-- **Fix:** Must use `application-api/v1.0.0`
+**Tag 格式错误**
+- **问题：** tag `v1.0.0` 不会触发 workflow
+- **修正：** 必须使用 `application-api/v1.0.0`
 
-**Bumping individual crate versions**
-- **Problem:** Editing `application-api/Cargo.toml` directly when it uses `version.workspace = true`
-- **Fix:** Only bump workspace root `Cargo.toml`
+**提升单个 crate 的版本号**
+- **问题：** 直接编辑 `application-api/Cargo.toml`，而它使用的是 `version.workspace = true`
+- **修正：** 只提升 workspace 根的 `Cargo.toml`
 
-**Forgetting to run Rust checks**
-- **Problem:** PR fails CI due to `cargo fmt` or `cargo clippy` errors
-- **Fix:** Always run all three checks before creating PR
+**忘记运行 Rust 检查**
+- **问题：** PR 因 `cargo fmt` 或 `cargo clippy` 报错导致 CI 失败
+- **修正：** 创建 PR 前始终运行三项检查
 
-**Bumping version based only on commit messages**
-- **Problem:** A `fix:` commit might only touch a comment (no bump needed), while a `chore:` commit might add a new API (MINOR bump)
-- **Fix:** Always inspect `git show --stat` and `git diff` to determine actual behavioral impact; commit messages are hints, the diff is the truth
+**只看 commit message 决定版本号**
+- **问题：** `fix:` 提交可能只改了注释（无需提升版本），而 `chore:` 提交可能新增了 API（应提升 MINOR）
+- **修正：** 必须检查 `git show --stat` 和 `git diff` 判断实际行为影响；commit message 只是线索，diff 才是事实
 
-**Tagging before PR merge**
-- **Problem:** Tag points to pre-merge commit
-- **Fix:** Always `git pull origin main` after merge before tagging
+**PR 合并前就打 tag**
+- **问题：** tag 指向合并前的 commit
+- **修正：** 合并后务必先 `git pull origin main` 再打 tag
 
-**Direct-pushing to main**
-- **Problem:** Bypasses review and branch protection
-- **Fix:** Always create PR, even for version bumps
+**直推 main**
+- **问题：** 绕过审核与分支保护
+- **修正：** 即使是版本提升也必须创建 PR
 
-## Workspace Structure Reminder
+## Workspace 结构提醒
 
 ```
 application-rs/
-  Cargo.toml           # Workspace root - bump version here
-  Cargo.lock           # Commit if changed
-  CHANGELOG.md         # Update with new release notes
-  application-api/     # Binary crate (HTTP API)
-  application-database/# Database layer
-  application-kernel/  # Core types, config, errors
-  application-macro/   # Procedural macros
-  application-http/   # HTTP client, 3rd party integrations
+  Cargo.toml           # Workspace 根 - 在这里提升版本号
+  Cargo.lock           # 有变化则提交
+  CHANGELOG.md         # 更新发布说明
+  application-api/     # 二进制 crate（HTTP API）
+  application-database/# 数据库层
+  application-kernel/  # 核心类型、配置、错误
+  application-macro/   # 过程宏
+  application-http/   # HTTP 客户端、第三方集成
 ```
 
-All crates share the workspace version via `version.workspace = true`.
+所有 crate 通过 `version.workspace = true` 共享 workspace 版本号。
 
-## Red Flags
+## 危险信号
 
-**Never:**
-- Auto-merge the PR (user MUST review manually)
-- Push directly to main
-- Tag before PR merge
-- Skip `cargo fmt` / `cargo clippy` checks
-- Release from dirty working directory
-- Use wrong tag format (`v1.0.0` instead of `application-api/v1.0.0`)
-- Bump version based only on commit messages instead of inspecting the actual diff
+**绝不：**
+- 自动合并 PR（必须由用户手动审核）
+- 直推 main
+- 在 PR 合并前打 tag
+- 跳过 `cargo fmt` / `cargo clippy` 检查
+- 从有未提交改动的工作区发布
+- 使用错误的 tag 格式（`v1.0.0` 而非 `application-api/v1.0.0`）
+- 只看 commit message 而不检查实际 diff 就决定版本号
 
-**Always:**
-- Run all Rust checks before PR
-- Update workspace root `Cargo.toml` only
-- Use `application-api/vX.Y.Z` tag format
-- Wait for PR merge before tagging
+**务必：**
+- 创建 PR 前运行所有 Rust 检查
+- 只更新 workspace 根的 `Cargo.toml`
+- 使用 `application-api/vX.Y.Z` tag 格式
+- 打 tag 前等待 PR 合并
