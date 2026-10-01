@@ -55,6 +55,7 @@ MFA/
 - 新增或修改页面、组件、接口、模型时，优先沿用 `entry/src/main/ets/` 下现有目录组织
 - 主题、公共组件、网络请求封装优先复用现有实现，避免重复创建近似能力
 - 与后端 API 联动时，接口字段、鉴权语义、错误处理需与后端保持一致
+- 弹窗/对话框统一用组件内的成员 `@Builder` 方法：**不要在 `Dialog.open/execute`、`Toast.execute` 等自定义函数的闭包里调用全局 `@Builder` 函数**（编译器不会给全局 builder 注入组件上下文，运行时报 `Cannot read property observeComponentCreation2 of undefined`）；因此加载/失败/重试弹窗各页保留自己的成员实现，不做跨页抽取
 - 未确认工程已有命令前，不凭空引入新的构建或测试流程，优先遵循工程内现有配置文件
 
 ## 测试
@@ -77,5 +78,5 @@ MFA/
 
 - `entry/src/main/ets/ability/` 目录包含 `EntryAbility.ets`（UIAbility 入口），上表已补充。
 - `code-linter.json5` 包含 `@security/no-unsafe-*` 系列规则，修改加密/安全相关逻辑前请先确认不会触发 lint 错误。
-- `build-profile.json5` 中的签名配置使用本地绝对路径与明文密码，仅用于本地开发，禁止用于生产。
+- `build-profile.json5` 中的签名配置使用本机绝对路径引用证书/Profile/密钥库，签名口令为 DevEco 加密后的**密文**（非明文，换机通常不可直接复用）；证书与密钥库本体不入库，仅用于本地开发，禁止用于生产。
 - 当前仓库 CI 未包含华为前端的构建/lint 检查。

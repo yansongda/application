@@ -1,5 +1,7 @@
 import { User as UserApi } from '../../api/User';
 import { Config, User } from '../../models/User';
+import { Authorization } from '../../models/Auth';
+import { AppPagesName } from '../../App';
 import { Toast } from '../../utils/PromptAction';
 import { AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
 
@@ -15,6 +17,8 @@ struct Delete {
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
   private user: User =
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
+  private authorization: Authorization =
+    PersistenceV2.globalConnect({ type: Authorization, defaultCreator: () => new Authorization() })!;
 
   build() {
     NavDestination() {
@@ -44,16 +48,24 @@ struct Delete {
                 return;
               }
 
-              await Toast.execute(
-                () => UserApi.delete(),
-                () => this.loadingDialog(),
-                $r('app.string.operation_success'),
-              );
+              try {
+                await Toast.execute(
+                  () => UserApi.delete(),
+                  () => this.loadingDialog(),
+                  $r('app.string.operation_success'),
+                );
+              } catch (e) {
+                // 失败已通过 Toast 提示，保留当前状态
+                return;
+              }
 
+              // 注销成功后清理本地登录态与用户数据，并回登录页
+              this.authorization.clear();
               this.user.config = new Config();
               this.user.phone = undefined;
 
               this.pages.clear();
+              this.pages.pushPathByName(AppPagesName.LOGIN, null);
             })
 
           Row() {

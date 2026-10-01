@@ -3,6 +3,46 @@
     {
       "name": "page_text_font_size",
       "value": "50fp"
+    },
+    {
+      "name": "title_font_size",
+      "value": "30fp"
+    },
+    {
+      "name": "subtitle_font_size",
+      "value": "20fp"
+    },
+    {
+      "name": "body_font_size",
+      "value": "14fp"
+    },
+    {
+      "name": "caption_font_size",
+      "value": "13fp"
+    },
+    {
+      "name": "caption_smaller_font_size",
+      "value": "12fp"
+    },
+    {
+      "name": "code_font_size",
+      "value": "50fp"
+    },
+    {
+      "name": "icon_font_size",
+      "value": "24fp"
+    },
+    {
+      "name": "fab_icon_font_size",
+      "value": "35fp"
+    },
+    {
+      "name": "guide_icon_font_size",
+      "value": "100fp"
+    },
+    {
+      "name": "empty_icon_font_size",
+      "value": "50fp"
     }
   ]
 }

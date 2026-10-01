@@ -111,10 +111,20 @@ struct Index {
                 return;
               }
 
-              const uri =
-                `otpauth://totp/${this.issuer}:${this.username}?secret=${this.secret}&issuer=${this.issuer}&period=${this.period}`;
+              const period = Number(this.period);
 
-              hilog.info(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建: %{public}s', uri);
+              if (!Number.isInteger(period) || period <= 0) {
+                Toast.show({ message: $r('app.string.index_create_page_period_error') });
+
+                return;
+              }
+
+              const label = `${encodeURIComponent(this.issuer)}:${encodeURIComponent(this.username)}`;
+              const uri =
+                `otpauth://totp/${label}?secret=${this.secret}&issuer=${encodeURIComponent(
+                  this.issuer)}&period=${period}`;
+
+              hilog.info(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建: %{private}s', uri);
 
               try {
                 await Toast.execute(
@@ -125,6 +135,8 @@ struct Index {
 
                 this.pages.pop();
               } catch (e) {
+                hilog.warn(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建 TOTP 失败: %{public}s',
+                  JSON.stringify(e));
               }
             })
         }

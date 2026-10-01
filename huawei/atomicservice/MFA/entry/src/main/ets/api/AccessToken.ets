@@ -28,7 +28,8 @@ export interface AccessTokenLoginRefreshResponse {
 export class AccessToken {
   static async login(clientId: string, authorizationCode: string): Promise<AccessTokenLoginResponse> {
     const response: AxiosResponse<Response<AccessTokenLoginResponse>> =
-      await http.post<AccessTokenLoginResponse, AxiosResponse<Response<AccessTokenLoginResponse>>, AccessTokenLoginRequest>('api/v1/access-token/login',
+      await http.post<AccessTokenLoginResponse, AxiosResponse<Response<AccessTokenLoginResponse>>, AccessTokenLoginRequest>(
+        'api/v1/access-token/login',
         {
           platform: "HUAWEI",
           third_id: clientId,
@@ -39,13 +40,14 @@ export class AccessToken {
       return response.data.data;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async loginRefresh(clientId: string,
     refreshToken: string): Promise<AccessTokenLoginRefreshResponse> {
     const response: AxiosResponse<Response<AccessTokenLoginRefreshResponse>> =
-      await http.post<AccessTokenLoginRefreshResponse, AxiosResponse<Response<AccessTokenLoginRefreshResponse>>, AccessTokenLoginRefreshRequest>('api/v1/access-token/login/refresh',
+      await http.post<AccessTokenLoginRefreshResponse, AxiosResponse<Response<AccessTokenLoginRefreshResponse>>, AccessTokenLoginRefreshRequest>(
+        'api/v1/access-token/login/refresh',
         {
           platform: "HUAWEI",
           third_id: clientId,
@@ -56,6 +58,6 @@ export class AccessToken {
       return response.data.data;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 }

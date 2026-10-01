@@ -86,6 +86,7 @@ export class Toast extends PromptAction {
     try {
       PromptAction.action.showToast(options);
     } catch (error) {
+      hilog.warn(LogDomain.UTILS, 'utils/toast', '调用 `showToast` 失败: %{public}s', JSON.stringify(error));
     }
   }
 

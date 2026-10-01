@@ -46,7 +46,8 @@ export class Authorization {
     return this._expiredAt;
   }
 
-  static async authenticateWithHuaweiID(scopes?: string[], context?: Context): Promise<authentication.AuthorizationWithHuaweiIDCredential> {
+  static async authenticateWithHuaweiID(scopes?: string[],
+    context?: Context): Promise<authentication.AuthorizationWithHuaweiIDCredential> {
     const request =
       new authentication.HuaweiIDProvider().createAuthorizationWithHuaweiIDRequest();
 
@@ -61,14 +62,16 @@ export class Authorization {
       authenticateWithHuaweiIDResponse =
         await (new authentication.AuthenticationController(context)).executeRequest(request);
     } catch (error) {
-      // 对于元服务来说，不太可能出现异常，因为元服务必须是登录状态。
-      hilog.error(LogDomain.MODELS, 'models/auth', '元服务登录出错: %{public}s', JSON.stringify(error))
+      // 元服务虽要求已登录，但仍可能因 App 指纹校验失败、网络异常、用户取消等原因抛错
+      hilog.error(LogDomain.MODELS, 'models/auth', '华为账号授权失败(authenticateWithHuaweiID): %{public}s',
+        JSON.stringify(error))
 
       return Promise.reject();
     }
 
     if (authenticateWithHuaweiIDResponse.state && request.state !== authenticateWithHuaweiIDResponse.state) {
-      hilog.error(LogDomain.MODELS, 'models/auth', '登录失败，state 不同: %{public}s != %{public}s',
+      hilog.error(LogDomain.MODELS, 'models/auth',
+        '华为账号授权失败(authenticateWithHuaweiID)，state 不同: %{public}s != %{public}s',
         authenticateWithHuaweiIDResponse.state, request.state);
 
       return Promise.reject();
@@ -89,14 +92,16 @@ export class Authorization {
       loginWithHuaweiIDResponse =
         await (new authentication.AuthenticationController()).executeRequest(request);
     } catch (error) {
-      // 对于元服务来说，不太可能出现异常，因为元服务必须是登录状态。
-      hilog.error(LogDomain.MODELS, 'models/auth', '元服务登录出错: %{public}s', JSON.stringify(error))
+      // 元服务虽要求已登录，但仍可能因 App 指纹校验失败、网络异常、用户取消等原因抛错
+      hilog.error(LogDomain.MODELS, 'models/auth', '华为账号登录失败(loginWithHuaweiID): %{public}s',
+        JSON.stringify(error))
 
       return Promise.reject();
     }
 
     if (loginWithHuaweiIDResponse.state && request.state !== loginWithHuaweiIDResponse.state) {
-      hilog.error(LogDomain.MODELS, 'models/auth', '登录失败，state 不同: %{public}s != %{public}s',
+      hilog.error(LogDomain.MODELS, 'models/auth',
+        '华为账号登录失败(loginWithHuaweiID)，state 不同: %{public}s != %{public}s',
         loginWithHuaweiIDResponse.state, request.state);
 
       return Promise.reject();
@@ -126,7 +131,7 @@ export class Authorization {
   async login(): Promise<Authorization> {
     const credential = await Authorization.loginWithHuaweiID();
 
-    hilog.info(LogDomain.MODELS, 'models/auth', '认证信息, credential: %{public}s, client_id: %{public}s',
+    hilog.info(LogDomain.MODELS, 'models/auth', '认证信息, credential: %{private}s',
       JSON.stringify(credential));
 
     if ('undefined' === typeof credential) {
@@ -149,7 +154,7 @@ export class Authorization {
     if ('undefined' === typeof refreshToken) {
       hilog.error(LogDomain.MODELS, 'models/auth', '传递的 refresh_token 参数错误');
 
-      Promise.reject();
+      return Promise.reject();
     }
 
     const response = await AccessToken.loginRefresh(App.clientId, refreshToken!);
@@ -160,5 +165,12 @@ export class Authorization {
     this._expiredAt = dateformat.now().add(response.expired_in, 'second').toDate() as Date;
 
     return this;
+  }
+
+  clear(): void {
+    this._authorizedAt = undefined;
+    this._accessToken = undefined;
+    this._refreshToken = undefined;
+    this._expiredAt = undefined;
   }
 }

@@ -25,7 +25,6 @@ export enum AppEnv {
 
 export enum AppPagesName {
   LOGIN = 'login',
-  GUIDE = 'guide',
   HOME = 'home',
   INDEX = 'index',
   INDEX_CREATE = 'index/create',
@@ -49,7 +48,9 @@ export class App {
     const clientId = App.getMetadata('client_id');
 
     if ('undefined' === typeof clientId) {
-      return 'undefined';
+      hilog.warn(LogDomain.UTILS, 'utils/app', 'metadata 中不存在 client_id');
+
+      return '';
     }
 
     App._clientId = clientId
@@ -94,7 +95,7 @@ export class App {
 
     const bundleInfo: bundleManager.BundleInfo = bundleManager.getBundleInfoForSelfSync(
       bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION |
-      bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_METADATA
+        bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_METADATA
     );
 
     hilog.info(LogDomain.UTILS, 'utils/app', 'metadata 获取信息: %{public}s',

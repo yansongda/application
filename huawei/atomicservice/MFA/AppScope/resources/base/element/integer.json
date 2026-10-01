@@ -27,6 +27,26 @@
     {
       "name": "page_margin_smaller",
       "value": 30
+    },
+    {
+      "name": "card_height",
+      "value": 100
+    },
+    {
+      "name": "card_content_height",
+      "value": 98
+    },
+    {
+      "name": "card_radius",
+      "value": 10
+    },
+    {
+      "name": "card_progress_height",
+      "value": 2
+    },
+    {
+      "name": "avatar_size",
+      "value": 30
     }
   ]
 }

@@ -60,14 +60,24 @@ export struct Card {
 
       if ('string' === typeof item.eventClick.action) {
         this.pages.pushPathByName(item.eventClick.action, item.eventClick.params, (popInfo: PopInfo) => {
-          item.callback(popInfo.result as IJumpCallbackResult);
+          // 用户取消弹窗时 result 为空，需判空后再回写，避免类型断言掩盖运行时异常
+          const result = popInfo.result as IJumpCallbackResult | undefined;
+
+          if ('undefined' === typeof result || 'undefined' === typeof result.value) {
+            return;
+          }
+
+          item.callback(result);
         });
       }
 
       if ('function' === typeof item.eventClick.action) {
         const result: string | undefined = await item.eventClick.action();
 
-        item.callback({ value: result ?? '' } as IJumpCallbackResult);
+        // 返回 undefined 表示本次操作未产生变更，保持卡片已有显示内容
+        if ('undefined' !== typeof result) {
+          item.callback({ value: result } as IJumpCallbackResult);
+        }
       }
     })
   }

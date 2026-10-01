@@ -6,11 +6,6 @@
       "buildFunction": "builder"
     },
     {
-      "name": "guide",
-      "pageSourceFile": "src/main/ets/pages/Guide.ets",
-      "buildFunction": "builder"
-    },
-    {
       "name": "index",
       "pageSourceFile": "src/main/ets/pages/index/Index.ets",
       "buildFunction": "builder"
@@ -27,12 +22,12 @@
     },
     {
       "name": "index/edit/issuer",
-      "pageSourceFile": "src/main/ets/pages/index/edit/Issuer.ets",
+      "pageSourceFile": "src/main/ets/pages/index/edit/Text.ets",
       "buildFunction": "builder"
     },
     {
       "name": "index/edit/username",
-      "pageSourceFile": "src/main/ets/pages/index/edit/Username.ets",
+      "pageSourceFile": "src/main/ets/pages/index/edit/Text.ets",
       "buildFunction": "builder"
     },
     {

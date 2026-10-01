@@ -1,5 +1,5 @@
 import { AxiosResponse } from '@ohos/axios';
-import { User as UserModel } from '../models/User';
+import { IUser } from '../models/User';
 import http, { HttpError, Response } from '../utils/Http';
 
 export interface EditAvatarRequest {
@@ -15,15 +15,15 @@ export interface EditSloganRequest {
 }
 
 export class User {
-  static async detail(): Promise<UserModel> {
-    const response: AxiosResponse<Response<UserModel>> =
-      await http.post<UserModel, AxiosResponse<Response<UserModel>>, void>('api/v1/users/detail');
+  static async detail(): Promise<IUser> {
+    const response: AxiosResponse<Response<IUser>> =
+      await http.post<IUser, AxiosResponse<Response<IUser>>, void>('api/v1/users/detail');
 
     if (0 === response.data?.code && response.data.data) {
       return response.data.data;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async editAvatar(avatar: string): Promise<void> {
@@ -37,7 +37,7 @@ export class User {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async editNickname(nickname: string): Promise<void> {
@@ -51,7 +51,7 @@ export class User {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async editSlogan(slogan: string): Promise<void> {
@@ -65,7 +65,7 @@ export class User {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 
   static async delete(): Promise<void> {
@@ -76,6 +76,6 @@ export class User {
       return;
     }
 
-    return Promise.reject(new HttpError(response.data.message));
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
   }
 }

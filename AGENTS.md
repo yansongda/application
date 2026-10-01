@@ -108,6 +108,6 @@ bun run typecheck
 
 - `application-rs/AGENTS.md` 中已修正：移除不存在的 `application-macro/` 目录；CI 不运行 `cargo test`。
 - `wechat/miniprogram/yansongda/` 包管理器为 Bun，锁文件为 `bun.lock`。
-- 华为 `build-profile.json5` 包含本地签名证书路径与明文密码，仅用于本地开发，禁止用于生产。
+- 华为 `build-profile.json5` 使用本机绝对路径引用证书/Profile/密钥库，签名口令是 DevEco 写入的**密文**（非明文，换机通常不可直接复用）；证书、密钥库本体不入库，仅用于本地开发，禁止用于生产。
  - 后端 `middleware.rs` 与 `application-http/src/http.rs` 记录完整 headers（含 Authorization），此为预期行为。
 - 三个前端均无实际业务测试；Rust 后端仅有少量单元测试，CI 不执行测试。
