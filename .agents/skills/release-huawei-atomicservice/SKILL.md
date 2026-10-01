@@ -1,49 +1,49 @@
 ---
 name: release-huawei-atomicservice
-description: Use when releasing the Huawei atomic service (元服务) frontend under huawei/atomicservice/MFA — bumping AppScope/app.json5 versionCode/versionName, adding a CHANGELOG.md section, creating a release PR, tagging huawei-atomicservice-mfa/vX.Y.Z, or preparing the signed .app for AGC (AppGallery Connect) 上架
+description: 在发布 huawei/atomicservice/MFA 下的华为元服务（atomic service）前端时使用 —— 提升 AppScope/app.json5 的 versionCode/versionName、新增 CHANGELOG.md 段落、创建 release PR、打 huawei-atomicservice-mfa/vX.Y.Z tag，或准备用于 AGC（AppGallery Connect）上架的签名 .app
 ---
 
-# Release Huawei Atomic Service (华为元服务 MFA)
+# 发布华为元服务（Huawei Atomic Service MFA）
 
-## Overview
+## 概述
 
-The Huawei atomic service frontend lives in `huawei/atomicservice/MFA/` and is built with ArkTS/ETS.
+华为元服务前端位于 `huawei/atomicservice/MFA/`，使用 ArkTS/ETS 构建。
 
-**Key difference from the WeChat mini-programs:** the version is NOT in `package.json` / `oh-package.json5` — it lives in `AppScope/app.json5` as `versionCode` + `versionName`. And there is **no CI** for this project: packaging and 上架 are manual DevEco Studio + AGC steps.
+**与微信小程序的关键差异：** 版本号不在 `package.json` / `oh-package.json5` 里，而是在 `AppScope/app.json5` 中的 `versionCode` + `versionName`。另外该项目**没有 CI**：打包和上架都靠手动操作 DevEco Studio + AGC。
 
-**Core principle:** bump version & CHANGELOG → **Create PR** → **User manually merges** → Tag & push → **manual** DevEco Studio build + AGC upload.
+**核心原则：** 提升版本号 & 更新 CHANGELOG → **创建 PR** → **用户手动合并** → 打 tag & 推送 → **手动** DevEco Studio 构建 + AGC 上传。
 
-**⚠️ MUST create a PR. Never push directly to main.**
-**⚠️ MUST NOT auto-merge the PR. The user must review and merge manually.**
-**⚠️ MUST NOT attempt automated AGC upload** (requires interactive Huawei developer account login).
+**⚠️ 必须创建 PR。绝不直推 main。**
+**⚠️ 绝不能自动合并 PR。必须由用户审核并手动合并。**
+**⚠️ 绝不能尝试自动化 AGC 上传**（需要交互式登录华为开发者账号）。
 
-## When to Use
+## 适用场景
 
-- Releasing a new version of the Huawei atomic service (华为元服务 MFA)
-- Bumping `versionCode` / `versionName` in `huawei/atomicservice/MFA/AppScope/app.json5`
-- Adding a CHANGELOG section for the huawei frontend
-- Creating or pushing tag `huawei-atomicservice-mfa/vX.Y.Z`
-- Preparing the signed `.app` package for AGC 上架
+- 发布华为元服务（MFA）新版本
+- 提升 `huawei/atomicservice/MFA/AppScope/app.json5` 中的 `versionCode` / `versionName`
+- 为华为前端新增 CHANGELOG 段落
+- 创建或推送 tag `huawei-atomicservice-mfa/vX.Y.Z`
+- 准备用于 AGC 上架的签名 `.app` 包
 
-Not for: WeChat mini-programs (**REQUIRED:** use frontend-miniprogram-release), the Rust backend (**REQUIRED:** use release-application-rs).
+不适用：微信小程序（**必须**使用 frontend-miniprogram-release）、Rust 后端（**必须**使用 release-application-rs）。
 
-## Key Facts (verified in this repo)
+## 关键事实（已在本仓库核实）
 
-| Item | Value |
+| 项目 | 值 |
 |------|-------|
-| Project root | `huawei/atomicservice/MFA/` |
-| Version source | `AppScope/app.json5` → `"versionCode": <int>`, `"versionName": "X.Y.Z"` |
-| versionCode scheme | `MAJOR*10000 + MINOR*100 + PATCH` (v1.0.0 = `10000`, v1.3.1 = `10301`) |
-| CHANGELOG | `huawei/atomicservice/MFA/CHANGELOG.md` (Keep a Changelog) |
-| Tag format | `huawei-atomicservice-mfa/vX.Y.Z` (lightweight tags) |
-| Bundle | `com.atomicservice.6917576589568238756`, `bundleType: atomicService` |
-| Signed package | `huawei/atomicservice/MFA/build/outputs/default/MFA-default-signed.app` (build output, never committed) |
-| Build & upload | DevEco Studio GUI + AGC web console — no `hvigorw` CLI wrapper is committed |
-| CI | none for huawei. Pushing the tag still triggers `.github/workflows/build-image.yml` (it listens to `**`), but every job is skipped by its `application-api` guard — an all-skipped run is **expected**, not a failure. |
+| 项目根目录 | `huawei/atomicservice/MFA/` |
+| 版本号来源 | `AppScope/app.json5` → `"versionCode": <int>`、`"versionName": "X.Y.Z"` |
+| versionCode 规则 | `MAJOR*10000 + MINOR*100 + PATCH`（v1.0.0 = `10000`，v1.3.1 = `10301`） |
+| CHANGELOG | `huawei/atomicservice/MFA/CHANGELOG.md`（Keep a Changelog） |
+| Tag 格式 | `huawei-atomicservice-mfa/vX.Y.Z`（轻量 tag） |
+| Bundle | `com.atomicservice.6917576589568238756`，`bundleType: atomicService` |
+| 签名包 | `huawei/atomicservice/MFA/build/outputs/default/MFA-default-signed.app`（构建产物，绝不提交） |
+| 构建与上传 | DevEco Studio GUI + AGC 网页控制台 —— 仓库里没有提交 `hvigorw` CLI wrapper |
+| CI | huawei 没有 CI。推送 tag 仍会触发 `.github/workflows/build-image.yml`（它监听 `**`），但每个 job 都会被其 `application-api` 守卫跳过 —— 全部 skipped 的运行是**预期行为**，不是失败。 |
 
-## The Process
+## 操作流程
 
-### Step 1: Check Current State
+### 第 1 步：检查当前状态
 
 ```bash
 cd huawei/atomicservice/MFA
@@ -54,60 +54,60 @@ git tag -l 'huawei-atomicservice-mfa/*' | sort -V | tail -5
 grep -E 'versionCode|versionName' AppScope/app.json5
 ```
 
-**If dirty:** Stop and look at *what* is dirty:
-- Changes inside `huawei/atomicservice/MFA/` that belong to this release (pending version bump, CHANGELOG entries) → keep them and carry them into the release branch and commit
-- Anything else (unrelated work in progress) → commit or stash it first, and keep it out of the release PR
+**若有未提交改动：** 停下来，先弄清*具体*是什么改动：
+- `huawei/atomicservice/MFA/` 内属于本次发布的改动（待提升的版本号、CHANGELOG 条目）→ 保留，并带到 release 分支中一起提交
+- 其他任何改动（无关的在建工作）→ 先提交或 stash，并确保不进入 release PR
 
-Never discard or stash-drop release-related edits to make the tree clean.
+绝不要为了让工作区干净而丢弃或 stash-drop 与发布相关的修改。
 
-**Scope isolation (CRITICAL).** The current branch is often a feature branch with unrelated work:
+**隔离改动范围（关键）。** 当前分支往往是夹杂无关工作的功能分支：
 
 ```bash
-# WRONG: Includes all changes from the branch
+# 错误：包含了分支上的所有改动
 git diff main..HEAD --stat
 
-# RIGHT: Only check changes in the target directory
+# 正确：只检查目标目录中的改动
 git diff main..HEAD -- huawei/
 ```
 
-`versionName` in `app.json5` is sometimes bumped together with feature work, so it may already be **ahead of the newest tag** (example, 2026-09 state: HEAD has `1.4.0` / `10400` while the newest tag is `v1.3.1`). In that case the pending version is `1.4.0` and the release PR only needs the CHANGELOG section.
+`app.json5` 中的 `versionName` 有时会随功能开发一起提升，因此可能已经**领先于最新 tag**（例如 2026-09 状态：HEAD 为 `1.4.0` / `10400`，而最新 tag 是 `v1.3.1`）。这种情况下待发布的版本就是 `1.4.0`，release PR 只需要补 CHANGELOG 段落。
 
-### Step 2: Determine the Version
+### 第 2 步：确定版本号
 
-**Commit messages are a hint; the diff is the truth.**
+**commit message 只是线索，diff 才是事实。**
 
 ```bash
-# Step 1: List commits since last tag (reference only)
+# 第 1 步：列出上个 tag 之后的提交（仅供参考）
 git log <PREV_TAG>..HEAD --oneline -- huawei/
 
-# Step 2: Inspect each commit's actual changes (THIS is what matters)
+# 第 2 步：查看每个提交的实际改动（这才是关键依据）
 git show --stat <commit> -- huawei/
 
-# Step 3: Review the aggregate diff
+# 第 3 步：审查整体 diff
 git diff <PREV_TAG>..HEAD -- huawei/
 ```
 
-A `chore:` commit may add a whole page (MINOR), a `feat:` commit may only touch a string resource (PATCH). Apply [SemVer](https://semver.org/lang/zh-CN/) based on **behavioral impact**:
+一个 `chore:` 提交可能新增整个页面（MINOR），一个 `feat:` 提交可能只是改了字符串资源（PATCH）。根据**行为影响**套用 [SemVer](https://semver.org/lang/zh-CN/)：
 
-| What Changed | Version Bump | Example |
+| 改动内容 | 版本提升 | 示例 |
 |--------------|-------------|---------|
-| New user-facing page / feature / API call | **MINOR** | `1.3.1` → `1.4.0` |
-| Bug fix with behavior change | **PATCH** | `1.3.0` → `1.3.1` |
-| Pure refactor / comment or resource renames | **No bump** or bundle with other changes | Skip if nothing user-visible changed |
-| Breaking change (removed page, changed auth flow) | **MAJOR** | `1.3.1` → `2.0.0` |
+| 新增面向用户的页面 / 功能 / API 调用 | **MINOR** | `1.3.1` → `1.4.0` |
+| 有行为变化的缺陷修复 | **PATCH** | `1.3.0` → `1.3.1` |
+| 纯重构 / 注释或资源重命名 | **不提升** 或与其他改动合并发布 | 若无用户可见变化，可跳过发版 |
+| 破坏性变更（移除页面、改变鉴权流程） | **MAJOR** | `1.3.1` → `2.0.0` |
 
-Then compute `versionCode` from the target version — it is **not** an independent counter:
+然后根据目标版本计算 `versionCode` —— 它**不是**独立计数器：
 
 ```
 versionCode = MAJOR * 10000 + MINOR * 100 + PATCH
 ```
 
-- `1.4.0` → `10400`, `1.3.1` → `10301`, `2.0.0` → `20000`
-- **Never reuse a versionCode.** AGC rejects an upload whose versionCode is not greater than the already-published one, so even a PATCH bump needs a new number.
+- `1.4.0` → `10400`，`1.3.1` → `10301`，`2.0.0` → `20000`
+- **绝不复用 versionCode。** AGC 会拒绝 versionCode 不大于已发布版本的包，所以即使只提升 PATCH 也必须使用新号。
 
-### Step 3: Update `app.json5` & `CHANGELOG.md`
+### 第 3 步：更新 `app.json5` & `CHANGELOG.md`
 
-**`AppScope/app.json5`** — change only these two lines:
+**`AppScope/app.json5`** —— 只改这两行：
 
 ```json5
 {
@@ -116,7 +116,7 @@ versionCode = MAJOR * 10000 + MINOR * 100 + PATCH
     "bundleType": "atomicService",
     "vendor": "yansongda",
     "versionCode": 10400,        // MAJOR*10000 + MINOR*100 + PATCH
-    "versionName": "1.4.0",      // must equal the tag version
+    "versionName": "1.4.0",      // 必须等于 tag 版本号
     "icon": "$media:icon",
     "label": "$string:app_name",
     "description": "$string:app_description"
@@ -124,9 +124,9 @@ versionCode = MAJOR * 10000 + MINOR * 100 + PATCH
 }
 ```
 
-Never touch `bundleName` (AGC matches the package to the app by it) and never touch the signing config in `build-profile.json5` (local absolute paths + DevEco-encrypted passwords; changing them invalidates the signature).
+绝不要动 `bundleName`（AGC 靠它把包与应用匹配），也不要动 `build-profile.json5` 中的签名配置（本机绝对路径 + DevEco 加密口令；改动会导致签名失效）。
 
-**`CHANGELOG.md`** — [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) format, same as `wechat/miniprogram/yansongda` and `wechat/miniprogram/totp`:
+**`CHANGELOG.md`** —— [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，与 `wechat/miniprogram/yansongda`、`wechat/miniprogram/totp` 一致：
 
 ```markdown
 # Changelog
@@ -148,23 +148,23 @@ Never touch `bundleName` (AGC matches the package to the app by it) and never to
 - 修复头像整体替换导致 UI 不刷新 (#PR)
 ```
 
-**Format checklist:**
-- [ ] Version header: `## [X.Y.Z] - YYYY-MM-DD` (NOT `## vX.Y.Z`, never omit the date)
-- [ ] Section headers capitalized English, one per change type: `### Added` / `### Changed` / `### Deprecated` / `### Removed` / `### Fixed` / `### Security`
-- [ ] One-line Chinese entries describing **user-visible behavior**, append `(#PR)` when a PR number exists
-- [ ] New version section at the **TOP** of the file
-- [ ] Keep the `# Changelog` title + convention line at the top of the file
-- [ ] Date is the actual release date — read it with `date +%F`; never invent or copy it
-- [ ] Every heading in the file uses `## [X.Y.Z] - YYYY-MM-DD` — never add a `## vX.Y.Z` heading; if an old-format heading is still present, convert it in the same commit
+**格式检查清单：**
+- [ ] 版本标题：`## [X.Y.Z] - YYYY-MM-DD`（不是 `## vX.Y.Z`，日期不可省略）
+- [ ] 段落标题使用英文并首字母大写，每种变更类型一个：`### Added` / `### Changed` / `### Deprecated` / `### Removed` / `### Fixed` / `### Security`
+- [ ] 中文单行条目，描述**用户可见行为**；有 PR 编号时追加 `(#PR)`
+- [ ] 新版本段落加在文件**最上方**
+- [ ] 保留文件顶部的 `# Changelog` 标题 + 规范说明行
+- [ ] 日期必须是实际发布日期 —— 用 `date +%F` 读取；绝不臆造或照抄
+- [ ] 文件中所有标题都使用 `## [X.Y.Z] - YYYY-MM-DD` —— 绝不新增 `## vX.Y.Z` 标题；若仍存在旧格式标题，在同一次提交中一并转换
 
-**Get commits since last release:**
+**获取上次发布以来的提交：**
 ```bash
 git log <PREV_TAG>..HEAD --pretty=format:"- %s" -- huawei/
 ```
 
-If dependencies changed, also stage `oh-package.json5` + `oh-package-lock.json5` (the lock file must always be committed).
+若依赖有变化，还需 stage `oh-package.json5` + `oh-package-lock.json5`（锁文件必须始终提交）。
 
-### Step 4: Create the Release PR
+### 第 4 步：创建 Release PR
 
 ```bash
 git checkout main && git pull origin main
@@ -175,12 +175,12 @@ git push -u origin release/huawei-atomicservice-vX.Y.Z
 gh pr create --title "release(huawei): vX.Y.Z" --body "Release huawei atomic service vX.Y.Z"
 ```
 
-- If the version was already bumped by feature work, only `CHANGELOG.md` is staged — say so in the PR body.
-- Since there is no CI lint/build for huawei, open the project once in DevEco Studio and make sure it compiles (and code-linter is clean) before opening the PR.
-- **Wait for the user to manually review and merge. NEVER auto-merge.**
-- Never `git push` to main; never force-push.
+- 若版本号已随功能开发提升过，则只 stage `CHANGELOG.md` —— 并在 PR 描述中说明。
+- 由于 huawei 没有 CI lint/build，打开 PR 前先在 DevEco Studio 中打开项目确认能编译（且 code-linter 无告警）。
+- **等待用户手动审核并合并。绝不自动合并。**
+- 绝不 `git push` 到 main；绝不 force-push。
 
-### Step 5: Tag & Push (After PR Merge)
+### 第 5 步：打 Tag & 推送（PR 合并后）
 
 ```bash
 git checkout main && git pull origin main
@@ -189,103 +189,103 @@ git tag huawei-atomicservice-mfa/vX.Y.Z
 git push origin huawei-atomicservice-mfa/vX.Y.Z
 ```
 
-- Lightweight tag; the `huawei-atomicservice-mfa/` prefix is mandatory and must match the existing tags exactly.
-- Always pull latest main first so the tag points at the merged release commit.
-- The triggered GitHub Actions run will show **all jobs skipped** — expected, because `build-image.yml` only builds `application-api` images.
+- 轻量 tag；`huawei-atomicservice-mfa/` 前缀是硬性要求，必须与现有 tag 完全一致。
+- 务必先拉取最新 main，确保 tag 指向已合并的 release commit。
+- 触发的 GitHub Actions 会显示**所有 job skipped** —— 属预期现象，因为 `build-image.yml` 只构建 `application-api` 镜像。
 
-### Step 6: Build & Upload (MANUAL — user only)
+### 第 6 步：构建 & 上传（手动 —— 仅由用户执行）
 
-1. Open `huawei/atomicservice/MFA` in **DevEco Studio**
-2. `Build > Build Hap(s)/APP(s) > Build APP(s)` with the release signing config (`default` product, `release` build mode)
-3. Take the signed package at `huawei/atomicservice/MFA/build/outputs/default/MFA-default-signed.app`
-4. AGC (AppGallery Connect) → **我的应用** → **HarmonyOS** → 「应用信息」补全资料 → 「软件包管理」上传该 `.app`
+1. 用 **DevEco Studio** 打开 `huawei/atomicservice/MFA`
+2. `Build > Build Hap(s)/APP(s) > Build APP(s)`，使用 release 签名配置（`default` product、`release` build mode）
+3. 取签名包：`huawei/atomicservice/MFA/build/outputs/default/MFA-default-signed.app`
+4. AGC（AppGallery Connect）→ **我的应用** → **HarmonyOS** → 「应用信息」补全资料 → 「软件包管理」上传该 `.app`
 5. 「版本信息」→「准备提交」→ **必须在该页面重新选择刚上传的软件包并保存**（只上传不选包时，提交的仍可能是旧包）
 6. 「提交审核」→ 审核通过后发布（正式发布前可先走开放式测试）
 
-**Common package-parse errors at upload time:**
+**上传时常见的包解析错误：**
 
-| Error | Cause | Fix |
+| 错误 | 原因 | 修正 |
 |-------|-------|-----|
-| Profile 文件非法 | Package was signed with a Profile belonging to another app | Use the release Profile of *this* app |
-| 软件包使用的 Profile 和证书不匹配 | Signing certificate ≠ certificate used when applying for the Profile | Re-check `build-profile.json5` signing config |
-| 非法软件包 | Package not signed | Rebuild with the signing config; never re-pack/re-sign manually |
-| 软件包中使用证书失效 | Certificate deleted or expired | Re-apply for the certificate and rebuild |
-| 错误码 1010（非元服务软件包） | Uploaded a HarmonyOS **application** package into a 元服务 app | Build/sign the `atomicService` package |
+| Profile 文件非法 | 包是用属于其他应用的 Profile 签名的 | 使用*本*应用的 release Profile |
+| 软件包使用的 Profile 和证书不匹配 | 签名证书 ≠ 申请 Profile 时使用的证书 | 重新检查 `build-profile.json5` 签名配置 |
+| 非法软件包 | 包未签名 | 用签名配置重新构建；绝不要手动重新打包/重签 |
+| 软件包中使用证书失效 | 证书被删除或已过期 | 重新申请证书后重新构建 |
+| 错误码 1010（非元服务软件包） | 把 HarmonyOS **应用**包上传到了元服务应用 | 构建/签名 `atomicService` 包 |
 
 - 元服务审核额外关注：快照、卡片大小、外部跳转 —— 见[《元服务审核指南》](https://developer.huawei.com/consumer/cn/doc/app/50129)
 - 签名材料（`.p12` / `.cer` / `.p7b`）不在仓库内，仅存于本机；口令为 DevEco 写入的密文，换机通常不可直接复用。缺失时无法产出签名包 —— 属本地环境问题，需在 DevEco Studio 重新生成/配置签名。
 
-**Do not attempt automated upload** — AGC requires an interactive Huawei developer account login.
+**不要尝试自动化上传** —— AGC 需要交互式登录华为开发者账号。
 
-## Release Flow
+## 发布流程
 
 ```
-User: "Release huawei / 华为元服务发版"
+用户："Release huawei / 华为元服务发版"
   |
   v
-Check git diff main..HEAD -- huawei/  +  app.json5 version vs newest tag
+检查 git diff main..HEAD -- huawei/  +  app.json5 版本号 vs 最新 tag
   |
   v
-Analyze commits/diff → SemVer bump → compute versionCode
+分析提交/diff → SemVer 提升 → 计算 versionCode
   |
   v
-Update AppScope/app.json5 + CHANGELOG.md (Keep a Changelog)
+更新 AppScope/app.json5 + CHANGELOG.md（Keep a Changelog）
   |
   v
-Create release branch from main, commit, push
+从 main 创建 release 分支，提交，推送
   |
   v
-Create PR
+创建 PR
   |
   v
-Merge PR (user, or with explicit permission)
+合并 PR（由用户合并，或获得明确授权后合并）
   |
   v
-git pull main → tag huawei-atomicservice-mfa/vX.Y.Z → push tag
+git pull main → 打 tag huawei-atomicservice-mfa/vX.Y.Z → 推送 tag
   |
   v
-Inform user: build signed .app in DevEco Studio, then upload via AGC
+提醒用户：在 DevEco Studio 构建签名 .app，然后通过 AGC 上传
 ```
 
-## Quick Reference
+## 速查表
 
-| Step | Action | Purpose |
+| 步骤 | 操作 | 目的 |
 |------|--------|---------|
-| 1. Check | `git status`, `git tag -l 'huawei-atomicservice-mfa/*'`, `grep version AppScope/app.json5` | Verify clean state & pending version |
-| 2. Bump | Edit `AppScope/app.json5` (`versionCode` + `versionName`), `CHANGELOG.md` | Update version and changelog |
-| 3. PR | Create PR, wait for user merge | Review & approve |
-| 4. Tag | `git tag huawei-atomicservice-mfa/vX.Y.Z` + push | Mark the release commit |
-| 5. Ship | DevEco Studio build → AGC upload → 提交审核 | Publish to AppGallery |
+| 1. 检查 | `git status`、`git tag -l 'huawei-atomicservice-mfa/*'`、`grep version AppScope/app.json5` | 确认状态干净 & 待发布版本 |
+| 2. 提升 | 编辑 `AppScope/app.json5`（`versionCode` + `versionName`）、`CHANGELOG.md` | 更新版本号和 changelog |
+| 3. PR | 创建 PR，等待用户合并 | 审核与批准 |
+| 4. Tag | `git tag huawei-atomicservice-mfa/vX.Y.Z` + 推送 | 标记 release commit |
+| 5. 发布 | DevEco Studio 构建 → AGC 上传 → 提交审核 | 发布到 AppGallery |
 
-## Common Mistakes
+## 常见错误
 
-| Mistake | Why It Happens | Fix |
+| 错误 | 出现原因 | 修正方式 |
 |---------|---------------|-----|
-| Bumping `oh-package.json5` version instead of `app.json5` | Copying the mini-program workflow | Huawei version lives in `AppScope/app.json5` only |
-| Forgetting `versionCode`, bumping only `versionName` | `versionName` is the visible one | AGC rejects a non-increased versionCode — always compute `MAJOR*10000+MINOR*100+PATCH` |
-| Writing `## v1.4.0` (no brackets, no date) | Habit from the pre-migration sections | All sections use `## [X.Y.Z] - YYYY-MM-DD` |
-| Copying a migrated entry verbatim, keeping its `feat:` / `optimize:` type prefix | The old entries had type prefixes | New entries are plain Chinese behavior descriptions + ` (#PR)` |
-| Uploading the package but not selecting it in 「版本信息」 | Upload looks successful | Re-select and save the new package in the version page before 提交审核 |
-| Tagging before PR merge | Tagging too early | `git pull origin main` after merge, then tag |
-| Pushing the tag and panicking at a skipped CI run | Workflow listens to `**` | All jobs skipped is expected; no huawei job exists |
-| Including unrelated directory changes | Assuming the branch is only about huawei | Explicitly filter with `-- huawei/` |
-| Committing `build/` output or the `.app` | Bundling the artifact "for convenience" | Only `app.json5` + `CHANGELOG.md` (+ lock files) belong in the release PR |
-| Auto-merging the PR | Assuming release PRs are safe | Wait for explicit user confirmation before merging |
-| Trying to upload to AGC via script | Automation instinct | Interactive login required — this step is manual |
+| 提升 `oh-package.json5` 版本号而不是 `app.json5` | 照搬小程序流程 | 华为版本号只在 `AppScope/app.json5` |
+| 忘记 `versionCode`，只提升 `versionName` | 以为 `versionName` 才是可见的那个 | AGC 会拒绝未递增的 versionCode —— 必须计算 `MAJOR*10000+MINOR*100+PATCH` |
+| 写成 `## v1.4.0`（没有方括号、没有日期） | 沿用了迁移前的旧段落习惯 | 所有段落都使用 `## [X.Y.Z] - YYYY-MM-DD` |
+| 照抄迁移过来的旧条目，保留其 `feat:` / `optimize:` 类型前缀 | 旧条目带类型前缀 | 新条目用朴素的中文行为描述 + ` (#PR)` |
+| 上传了包但没在「版本信息」里选中它 | 上传看起来成功了 | 提交审核前，在版本页面重新选择并保存新包 |
+| PR 合并前就打 tag | 打得太早 | 合并后先 `git pull origin main` 再打 tag |
+| 推了 tag 后看到 CI skipped 就慌了 | workflow 监听 `**` | 全部 skipped 属预期；不存在 huawei 相关 job |
+| 混入无关目录的改动 | 想当然认为分支只涉及 huawei | 用 `-- huawei/` 显式过滤 |
+| 提交 `build/` 产物或 `.app` | 图省事把产物一起提交 | release PR 里只应有 `app.json5` + `CHANGELOG.md`（+ 锁文件） |
+| 自动合并 PR | 想当然认为 release PR 是安全的 | 合并前等待用户明确确认 |
+| 试图用脚本上传 AGC | 自动化惯性 | 需要交互式登录 —— 这一步只能手动 |
 
-## Red Flags
+## 危险信号
 
-**Never:**
-- Push directly to main, or force-push
-- Auto-merge the release PR
-- Tag before the PR is merged
-- Reuse a `versionCode`
-- Change `bundleName` or `build-profile.json5` signing material as part of a release
-- Attempt an automated AGC upload
-- Commit `build/`, `oh_modules/`, `.hvigor/`, `.idea/`
+**绝不：**
+- 直推 main，或 force-push
+- 自动合并 release PR
+- 在 PR 合并前打 tag
+- 复用 `versionCode`
+- 在发布中改动 `bundleName` 或 `build-profile.json5` 签名材料
+- 尝试自动化 AGC 上传
+- 提交 `build/`、`oh_modules/`、`.hvigor/`、`.idea/`
 
-**Always:**
-- Verify `versionName` in `app.json5` equals the tag version
-- Keep the release diff limited to `huawei/atomicservice/MFA/`
-- Use the `huawei-atomicservice-mfa/vX.Y.Z` tag prefix
-- Hand the signed `.app` + AGC upload step to the user
+**务必：**
+- 核对 `app.json5` 中 `versionName` 等于 tag 版本号
+- 把 release diff 限制在 `huawei/atomicservice/MFA/` 内
+- 使用 `huawei-atomicservice-mfa/vX.Y.Z` tag 前缀
+- 把签名 `.app` + AGC 上传步骤交给用户手动完成
