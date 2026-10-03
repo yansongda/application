@@ -1,8 +1,7 @@
 import { ItemRuntime, ItemsRuntime } from '../../models/Runtime';
 import { CardAction } from '../../models/card/CardAction';
-import { CardSnapshot, CardSnapshotData, CardSnapshotItem } from '../../utils/CardSnapshot';
+import { CardSnapshotItem } from '../../utils/CardSnapshot';
 import { Clipboard } from '../../utils/Clipboard';
-import { formBindingData, formProvider } from '@kit.FormKit';
 import {
   AdvancedDialogV2Button,
   AlertDialogV2,
@@ -21,6 +20,7 @@ import { displayOr } from '../../utils/Display';
 import { IndexGuideState } from '../../models/Guide';
 import { IndexGuide } from '../../components/IndexGuide';
 import { TotpCard } from '../../components/TotpCard';
+import { CardBridge } from '../../models/card/CardBridge';
 
 @Builder
 export function builder() {
@@ -589,7 +589,7 @@ export struct Index {
     }
   }
 
-  // 卡片快照同步（单入口）：账号列表变化后写 preferences，并主动推送最新数据到已添加的卡片
+  // 卡片快照同步（单入口）：账号列表变化后写 preferences 并主动推送最新数据到已添加的卡片
   private syncCards(): void {
     const context = this.getUIContext().getHostContext();
 
@@ -597,42 +597,11 @@ export struct Index {
       return;
     }
 
-    CardSnapshot.write(context, this.itemsRuntime.ids.map((id: string): CardSnapshotItem => ({
+    CardBridge.sync(context, this.itemsRuntime.ids.map((id: string): CardSnapshotItem => ({
       id: id,
       issuer: this.itemsRuntime.get(id).issuer,
       username: this.itemsRuntime.get(id).username,
     })));
-
-    this.refreshForms();
-  }
-
-  // 主动刷新卡片：逐个 push 最新快照数据到已添加的卡片（不做卡片侧算码），失败仅打日志不打断主流程
-  private refreshForms(): void {
-    const context = this.getUIContext().getHostContext();
-
-    if ('undefined' === typeof context) {
-      return;
-    }
-
-    const formIds: string[] = CardSnapshot.listFormIds(context);
-
-    if (formIds.length <= 0) {
-      return;
-    }
-
-    const snap: CardSnapshotData = CardSnapshot.read(context);
-    const data: formBindingData.FormBindingData = formBindingData.createFormBindingData({
-      count: String(snap.count),
-      first: snap.items[0]?.issuer ?? '',
-      hasItems: snap.count > 0 ? '1' : '0',
-    });
-
-    formIds.forEach((formId: string): void => {
-      formProvider.updateForm(formId, data).catch((e: Error) => {
-        hilog.error(LogDomain.PAGES, AppPagesName.INDEX, '卡片推送失败: formId=%{public}s, err=%{public}s',
-          formId, JSON.stringify(e));
-      });
-    });
   }
 
   // 卡片动作到达（EntryAbility 写入 version++ 触发）；消费失败已内部处理，这里仅避免 unhandled rejection

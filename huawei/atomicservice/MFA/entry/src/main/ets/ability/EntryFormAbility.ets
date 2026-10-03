@@ -2,10 +2,11 @@
 // onRemoveForm 清除 formId；onUpdateForm 重读快照推送最新数据（fire-and-forget）。
 // 注意：日志不得出现密钥 / 验证码。
 import { Want } from '@kit.AbilityKit';
-import { FormExtensionAbility, formBindingData, formInfo, formProvider } from '@kit.FormKit';
+import { FormExtensionAbility, formBindingData, formInfo } from '@kit.FormKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../App';
 import { CardSnapshot, CardSnapshotData } from '../utils/CardSnapshot';
+import { CardBridge } from '../models/card/CardBridge';
 
 export default class EntryFormAbility extends FormExtensionAbility {
   onAddForm(want: Want): formBindingData.FormBindingData {
@@ -21,11 +22,7 @@ export default class EntryFormAbility extends FormExtensionAbility {
     hilog.info(LogDomain.FORM, 'ability/EntryFormAbility', 'onAddForm 回调. want: %{public}s',
       JSON.stringify(want));
 
-    return formBindingData.createFormBindingData({
-      count: String(snap.count),
-      first: snap.items[0]?.issuer ?? '',
-      hasItems: snap.count > 0 ? '1' : '0',
-    });
+    return CardBridge.bindingData(snap);
   }
 
   onRemoveForm(formId: string): void {
@@ -34,16 +31,6 @@ export default class EntryFormAbility extends FormExtensionAbility {
   }
 
   onUpdateForm(formId: string, wantParams?: Record<string, Object>): void {
-    const snap: CardSnapshotData = CardSnapshot.read(this.context);
-    const data: formBindingData.FormBindingData = formBindingData.createFormBindingData({
-      count: String(snap.count),
-      first: snap.items[0]?.issuer ?? '',
-      hasItems: snap.count > 0 ? '1' : '0',
-    });
-
-    formProvider.updateForm(formId, data).catch((e: Error) => {
-      hilog.error(LogDomain.FORM, 'ability/EntryFormAbility', 'updateForm 推送失败. formId: %{public}s, err: %{public}s',
-        formId, JSON.stringify(e));
-    });
+    CardBridge.push(this.context, [formId]);
   }
 }
