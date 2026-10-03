@@ -1,6 +1,12 @@
 import { AppStorageV2 } from '@kit.ArkUI';
 import { Header } from './Header';
 
+// 条目布局：ROW = 左侧标题 + 右侧值（默认）；TEXT = 整行文本（长句说明类，避免被 30% 标题宽度压成逐字换行）
+export enum CardItemLayout {
+  ROW = 'row',
+  TEXT = 'text',
+}
+
 @ComponentV2
 export struct Card {
   @Require @Param
@@ -29,28 +35,35 @@ export struct Card {
   @Builder
   listItem(item: CardItem) {
     ListItem({ style: ListItemStyle.CARD }) {
-      Row() {
+      if (CardItemLayout.TEXT === item.layout) {
         Text(item.title)
-          .fontWeight(FontWeight.Bold)
+          .fontSize($r('app.float.body_font_size'))
           .textAlign(TextAlign.Start)
-          .width($r('app.string.components_card_input_item_title_width'))
-
+          .width('100%')
+      } else {
         Row() {
-          Text(item.value)
-            .textAlign(TextAlign.End)
-            .width(item.eventClick ? '90%' : '100%')
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(item.title)
+            .fontWeight(FontWeight.Bold)
+            .textAlign(TextAlign.Start)
+            .width($r('app.string.components_card_input_item_title_width'))
 
-          if (item.eventClick) {
-            Text() {
-              SymbolSpan($r('sys.symbol.chevron_right'))
+          Row() {
+            Text(item.value)
+              .textAlign(TextAlign.End)
+              .width(item.eventClick ? '90%' : '100%')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+            if (item.eventClick) {
+              Text() {
+                SymbolSpan($r('sys.symbol.chevron_right'))
+              }
+              .textAlign(TextAlign.End)
+              .width('10%')
             }
-            .textAlign(TextAlign.End)
-            .width('10%')
           }
+          .width($r('app.string.components_card_input_item_content_width'))
         }
-        .width($r('app.string.components_card_input_item_content_width'))
       }
     }
     .onClick(async () => {
@@ -91,6 +104,7 @@ export interface ICardItemEventClick {
 export interface ICardItem {
   title: ResourceStr;
   value: ResourceStr;
+  layout?: CardItemLayout;
   eventClick?: ICardItemEventClick;
 }
 
@@ -99,11 +113,13 @@ export class CardItem {
   title: ResourceStr;
   @Trace
   value: ResourceStr;
+  layout: CardItemLayout;
   eventClick?: ICardItemEventClick;
 
   constructor(item: ICardItem) {
     this.title = item.title;
     this.value = item.value;
+    this.layout = item.layout ?? CardItemLayout.ROW;
     this.eventClick = item.eventClick;
   }
 

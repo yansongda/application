@@ -47,10 +47,6 @@
     {
       "name": "avatar_size",
       "value": 30
-    },
-    {
-      "name": "action_icon_size",
-      "value": 22
     }
   ]
 }

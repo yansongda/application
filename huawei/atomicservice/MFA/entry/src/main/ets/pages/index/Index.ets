@@ -80,7 +80,8 @@ export struct Index {
         .refreshOffset(64)
         .pullToRefresh(true)
 
-        if (!this.isSortMode && !this.isGuideVisible) {
+        // 空态已有两个等价主入口（扫码/输入），隐藏 FAB 避免重复；排序态同样隐藏
+        if (!this.isSortMode && this.itemsRuntime.ids.length > 0) {
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.plus'))
               .fontSize($r('app.float.fab_icon_font_size'))
@@ -170,8 +171,27 @@ export struct Index {
   @Builder
   empty() {
     Scroll() {
+      // 空态整屏垂直居中：内容不足一屏时居中，超过一屏时自动可滚动
       Column() {
-        // 引导说明块：内嵌在首屏空态顶部，首次进入且未跳过时展示；点「不再提示」后仅隐藏该块，首屏其余内容保持可见
+        // 英雄区：图标 + 标题 + 一句话价值说明（原引导块与其下方的要点列表内容重复，已合并为一屏）
+        Column({ space: $r('app.integer.column_space_smaller') }) {
+          SymbolGlyph($r('sys.symbol.lock_shield'))
+            .fontSize($r('app.float.empty_icon_font_size'))
+            .fontColor([$r('app.color.brand')])
+
+          Text($r('app.string.index_index_page_empty_title'))
+            .fontSize($r('app.float.subtitle_font_size'))
+            .fontWeight(FontWeight.Bold)
+            .textAlign(TextAlign.Center)
+
+          Text($r('app.string.index_index_page_empty_tip_offline'))
+            .fontSize($r('app.float.caption_font_size'))
+            .fontColor($r('sys.color.font_tertiary'))
+            .textAlign(TextAlign.Center)
+        }
+        .width('100%')
+
+        // 空态提示卡：首次进入且未跳过时展示；点「不再提示」后仅隐藏该卡
         if (this.isGuideVisible) {
           IndexGuide({
             onDismiss: (): void => {
@@ -179,47 +199,6 @@ export struct Index {
             }
           })
         }
-
-        // 首屏标题
-        Text($r('app.string.index_index_page_empty_title'))
-          .fontSize($r('app.float.subtitle_font_size'))
-          .fontWeight(FontWeight.Bold)
-          .width('100%')
-          .margin({ top: $r('app.integer.page_margin') })
-
-        // 3 条价值要点：离线计算 / 多设备同步 / 桌面卡片
-        Row() {
-          SymbolGlyph($r('sys.symbol.lock_shield'))
-            .fontSize($r('app.float.icon_font_size'))
-          Text($r('app.string.index_index_page_empty_tip_offline'))
-            .fontSize($r('app.float.caption_font_size'))
-            .margin({ left: 8 })
-        }
-        .justifyContent(FlexAlign.Center)
-        .width('100%')
-        .margin({ top: $r('app.integer.column_space_smaller') })
-
-        Row() {
-          SymbolGlyph($r('sys.symbol.arrow_2_circlepath'))
-            .fontSize($r('app.float.icon_font_size'))
-          Text($r('app.string.index_index_page_empty_tip_sync'))
-            .fontSize($r('app.float.caption_font_size'))
-            .margin({ left: 8 })
-        }
-        .justifyContent(FlexAlign.Center)
-        .width('100%')
-        .margin({ top: $r('app.integer.column_space_smaller') })
-
-        Row() {
-          SymbolGlyph($r('sys.symbol.rectangle_on_rectangle'))
-            .fontSize($r('app.float.icon_font_size'))
-          Text($r('app.string.index_index_page_empty_tip_card'))
-            .fontSize($r('app.float.caption_font_size'))
-            .margin({ left: 8 })
-        }
-        .justifyContent(FlexAlign.Center)
-        .width('100%')
-        .margin({ top: $r('app.integer.column_space_smaller') })
 
         // 两个并列主按钮：扫码添加 / 手动输入
         Row({ space: $r('app.integer.column_space_smaller') }) {
@@ -256,11 +235,13 @@ export struct Index {
           })
       }
       .width('100%')
+      .constraintSize({ minHeight: '100%' })
+      .justifyContent(FlexAlign.Center)
       .padding({
         left: $r('app.integer.page_padding'),
         right: $r('app.integer.page_padding'),
-        top: $r('app.integer.page_padding_smaller'),
-        bottom: $r('app.integer.page_padding_smaller')
+        top: $r('app.integer.page_padding'),
+        bottom: $r('app.integer.page_padding')
       })
     }
     .width('100%')

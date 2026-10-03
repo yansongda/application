@@ -1,5 +1,6 @@
-// 首屏引导说明块（纯展示组件）：内嵌在首页空态顶部，紧凑布局不再整屏；点「不再提示」通过 onDismiss 上报，
-// 扫码/输入两个添加入口已由空态主按钮承担，不再在本组件内提供
+// 空态提示卡（纯展示组件）：3 条价值要点 + 弱化的「不再提示」文本按钮。
+// 图标列宽固定、文字统一左对齐，避免图标宽度不一导致文字起始位置参差；
+// 点「不再提示」通过 onDismiss 上报，由页面持久化标记，之后空态不再展示本卡。
 @ComponentV2
 export struct IndexGuide {
   @Event onDismiss: () => void = () => {
@@ -7,66 +8,51 @@ export struct IndexGuide {
 
   build() {
     Column({ space: $r('app.integer.column_space_smaller') }) {
-      // 区块标题：安全说明（密钥本地计算，不离开设备）
-      Row() {
-        SymbolGlyph($r('sys.symbol.lock_shield'))
-          .fontSize($r('app.float.icon_font_size'))
-          .fontColor([$r('app.color.brand')])
-        Text($r('app.string.index_guide_page_step_security_title'))
-          .fontSize($r('app.float.subtitle_font_size'))
-          .fontWeight(FontWeight.Bold)
-          .margin({ left: 8 })
+      Column({ space: $r('app.integer.column_space_smaller') }) {
+        this.tip($r('sys.symbol.arrow_2_circlepath'), $r('app.string.index_index_page_empty_tip_sync'))
+        this.tip($r('sys.symbol.rectangle_on_rectangle'), $r('app.string.index_index_page_empty_tip_card'))
+        this.tip($r('sys.symbol.qrcode'), $r('app.string.index_index_page_empty_tip_add'))
       }
       .width('100%')
+      .padding($r('app.integer.page_padding'))
+      .backgroundColor($r('sys.color.background_primary'))
+      .borderRadius($r('app.integer.card_radius'))
 
-      // 3 条要点：扫码添加 / 手动输入 / 下拉刷新
-      Row() {
-        SymbolGlyph($r('sys.symbol.qrcode'))
-          .fontSize($r('app.float.icon_font_size'))
-          .fontColor([$r('app.color.brand')])
-        Text($r('app.string.index_guide_page_step_scan_title'))
-          .fontSize($r('app.float.caption_font_size'))
-          .margin({ left: 8 })
-      }
-      .width('100%')
-
-      Row() {
-        SymbolGlyph($r('sys.symbol.doc_plaintext_and_pencil'))
-          .fontSize($r('app.float.icon_font_size'))
-          .fontColor([$r('app.color.brand')])
-        Text($r('app.string.index_guide_page_step_input_title'))
-          .fontSize($r('app.float.caption_font_size'))
-          .margin({ left: 8 })
-      }
-      .width('100%')
-
-      Row() {
-        SymbolGlyph($r('sys.symbol.checkmark'))
-          .fontSize($r('app.float.icon_font_size'))
-          .fontColor([$r('app.color.brand')])
-        Text($r('app.string.index_guide_page_step_refresh_title'))
-          .fontSize($r('app.float.caption_font_size'))
-          .margin({ left: 8 })
-      }
-      .width('100%')
-
-      // 不再提示：仅隐藏引导块，首屏其余内容保持可见
+      // 次入口：仅隐藏本卡，空态英雄区与添加按钮保持可见
       Button($r('app.string.index_index_page_guide_dismiss'))
-        .type(ButtonType.Capsule)
-        .backgroundColor($r('app.color.brand'))
-        .fontColor($r('sys.color.font_on_primary'))
-        .margin({ top: $r('app.integer.page_padding_smaller') })
+        .type(ButtonType.Normal)
+        .backgroundColor(Color.Transparent)
+        .fontColor($r('sys.color.font_tertiary'))
+        .fontSize($r('app.float.caption_smaller_font_size'))
+        .padding({ left: 0, right: 0 })
         .onClick(() => {
           this.onDismiss();
         })
     }
     .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding({
-      left: $r('app.integer.page_padding'),
-      right: $r('app.integer.page_padding'),
-      top: $r('app.integer.page_padding'),
-      bottom: $r('app.integer.page_padding')
-    })
+    .alignItems(HorizontalAlign.Center)
+    .margin({ top: $r('app.integer.column_space_biggest') })
+  }
+
+  // 提示行：图标列固定宽度，文字占满剩余宽度并左对齐（换行时不挤压图标）
+  @Builder
+  tip(icon: Resource, text: ResourceStr) {
+    Row({ space: $r('app.integer.page_padding_smaller') }) {
+      Row() {
+        SymbolGlyph(icon)
+          .fontSize($r('app.float.icon_font_size'))
+          .fontColor([$r('app.color.brand')])
+      }
+      .width(30)
+      .justifyContent(FlexAlign.Start)
+
+      Text(text)
+        .fontSize($r('app.float.body_font_size'))
+        .fontColor($r('sys.color.font_secondary'))
+        .textAlign(TextAlign.Start)
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Center)
   }
 }
