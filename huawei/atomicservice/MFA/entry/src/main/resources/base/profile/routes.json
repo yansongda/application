@@ -17,22 +17,17 @@
     },
     {
       "name": "index/create",
-      "pageSourceFile": "src/main/ets/pages/index/create/Index.ets",
+      "pageSourceFile": "src/main/ets/pages/index/Create.ets",
       "buildFunction": "builder"
     },
     {
       "name": "index/edit/issuer",
-      "pageSourceFile": "src/main/ets/pages/index/edit/Text.ets",
+      "pageSourceFile": "src/main/ets/pages/index/EditText.ets",
       "buildFunction": "builder"
     },
     {
       "name": "index/edit/username",
-      "pageSourceFile": "src/main/ets/pages/index/edit/Text.ets",
-      "buildFunction": "builder"
-    },
-    {
-      "name": "user",
-      "pageSourceFile": "src/main/ets/pages/user/Index.ets",
+      "pageSourceFile": "src/main/ets/pages/index/EditText.ets",
       "buildFunction": "builder"
     },
     {
@@ -48,6 +43,11 @@
     {
       "name": "user/edit/slogan",
       "pageSourceFile": "src/main/ets/pages/user/edit/Slogan.ets",
+      "buildFunction": "builder"
+    },
+    {
+      "name": "help",
+      "pageSourceFile": "src/main/ets/pages/Help.ets",
       "buildFunction": "builder"
     }
   ]

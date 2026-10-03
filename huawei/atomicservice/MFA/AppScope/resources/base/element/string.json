@@ -45,10 +45,6 @@
       "value": "取消"
     },
     {
-      "name": "operation_failed",
-      "value": "操作失败"
-    },
-    {
       "name": "operation_success",
       "value": "操作成功"
     },

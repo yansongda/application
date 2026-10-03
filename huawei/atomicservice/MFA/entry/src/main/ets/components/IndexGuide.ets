@@ -1,124 +1,58 @@
-const GUIDE_STEPS: number = 4;
-
-// 空数据时的引导页（纯展示组件）：是否展示由父组件决定，跳过/开始通过 onDismiss 上报，添加动作由父组件执行
+// 空态提示卡（纯展示组件）：3 条价值要点 + 弱化的「不再提示」文本按钮。
+// 图标列宽固定、文字统一左对齐，避免图标宽度不一导致文字起始位置参差；
+// 点「不再提示」通过 onDismiss 上报，由页面持久化标记，之后空态不再展示本卡。
 @ComponentV2
 export struct IndexGuide {
-  @Event onScan: () => void = () => {
-  };
-  @Event onInput: () => void = () => {
-  };
   @Event onDismiss: () => void = () => {
   };
-  @Local
-  private guideIndex: number = 0;
-  private swiper: SwiperController = new SwiperController();
 
   build() {
-    Column() {
-      Swiper(this.swiper) {
-        this.guideStep($r('sys.symbol.lock_shield'), $r('app.string.index_guide_page_step_security_title'))
-        this.guideActionStep($r('sys.symbol.qrcode'), $r('app.string.index_guide_page_step_scan_title'),
-          $r('app.string.index_index_page_add_by_scan'), (): void => {
-            this.onScan();
-          })
-        this.guideActionStep($r('sys.symbol.doc_plaintext_and_pencil'),
-          $r('app.string.index_guide_page_step_input_title'),
-          $r('app.string.index_index_page_add_by_input'), (): void => {
-            this.onInput();
-          })
-        this.guideStep($r('sys.symbol.checkmark'), $r('app.string.index_guide_page_step_refresh_title'))
-      }
-      .indicator(new DotIndicator().color($r('sys.color.font_tertiary')).selectedColor($r('app.color.brand')))
-      .loop(false)
-      .layoutWeight(1)
-      .onChange((index: number): void => {
-        this.guideIndex = index;
-      })
-
-      Row() {
-        Button($r('app.string.index_guide_page_skip'))
-          .type(ButtonType.Normal)
-          .backgroundColor(Color.Transparent)
-          .fontColor($r('sys.color.font_secondary'))
-          .visibility(this.guideIndex >= GUIDE_STEPS - 1 ? Visibility.None : Visibility.Visible)
-          .onClick(() => {
-            this.onDismiss();
-          })
-
-        Blank()
-
-        Button(this.guideIndex >= GUIDE_STEPS - 1 ? $r('app.string.index_guide_page_start') :
-          $r('app.string.index_guide_page_next'))
-          .type(ButtonType.Capsule)
-          .backgroundColor($r('app.color.brand'))
-          .fontColor($r('sys.color.font_on_primary'))
-          .onClick(() => {
-            if (this.guideIndex >= GUIDE_STEPS - 1) {
-              this.onDismiss();
-
-              return;
-            }
-
-            this.swiper.showNext();
-          })
+    Column({ space: $r('app.integer.column_space_smaller') }) {
+      Column({ space: $r('app.integer.column_space_smaller') }) {
+        this.tip($r('sys.symbol.arrow_2_circlepath'), $r('app.string.index_index_page_empty_tip_sync'))
+        this.tip($r('sys.symbol.rectangle_on_rectangle'), $r('app.string.index_index_page_empty_tip_card'))
+        this.tip($r('sys.symbol.qrcode'), $r('app.string.index_index_page_empty_tip_add'))
       }
       .width('100%')
-      .padding({
-        left: $r('app.integer.page_padding'),
-        right: $r('app.integer.page_padding'),
-        bottom: $r('app.integer.page_padding')
-      })
+      .padding($r('app.integer.page_padding'))
+      .backgroundColor($r('sys.color.background_primary'))
+      .borderRadius($r('app.integer.card_radius'))
+
+      // 次入口：仅隐藏本卡，空态英雄区与添加按钮保持可见
+      Button($r('app.string.index_index_page_guide_dismiss'))
+        .type(ButtonType.Normal)
+        .backgroundColor(Color.Transparent)
+        .fontColor($r('sys.color.font_tertiary'))
+        .fontSize($r('app.float.caption_smaller_font_size'))
+        .padding({ left: 0, right: 0 })
+        .onClick(() => {
+          this.onDismiss();
+        })
     }
     .width('100%')
-    .height('100%')
+    .alignItems(HorizontalAlign.Center)
+    .margin({ top: $r('app.integer.column_space_biggest') })
   }
 
+  // 提示行：图标列固定宽度，文字占满剩余宽度并左对齐（换行时不挤压图标）
   @Builder
-  guideStep(icon: Resource, title: Resource) {
-    Column() {
-      Text() {
-        SymbolSpan(icon)
+  tip(icon: Resource, text: ResourceStr) {
+    Row({ space: $r('app.integer.page_padding_smaller') }) {
+      Row() {
+        SymbolGlyph(icon)
+          .fontSize($r('app.float.icon_font_size'))
+          .fontColor([$r('app.color.brand')])
       }
-      .fontSize($r('app.float.guide_icon_font_size'))
-      .fontColor($r('app.color.brand'))
+      .width(30)
+      .justifyContent(FlexAlign.Start)
 
-      Text(title)
-        .margin({ top: 30 })
-        .fontSize($r('app.float.subtitle_font_size'))
-        .fontWeight(FontWeight.Bold)
-        .textAlign(TextAlign.Center)
+      Text(text)
+        .fontSize($r('app.float.body_font_size'))
+        .fontColor($r('sys.color.font_secondary'))
+        .textAlign(TextAlign.Start)
+        .layoutWeight(1)
     }
     .width('100%')
-    .height('100%')
-    .padding({ left: $r('app.integer.page_padding'), right: $r('app.integer.page_padding') })
-    .justifyContent(FlexAlign.Center)
-  }
-
-  @Builder
-  guideActionStep(icon: Resource, title: Resource, actionText: Resource, action: () => void) {
-    Column() {
-      Text() {
-        SymbolSpan(icon)
-      }
-      .fontSize($r('app.float.guide_icon_font_size'))
-      .fontColor($r('app.color.brand'))
-
-      Text(title)
-        .margin({ top: 30 })
-        .fontSize($r('app.float.subtitle_font_size'))
-        .fontWeight(FontWeight.Bold)
-        .textAlign(TextAlign.Center)
-
-      Button(actionText)
-        .type(ButtonType.Capsule)
-        .backgroundColor($r('app.color.brand'))
-        .fontColor($r('sys.color.font_on_primary'))
-        .margin({ top: 30 })
-        .onClick(action)
-    }
-    .width('100%')
-    .height('100%')
-    .padding({ left: $r('app.integer.page_padding'), right: $r('app.integer.page_padding') })
-    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
   }
 }

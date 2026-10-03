@@ -1,10 +1,6 @@
 {
   "float": [
     {
-      "name": "page_text_font_size",
-      "value": "50fp"
-    },
-    {
       "name": "title_font_size",
       "value": "30fp"
     },
@@ -37,12 +33,8 @@
       "value": "35fp"
     },
     {
-      "name": "guide_icon_font_size",
-      "value": "100fp"
-    },
-    {
       "name": "empty_icon_font_size",
-      "value": "50fp"
+      "value": "64fp"
     }
   ]
 }

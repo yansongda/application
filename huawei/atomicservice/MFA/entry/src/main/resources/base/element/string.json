@@ -25,16 +25,8 @@
       "value": "关联失败"
     },
     {
-      "name": "index_index_page_add_name",
-      "value": "新增"
-    },
-    {
       "name": "index_index_page_add_failed_title",
       "value": "添加失败"
-    },
-    {
-      "name": "index_index_page_data_empty",
-      "value": "暂无数据"
     },
     {
       "name": "index_index_page_detail_name",
@@ -161,34 +153,6 @@
       "value": "排序失败，已恢复原顺序"
     },
     {
-      "name": "index_guide_page_step_security_title",
-      "value": "MFA 验证器保护账号安全"
-    },
-    {
-      "name": "index_guide_page_step_scan_title",
-      "value": "扫描二维码即可快速添加"
-    },
-    {
-      "name": "index_guide_page_step_input_title",
-      "value": "也可以手动输入密钥添加"
-    },
-    {
-      "name": "index_guide_page_step_refresh_title",
-      "value": "验证码按更新周期自动刷新"
-    },
-    {
-      "name": "index_guide_page_skip",
-      "value": "跳过"
-    },
-    {
-      "name": "index_guide_page_next",
-      "value": "下一步"
-    },
-    {
-      "name": "index_guide_page_start",
-      "value": "开始使用"
-    },
-    {
       "name": "index_edit_issuer_page_title",
       "value": "设置发行方"
     },
@@ -203,10 +167,6 @@
     {
       "name": "index_edit_username_page_title",
       "value": "设置用户名"
-    },
-    {
-      "name": "user_index_page_name",
-      "value": "我的"
     },
     {
       "name": "user_detail_page_name",
@@ -271,6 +231,150 @@
     {
       "name": "user_delete_page_delete_button",
       "value": "确认注销"
+    },
+    {
+      "name": "card_ability_label",
+      "value": "MFA 验证码卡片"
+    },
+    {
+      "name": "card_ability_desc",
+      "value": "在桌面直接取码"
+    },
+    {
+      "name": "card_display_name",
+      "value": "验证码"
+    },
+    {
+      "name": "card_description",
+      "value": "桌面卡片，点一下取码"
+    },
+    {
+      "name": "card_title",
+      "value": "MFA认证"
+    },
+    {
+      "name": "card_count_suffix",
+      "value": "个账号"
+    },
+    {
+      "name": "card_empty_title",
+      "value": "还没有账号"
+    },
+    {
+      "name": "card_empty_hint",
+      "value": "点击添加第一个账号"
+    },
+    {
+      "name": "card_hint",
+      "value": "点击查看验证码"
+    },
+    {
+      "name": "index_index_page_empty_title",
+      "value": "开始保护你的账号"
+    },
+    {
+      "name": "index_index_page_empty_tip_offline",
+      "value": "验证码在本机离线计算，不会上传网络"
+    },
+    {
+      "name": "index_index_page_empty_tip_sync",
+      "value": "登录华为账号后多设备同步，换机不丢失"
+    },
+    {
+      "name": "index_index_page_empty_tip_card",
+      "value": "把卡片添加到桌面，点一下就能取码"
+    },
+    {
+      "name": "index_index_page_help_entry",
+      "value": "查看使用帮助"
+    },
+    {
+      "name": "index_index_page_guide_dismiss",
+      "value": "不再提示"
+    },
+    {
+      "name": "index_index_page_copied",
+      "value": "验证码已复制"
+    },
+    {
+      "name": "index_index_page_copy_failed",
+      "value": "复制失败，请重试"
+    },
+    {
+      "name": "index_detail_page_copy",
+      "value": "复制验证码"
+    },
+    {
+      "name": "user_detail_page_protected",
+      "value": "已保护 %d 个账号"
+    },
+    {
+      "name": "help_entry",
+      "value": "使用帮助"
+    },
+    {
+      "name": "user_detail_page_about",
+      "value": "关于"
+    },
+    {
+      "name": "user_detail_page_version",
+      "value": "版本 %s"
+    },
+    {
+      "name": "user_help_page_title",
+      "value": "使用帮助"
+    },
+    {
+      "name": "user_help_page_add_title",
+      "value": "添加账号"
+    },
+    {
+      "name": "user_help_page_add_scan",
+      "value": "扫描服务商提供的二维码，即可自动添加"
+    },
+    {
+      "name": "user_help_page_add_input",
+      "value": "也可手动输入发行方、用户名与密钥创建"
+    },
+    {
+      "name": "user_help_page_card_title",
+      "value": "使用卡片"
+    },
+    {
+      "name": "user_help_page_card_tip",
+      "value": "长按元服务图标或从服务面板把卡片添加到桌面，点一下即可取码"
+    },
+    {
+      "name": "user_help_page_security_title",
+      "value": "安全说明"
+    },
+    {
+      "name": "user_help_page_security_offline",
+      "value": "验证码在你本机离线计算，密钥不会离开设备"
+    },
+    {
+      "name": "user_help_page_security_delete",
+      "value": "删除账号后该条目对应的数据将一并删除，且无法恢复"
+    },
+    {
+      "name": "user_help_page_sync_title",
+      "value": "多设备同步"
+    },
+    {
+      "name": "user_help_page_sync_tip",
+      "value": "登录华为账号后，账号列表会在你的设备间同步"
+    },
+    {
+      "name": "user_help_page_card_copy",
+      "value": "在列表中点击验证码，即可快速复制到剪贴板"
+    },
+    {
+      "name": "index_index_page_empty_tip_add",
+      "value": "扫描服务商二维码，或手动输入密钥添加账号"
+    },
+    {
+      "name": "user_help_page_security_swipe_delete",
+      "value": "在列表项上左滑可删除该账号"
     }
   ]
 }
