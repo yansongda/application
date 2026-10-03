@@ -1,5 +1,5 @@
 import { AppStorageV2, LoadingDialogV2 } from '@kit.ArkUI';
-import { CardInput, CardInputItem } from '../../components/Card';
+import { CardInput, CardInputItem } from '../../components/CardInput';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../../App';
 import { Toast } from '../../utils/PromptAction';

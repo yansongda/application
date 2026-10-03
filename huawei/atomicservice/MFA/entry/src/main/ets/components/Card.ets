@@ -1,12 +1,6 @@
 import { AppStorageV2 } from '@kit.ArkUI';
 import { Header } from './Header';
 
-// 条目布局：ROW = 左侧标题 + 右侧值（默认）；TEXT = 整行文本（长句说明类，避免被 30% 标题宽度压成逐字换行）
-export enum CardItemLayout {
-  ROW = 'row',
-  TEXT = 'text',
-}
-
 @ComponentV2
 export struct Card {
   @Require @Param
@@ -35,35 +29,28 @@ export struct Card {
   @Builder
   listItem(item: CardItem) {
     ListItem({ style: ListItemStyle.CARD }) {
-      if (CardItemLayout.TEXT === item.layout) {
+      Row() {
         Text(item.title)
-          .fontSize($r('app.float.body_font_size'))
+          .fontWeight(FontWeight.Bold)
           .textAlign(TextAlign.Start)
-          .width('100%')
-      } else {
+          .width($r('app.string.components_card_input_item_title_width'))
+
         Row() {
-          Text(item.title)
-            .fontWeight(FontWeight.Bold)
-            .textAlign(TextAlign.Start)
-            .width($r('app.string.components_card_input_item_title_width'))
+          Text(item.value)
+            .textAlign(TextAlign.End)
+            .width(item.eventClick ? '90%' : '100%')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-          Row() {
-            Text(item.value)
-              .textAlign(TextAlign.End)
-              .width(item.eventClick ? '90%' : '100%')
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-            if (item.eventClick) {
-              Text() {
-                SymbolSpan($r('sys.symbol.chevron_right'))
-              }
-              .textAlign(TextAlign.End)
-              .width('10%')
+          if (item.eventClick) {
+            Text() {
+              SymbolSpan($r('sys.symbol.chevron_right'))
             }
+            .textAlign(TextAlign.End)
+            .width('10%')
           }
-          .width($r('app.string.components_card_input_item_content_width'))
         }
+        .width($r('app.string.components_card_input_item_content_width'))
       }
     }
     .onClick(async () => {
@@ -104,7 +91,6 @@ export interface ICardItemEventClick {
 export interface ICardItem {
   title: ResourceStr;
   value: ResourceStr;
-  layout?: CardItemLayout;
   eventClick?: ICardItemEventClick;
 }
 
@@ -113,13 +99,11 @@ export class CardItem {
   title: ResourceStr;
   @Trace
   value: ResourceStr;
-  layout: CardItemLayout;
   eventClick?: ICardItemEventClick;
 
   constructor(item: ICardItem) {
     this.title = item.title;
     this.value = item.value;
-    this.layout = item.layout ?? CardItemLayout.ROW;
     this.eventClick = item.eventClick;
   }
 
@@ -130,91 +114,4 @@ export class CardItem {
 
 export interface IJumpCallbackResult {
   value: string;
-}
-
-@ComponentV2
-export struct CardInput {
-  @Require @Param
-  items: CardInputItem[];
-  @Param
-  title?: ResourceStr = undefined;
-
-  build() {
-    Column({ space: $r('app.integer.column_space_smaller') }) {
-      Header({ title: this.title })
-
-      List({ space: 10 }) {
-        ListItemGroup({ style: ListItemGroupStyle.CARD }) {
-          ForEach(this.items, (item: CardInputItem) => {
-            this.listItem(item)
-          }, (item: CardInputItem, index: number) => index + item.title.toString())
-        }
-        .divider({ strokeWidth: 1 })
-      }
-      .width('100%')
-      .height(LayoutPolicy.fixAtIdealSize)
-    }
-  }
-
-  @Builder
-  listItem(item: CardInputItem) {
-    ListItem({ style: ListItemStyle.CARD }) {
-      Row() {
-        Text(item.title)
-          .fontWeight(FontWeight.Bold)
-          .textAlign(TextAlign.Start)
-          .width($r('app.string.components_card_input_item_title_width'))
-
-        TextInput({
-          placeholder: item.placeholder,
-          text: item.value!!
-        })
-          .width($r('app.string.components_card_input_item_content_width'))
-          .type(item.options?.type ?? InputType.Normal)
-          .maxLength(item.options?.maxLength ?? Infinity)
-          .textAlign(TextAlign.End)
-          .backgroundColor($r('sys.color.background_primary'))
-          .onChange((value) => {
-            if (item.callback?.onChange) {
-              item.callback.onChange(value);
-            }
-          })
-      }
-    }
-  }
-}
-
-@ObservedV2
-export class CardInputItem {
-  title: ResourceStr;
-  placeholder?: ResourceStr;
-  @Trace
-  value?: ResourceStr;
-  options?: ICardInputItemOptions;
-  callback?: ICardInputItemCallback;
-
-  constructor(item: ICardInputItem) {
-    this.title = item.title;
-    this.placeholder = item.placeholder;
-    this.value = item.value;
-    this.options = item.options;
-    this.callback = item.callback;
-  }
-}
-
-export interface ICardInputItem {
-  title: ResourceStr;
-  placeholder?: ResourceStr;
-  value?: ResourceStr;
-  options?: ICardInputItemOptions;
-  callback?: ICardInputItemCallback;
-}
-
-export interface ICardInputItemOptions {
-  type?: InputType;
-  maxLength?: number;
-}
-
-export interface ICardInputItemCallback {
-  onChange?: (value: string) => void;
 }
