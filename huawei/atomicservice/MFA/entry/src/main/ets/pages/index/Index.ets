@@ -1,4 +1,5 @@
-import { ItemRuntime, ItemsRuntime } from '../../models/Runtime';
+import { ItemRuntime } from '../../models/totp/ItemRuntime';
+import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { CardAction } from '../../models/card/CardAction';
 import { CardSnapshotItem } from '../../utils/CardSnapshot';
 import { Clipboard } from '../../utils/Clipboard';

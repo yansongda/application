@@ -1,4 +1,4 @@
-import { DEFAULT_PERIOD, ItemRuntime } from '../models/Runtime';
+import { DEFAULT_PERIOD, ItemRuntime } from '../models/totp/ItemRuntime';
 import { Clipboard } from '../utils/Clipboard';
 import { Toast } from '../utils/PromptAction';
 

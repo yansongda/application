@@ -3,7 +3,7 @@ import { AdvancedDialogV2Button, AlertDialogV2, AppStorageV2, LoadingDialogV2, P
 import { Card, CardItem } from '../../components/Card';
 import { User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
-import { ItemsRuntime } from '../../models/Runtime';
+import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Dialog } from '../../utils/PromptAction';
 import { User as UserApi } from '../../api/User';

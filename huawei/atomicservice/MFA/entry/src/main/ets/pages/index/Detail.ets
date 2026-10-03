@@ -1,4 +1,4 @@
-import { ItemRuntime } from '../../models/Runtime';
+import { ItemRuntime } from '../../models/totp/ItemRuntime';
 import { AppPagesName } from '../../App';
 import { EditTextParams } from './EditText';
 import { Card, CardItem } from '../../components/Card';

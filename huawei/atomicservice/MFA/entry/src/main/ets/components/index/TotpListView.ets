@@ -1,4 +1,4 @@
-import { ItemsRuntime } from '../../models/Runtime';
+import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { AppPagesName, LogDomain } from '../../App';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { TotpCard } from '../TotpCard';

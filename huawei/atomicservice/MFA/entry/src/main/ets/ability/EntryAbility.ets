@@ -4,7 +4,7 @@ import { AppStorageV2, PersistenceV2, ThemeControl, UIContext, window } from '@k
 import { Authorization } from '../models/Auth';
 import { LogDomain } from '../App';
 import { User } from '../models/User';
-import { ItemsRuntime } from '../models/Runtime';
+import { ItemsRuntime } from '../models/totp/ItemsRuntime';
 import { MainTheme } from '../themes/Main';
 import { CardAction } from '../models/card/CardAction';
 
