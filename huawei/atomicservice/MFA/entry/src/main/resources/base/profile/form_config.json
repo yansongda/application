@@ -1,0 +1,21 @@
+{
+  "forms": [
+    {
+      "name": "mfa_card",
+      "displayName": "$string:card_display_name",
+      "description": "$string:card_description",
+      "src": "./ets/card/pages/Card.ets",
+      "uiSyntax": "arkts",
+      "isDynamic": true,
+      "isDefault": true,
+      "defaultDimension": "2*2",
+      "supportDimensions": [
+        "2*2"
+      ],
+      "updateEnabled": true,
+      "updateDuration": 1,
+      "formConfigAbility": "ability://EntryAbility",
+      "dataProxyEnabled": false
+    }
+  ]
+}

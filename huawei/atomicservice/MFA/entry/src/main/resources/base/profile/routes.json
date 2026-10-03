@@ -49,6 +49,11 @@
       "name": "user/edit/slogan",
       "pageSourceFile": "src/main/ets/pages/user/edit/Slogan.ets",
       "buildFunction": "builder"
+    },
+    {
+      "name": "user/help",
+      "pageSourceFile": "src/main/ets/pages/user/Help.ets",
+      "buildFunction": "builder"
     }
   ]
 }

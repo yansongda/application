@@ -9,6 +9,8 @@ export enum LogDomain {
   MODELS = 2,
 
   PAGES = 3,
+
+  FORM = 4,
 }
 
 export enum HttpDomain {
@@ -35,6 +37,7 @@ export enum AppPagesName {
   USER_DETAIL = 'user/detail',
   USER_DELETE = 'user/delete',
   USER_EDIT_SLOGAN = 'user/edit/slogan',
+  USER_HELP = 'user/help',
 }
 
 export class App {
