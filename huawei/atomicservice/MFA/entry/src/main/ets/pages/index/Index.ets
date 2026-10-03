@@ -350,21 +350,20 @@ export struct Index {
     }
   }
 
-  // 空数据时只首次展示引导页：决定展示的同时立刻持久化标记，之后数据仍为空也只展示空状态
+  // 空数据时只首次展示引导卡：是否展示由模型判定并持久化标记，页面只维护本次进入的内存态
   private decideGuide(): void {
-    if (this.itemsRuntime.ids.length > 0) {
+    if (this.isGuideVisible) {
+      return;
+    }
+
+    if (!this.guideState.canShow(this.itemsRuntime.ids.length)) {
       this.isGuideVisible = false;
 
       return;
     }
 
-    if (this.isGuideVisible || this.guideState.isSkipped) {
-      return;
-    }
-
     this.isGuideVisible = true;
-    this.guideState.isSkipped = true;
-    PersistenceV2.save(IndexGuideState);
+    this.guideState.markShown();
   }
 
   private async refresh(): Promise<void> {
