@@ -1,4 +1,8 @@
 import { ItemRuntime, ItemsRuntime } from '../../models/Runtime';
+import { CardAction } from '../../models/CardAction';
+import { CardSnapshot, CardSnapshotData, CardSnapshotItem } from '../../utils/CardSnapshot';
+import { Clipboard } from '../../utils/Clipboard';
+import { formBindingData, formProvider } from '@kit.FormKit';
 import {
   AdvancedDialogV2Button,
   AlertDialogV2,
@@ -45,6 +49,10 @@ export struct Index {
   private scroller: ListScroller = new ListScroller();
   private swipeActionId?: string;
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
+  // 卡片动作（点卡取码）：EntryAbility 写入，@Monitor 感知；必须带 @Local 才能被 @Monitor 监听到变化
+  @Local private cardAction: CardAction = AppStorageV2.connect(CardAction, () => new CardAction())!;
+  // 卡片动作消费互斥：避免 @Monitor / onActive / refresh 锚点并发重复消费
+  private isConsuming: boolean = false;
 
   build() {
     NavDestination() {
@@ -130,6 +138,11 @@ export struct Index {
       if (this.isSortMode) {
         return;
       }
+
+      // 先消费卡片动作（若已有待办且列表已就绪则立即复制），再常规刷新
+      this.consumeCardAction().catch(() => {
+        // 失败已内部处理，仅避免 unhandled rejection
+      });
 
       this.refresh().catch(() => {
         // 失败已由重试对话框提示，仅避免 unhandled rejection
@@ -377,6 +390,7 @@ export struct Index {
             await Totp.delete(this.swipeActionId);
             this.itemsRuntime.delete(this.swipeActionId);
             this.swipeActionId = undefined;
+            this.syncCards();
 
             Dialog.close(dialogId);
           } catch (e) {
@@ -443,6 +457,7 @@ export struct Index {
 
       this.itemsRuntime.add(data);
       this.decideGuide();
+      this.syncCards();
     } catch (e) {
       await Dialog.open(() => this.addFailedDialog(e.message));
     }
@@ -465,6 +480,7 @@ export struct Index {
       await Dialog.execute(() => this.loadingDialog(), () => Totp.sort(reqItems));
 
       this.isSortMode = false;
+      this.syncCards();
     } catch (e) {
       hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '排序失败: %{public}s', JSON.stringify(e));
 
@@ -508,8 +524,147 @@ export struct Index {
 
       this.itemsRuntime.reload(items.values());
       this.decideGuide();
+      this.syncCards();
     } finally {
       this.isFetching = false;
+
+      // 待办重试锚点：refresh 被去重/未激活时，卡片待办在此补消费（isConsuming 期间会被互斥拦下）
+      if ('undefined' !== typeof this.cardAction.action) {
+        this.consumeCardAction().catch(() => {
+          // 仅避免 unhandled rejection
+        });
+      }
+    }
+  }
+
+  // 卡片快照同步（单入口）：账号列表变化后写 preferences，并主动推送最新数据到已添加的卡片
+  private syncCards(): void {
+    const context = this.getUIContext().getHostContext();
+
+    if ('undefined' === typeof context) {
+      return;
+    }
+
+    CardSnapshot.write(context, this.itemsRuntime.ids.map((id: string): CardSnapshotItem => ({
+      id: id,
+      issuer: this.itemsRuntime.get(id).issuer,
+      username: this.itemsRuntime.get(id).username,
+    })));
+
+    this.refreshForms();
+  }
+
+  // 主动刷新卡片：逐个 push 最新快照数据到已添加的卡片（不做卡片侧算码），失败仅打日志不打断主流程
+  private refreshForms(): void {
+    const context = this.getUIContext().getHostContext();
+
+    if ('undefined' === typeof context) {
+      return;
+    }
+
+    const formIds: string[] = CardSnapshot.listFormIds(context);
+
+    if (formIds.length <= 0) {
+      return;
+    }
+
+    const snap: CardSnapshotData = CardSnapshot.read(context);
+    const data: formBindingData.FormBindingData = formBindingData.createFormBindingData({
+      count: String(snap.count),
+      first: snap.items[0]?.issuer ?? '',
+      hasItems: snap.count > 0 ? '1' : '0',
+    });
+
+    formIds.forEach((formId: string): void => {
+      formProvider.updateForm(formId, data).catch((e: Error) => {
+        hilog.error(LogDomain.PAGES, AppPagesName.INDEX, '卡片推送失败: formId=%{public}s, err=%{public}s',
+          formId, JSON.stringify(e));
+      });
+    });
+  }
+
+  // 卡片动作到达（EntryAbility 写入 version++ 触发）；消费失败已内部处理，这里仅避免 unhandled rejection
+  @Monitor('cardAction.version')
+  onCardActionChange(): void {
+    this.consumeCardAction().catch(() => {
+      // 仅避免 unhandled rejection
+    });
+  }
+
+  // 消费卡片动作：点卡取码（复制首个/指定账号验证码到剪贴板）。互斥 + 仅成功后清空待办。
+  private async consumeCardAction(): Promise<void> {
+    if (this.isConsuming) {
+      return;
+    }
+
+    if ('copy' !== this.cardAction.action || !(this.cardAction.version > 0)) {
+      return;
+    }
+
+    this.isConsuming = true;
+
+    try {
+      // 列表未就绪时先拉取；refresh 并发时可能被 isFetching 去重而静默返回，需复查 ids
+      if (this.itemsRuntime.ids.length <= 0) {
+        try {
+          await this.refresh();
+        } catch (e) {
+          hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '点卡取码前置刷新失败: %{public}s', JSON.stringify(e));
+
+          return;
+        }
+
+        // 被去重（并发请求进行中）：本轮不消费，保留待办，由 refresh 锚点补消费
+        if (this.isFetching) {
+          return;
+        }
+
+        // 永挂兜底：refresh 成功但确无账号 → 清空待办，避免日后添加首个账号时意外自动复制
+        if (this.itemsRuntime.ids.length <= 0) {
+          this.cardAction.action = undefined;
+          this.cardAction.itemId = undefined;
+
+          return;
+        }
+      }
+
+      // 定位运行时：itemId 指定且存在则用之，否则（未指定/条目已删）回退首个账号
+      let targetId: string = this.itemsRuntime.ids[0];
+
+      if ('undefined' !== typeof this.cardAction.itemId &&
+        this.itemsRuntime.ids.includes(this.cardAction.itemId)) {
+        targetId = this.cardAction.itemId;
+      }
+
+      try {
+        await this.itemsRuntime.get(targetId).freshCode();
+      } catch (e) {
+        hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '点卡取码计算失败: %{public}s', JSON.stringify(e));
+
+        return;
+      }
+
+      const code: string | undefined = this.itemsRuntime.get(targetId).code;
+
+      if ('undefined' === typeof code || code.length <= 0) {
+        return;
+      }
+
+      try {
+        await Clipboard.copy(code);
+
+        // 仅成功后清空待办
+        this.cardAction.action = undefined;
+        this.cardAction.itemId = undefined;
+
+        Toast.show({ message: $r('app.string.index_index_page_copied'), duration: 3000 });
+      } catch (e) {
+        hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '点卡取码复制失败，保留待办: %{public}s', JSON.stringify(e));
+
+        Toast.show({ message: $r('app.string.index_index_page_copy_failed'), duration: 3000 });
+      }
+    } finally {
+      this.isConsuming = false;
     }
   }
 }

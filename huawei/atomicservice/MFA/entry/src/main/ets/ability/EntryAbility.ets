@@ -1,4 +1,4 @@
-import { UIAbility } from '@kit.AbilityKit';
+import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppStorageV2, PersistenceV2, ThemeControl, UIContext, window } from '@kit.ArkUI';
 import { Authorization } from '../models/Auth';
@@ -6,8 +6,36 @@ import { LogDomain } from '../App';
 import { User } from '../models/User';
 import { ItemsRuntime } from '../models/Runtime';
 import { MainTheme } from '../themes/Main';
+import { CardAction } from '../models/CardAction';
 
 export default class EntryAbility extends UIAbility {
+  // 冷启动：卡片点击拉起时 want 携带卡片动作参数，写入共享状态供 Index 页消费
+  onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    this.handleCardAction(want);
+  }
+
+  // 热启动：元服务已在后台时点卡，不重建 Ability，新 want 直接到达
+  onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    this.handleCardAction(want);
+  }
+
+  private handleCardAction(want: Want): void {
+    const cardAction: CardAction | undefined = CardAction.fromWant(want);
+
+    if ('undefined' === typeof cardAction) {
+      return;
+    }
+
+    const shared: CardAction = AppStorageV2.connect(CardAction, () => new CardAction())!;
+
+    shared.action = cardAction.action;
+    shared.itemId = cardAction.itemId;
+    shared.version++;
+
+    hilog.info(LogDomain.ABILITY, 'ability/EntryAbility', '卡片动作到达: action=%{public}s, itemId=%{public}s',
+      shared.action ?? 'undefined', shared.itemId ?? 'undefined');
+  }
+
   onWindowStageCreate(windowStage: window.WindowStage): void {
     windowStage.loadContent('pages/Home', (err) => {
       if (err.code) {
