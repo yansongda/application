@@ -37,7 +37,7 @@
     "extensionAbilities": [
       {
         "name": "EntryFormAbility",
-        "srcEntry": "./ets/entryformability/EntryFormAbility.ets",
+        "srcEntry": "./ets/ability/EntryFormAbility.ets",
         "label": "$string:card_ability_label",
         "description": "$string:card_ability_desc",
         "type": "form",

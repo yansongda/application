@@ -4,7 +4,7 @@
 // 日志不得出现 token / 密钥 / 验证码。
 import { Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { LogDomain } from '../App';
+import { LogDomain } from '../../App';
 
 @ObservedV2
 export class CardAction {

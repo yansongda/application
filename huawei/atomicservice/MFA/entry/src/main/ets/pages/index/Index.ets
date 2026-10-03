@@ -1,5 +1,5 @@
 import { ItemRuntime, ItemsRuntime } from '../../models/Runtime';
-import { CardAction } from '../../models/CardAction';
+import { CardAction } from '../../models/card/CardAction';
 import { CardSnapshot, CardSnapshotData, CardSnapshotItem } from '../../utils/CardSnapshot';
 import { Clipboard } from '../../utils/Clipboard';
 import { formBindingData, formProvider } from '@kit.FormKit';

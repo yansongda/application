@@ -4,7 +4,7 @@
       "name": "mfa_card",
       "displayName": "$string:card_display_name",
       "description": "$string:card_description",
-      "src": "./ets/card/pages/Card.ets",
+      "src": "./ets/pages/card/Card.ets",
       "uiSyntax": "arkts",
       "isDynamic": true,
       "isDefault": true,

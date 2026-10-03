@@ -18,7 +18,8 @@ export default class EntryFormAbility extends FormExtensionAbility {
 
     const snap: CardSnapshotData = CardSnapshot.read(this.context);
 
-    hilog.info(LogDomain.FORM, 'entryformability', 'onAddForm 回调. want: %{public}s', JSON.stringify(want));
+    hilog.info(LogDomain.FORM, 'ability/EntryFormAbility', 'onAddForm 回调. want: %{public}s',
+      JSON.stringify(want));
 
     return formBindingData.createFormBindingData({
       count: String(snap.count),
@@ -29,7 +30,7 @@ export default class EntryFormAbility extends FormExtensionAbility {
 
   onRemoveForm(formId: string): void {
     CardSnapshot.removeFormId(this.context, formId);
-    hilog.info(LogDomain.FORM, 'entryformability', 'onRemoveForm 回调. formId: %{public}s', formId);
+    hilog.info(LogDomain.FORM, 'ability/EntryFormAbility', 'onRemoveForm 回调. formId: %{public}s', formId);
   }
 
   onUpdateForm(formId: string, wantParams?: Record<string, Object>): void {
@@ -41,7 +42,7 @@ export default class EntryFormAbility extends FormExtensionAbility {
     });
 
     formProvider.updateForm(formId, data).catch((e: Error) => {
-      hilog.error(LogDomain.FORM, 'entryformability', 'updateForm 推送失败. formId: %{public}s, err: %{public}s',
+      hilog.error(LogDomain.FORM, 'ability/EntryFormAbility', 'updateForm 推送失败. formId: %{public}s, err: %{public}s',
         formId, JSON.stringify(e));
     });
   }

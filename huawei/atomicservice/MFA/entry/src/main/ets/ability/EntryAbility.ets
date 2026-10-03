@@ -6,7 +6,7 @@ import { LogDomain } from '../App';
 import { User } from '../models/User';
 import { ItemsRuntime } from '../models/Runtime';
 import { MainTheme } from '../themes/Main';
-import { CardAction } from '../models/CardAction';
+import { CardAction } from '../models/card/CardAction';
 
 export default class EntryAbility extends UIAbility {
   // 冷启动：卡片点击拉起时 want 携带卡片动作参数，写入共享状态供 Index 页消费

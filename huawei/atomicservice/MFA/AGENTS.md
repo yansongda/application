@@ -22,11 +22,11 @@ MFA/
 
 `entry/src/main/ets/` 下常见结构：
 
-- `ability/`：Ability 入口（EntryAbility.ets）
-- `pages/`：页面
+- `ability/`：Ability 入口（`EntryAbility.ets` 为 UIAbility；`EntryFormAbility.ets` 为服务卡片 FormExtensionAbility，由 `module.json5` 的 `extensionAbilities.srcEntry` 声明）
+- `pages/`：页面；`pages/card/` 为服务卡片页面（由 `resources/base/profile/form_config.json` 的 `src` 声明，**不注册**到 `routes.json`）
 - `components/`：组件
 - `api/`：接口调用
-- `models/`：模型
+- `models/`：模型；`models/card/` 为卡片相关模型（如 `CardAction`）
 - `utils/`：工具函数
 - `themes/`：主题定义
 - `types/`：类型定义
