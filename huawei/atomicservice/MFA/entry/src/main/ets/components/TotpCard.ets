@@ -1,4 +1,6 @@
 import { DEFAULT_PERIOD, ItemRuntime } from '../models/Runtime';
+import { Clipboard } from '../utils/Clipboard';
+import { Toast } from '../utils/PromptAction';
 
 // TOTP 列表项卡片内容：排序把手 + 发行方/用户名 + 验证码 + 周期进度
 // 注意：ListItem 本体必须留在 List 的直接子节点（拖拽排序 onMove 依赖），这里只承载内容
@@ -42,6 +44,28 @@ export struct TotpCard {
         Column() {
           Text(this.runtime.code ?? '')
             .fontSize($r('app.float.code_font_size'))
+
+          if (!this.isSortMode) {
+            Button() {
+              SymbolGlyph($r('sys.symbol.doc_filled_on_doc'))
+                .fontSize($r('app.integer.action_icon_size'))
+            }
+            .type(ButtonType.Circle)
+            .backgroundColor(Color.Transparent)
+            .onClick(async () => {
+              if ('undefined' === typeof this.runtime.code || this.runtime.code === '') {
+                return;
+              }
+
+              try {
+                await Clipboard.copy(this.runtime.code ?? '');
+
+                Toast.show({ message: $r('app.string.index_index_page_copied'), duration: 3000 });
+              } catch (e) {
+                Toast.show({ message: $r('app.string.index_index_page_copy_failed'), duration: 3000 });
+              }
+            })
+          }
         }
         .layoutWeight(6)
       }
