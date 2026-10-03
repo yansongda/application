@@ -88,9 +88,10 @@ entry/src/main/
     └── pages/user/Help.ets                          [新] 使用帮助静态页
 
 AppScope/resources/base/element/integer.json         [改] + action_icon_size
-docs/huawei-atomic-service-card-density-agc.md       [新] AGC 提交与审核回复材料
 docs/evidence/huawei-atomic-service-card-density/    [新] 逐任务证据
 ```
+
+> 注：原 `docs/huawei-atomic-service-card-density-agc.md`（AGC 提交与审核回复材料）已于 2026-10-03 按需求删除。
 
 ## 3. 详细设计
 
