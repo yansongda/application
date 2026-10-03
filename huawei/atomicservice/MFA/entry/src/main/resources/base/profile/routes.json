@@ -31,11 +31,6 @@
       "buildFunction": "builder"
     },
     {
-      "name": "user",
-      "pageSourceFile": "src/main/ets/pages/user/Index.ets",
-      "buildFunction": "builder"
-    },
-    {
       "name": "user/detail",
       "pageSourceFile": "src/main/ets/pages/user/Detail.ets",
       "buildFunction": "builder"
@@ -51,8 +46,8 @@
       "buildFunction": "builder"
     },
     {
-      "name": "user/help",
-      "pageSourceFile": "src/main/ets/pages/user/Help.ets",
+      "name": "help",
+      "pageSourceFile": "src/main/ets/pages/Help.ets",
       "buildFunction": "builder"
     }
   ]

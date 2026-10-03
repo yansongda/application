@@ -169,10 +169,6 @@
       "value": "设置用户名"
     },
     {
-      "name": "user_index_page_name",
-      "value": "我的"
-    },
-    {
       "name": "user_detail_page_name",
       "value": "个人信息"
     },
@@ -309,19 +305,19 @@
       "value": "复制验证码"
     },
     {
-      "name": "user_index_page_protected",
+      "name": "user_detail_page_protected",
       "value": "已保护 %d 个账号"
     },
     {
-      "name": "user_index_page_help",
+      "name": "help_entry",
       "value": "使用帮助"
     },
     {
-      "name": "user_index_page_about",
+      "name": "user_detail_page_about",
       "value": "关于"
     },
     {
-      "name": "user_index_page_version",
+      "name": "user_detail_page_version",
       "value": "版本 %s"
     },
     {

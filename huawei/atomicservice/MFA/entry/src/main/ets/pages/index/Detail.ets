@@ -82,9 +82,9 @@ struct Detail {
           Card({
             items: [
               new CardItem({
-                title: $r('app.string.user_index_page_help'),
+                title: $r('app.string.help_entry'),
                 value: '',
-                eventClick: { action: AppPagesName.USER_HELP },
+                eventClick: { action: AppPagesName.HELP },
               }),
             ]
           })

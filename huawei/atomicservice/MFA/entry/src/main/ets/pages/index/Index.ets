@@ -231,7 +231,7 @@ export struct Index {
           .fontSize($r('app.float.body_font_size'))
           .margin({ top: $r('app.integer.page_padding_smaller') })
           .onClick(() => {
-            this.pages.pushPathByName(AppPagesName.USER_HELP, null);
+            this.pages.pushPathByName(AppPagesName.HELP, null);
           })
       }
       .width('100%')
