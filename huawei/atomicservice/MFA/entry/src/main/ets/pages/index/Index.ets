@@ -59,21 +59,7 @@ export struct Index {
       Stack({ alignContent: Alignment.BottomEnd }) {
         Refresh({ refreshing: this.isRefreshing!! }) {
           if (this.itemsRuntime.ids.length <= 0) {
-            if (this.isGuideVisible) {
-              IndexGuide({
-                onScan: (): void => {
-                  this.addByScan();
-                },
-                onInput: (): void => {
-                  this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
-                },
-                onDismiss: (): void => {
-                  this.isGuideVisible = false;
-                }
-              })
-            } else {
-              this.empty()
-            }
+            this.empty()
           } else {
             this.main()
           }
@@ -183,18 +169,103 @@ export struct Index {
 
   @Builder
   empty() {
-    Column() {
-      Text() {
-        SymbolSpan($r('sys.symbol.exclamationmark_circle'))
-      }
-      .fontSize($r('app.float.empty_icon_font_size'))
+    Scroll() {
+      Column() {
+        // 引导说明块：内嵌在首屏空态顶部，首次进入且未跳过时展示；点「不再提示」后仅隐藏该块，首屏其余内容保持可见
+        if (this.isGuideVisible) {
+          IndexGuide({
+            onDismiss: (): void => {
+              this.isGuideVisible = false;
+            }
+          })
+        }
 
-      Text($r('app.string.index_index_page_data_empty'))
-        .margin({ top: 10 })
+        // 首屏标题
+        Text($r('app.string.index_index_page_empty_title'))
+          .fontSize($r('app.float.subtitle_font_size'))
+          .fontWeight(FontWeight.Bold)
+          .width('100%')
+          .margin({ top: $r('app.integer.page_margin') })
+
+        // 3 条价值要点：离线计算 / 多设备同步 / 桌面卡片
+        Row() {
+          SymbolGlyph($r('sys.symbol.lock_shield'))
+            .fontSize($r('app.float.icon_font_size'))
+          Text($r('app.string.index_index_page_empty_tip_offline'))
+            .fontSize($r('app.float.caption_font_size'))
+            .margin({ left: 8 })
+        }
+        .justifyContent(FlexAlign.Center)
+        .width('100%')
+        .margin({ top: $r('app.integer.column_space_smaller') })
+
+        Row() {
+          SymbolGlyph($r('sys.symbol.arrow_2_circlepath'))
+            .fontSize($r('app.float.icon_font_size'))
+          Text($r('app.string.index_index_page_empty_tip_sync'))
+            .fontSize($r('app.float.caption_font_size'))
+            .margin({ left: 8 })
+        }
+        .justifyContent(FlexAlign.Center)
+        .width('100%')
+        .margin({ top: $r('app.integer.column_space_smaller') })
+
+        Row() {
+          SymbolGlyph($r('sys.symbol.rectangle_on_rectangle'))
+            .fontSize($r('app.float.icon_font_size'))
+          Text($r('app.string.index_index_page_empty_tip_card'))
+            .fontSize($r('app.float.caption_font_size'))
+            .margin({ left: 8 })
+        }
+        .justifyContent(FlexAlign.Center)
+        .width('100%')
+        .margin({ top: $r('app.integer.column_space_smaller') })
+
+        // 两个并列主按钮：扫码添加 / 手动输入
+        Row({ space: $r('app.integer.column_space_smaller') }) {
+          Button($r('app.string.index_index_page_add_by_scan'))
+            .type(ButtonType.Capsule)
+            .layoutWeight(1)
+            .fontColor($r('sys.color.font_on_primary'))
+            .backgroundColor($r('app.color.brand'))
+            .onClick(() => {
+              this.addByScan();
+            })
+
+          Button($r('app.string.index_index_page_add_by_input'))
+            .type(ButtonType.Capsule)
+            .layoutWeight(1)
+            .fontColor($r('sys.color.font_on_primary'))
+            .backgroundColor($r('app.color.brand'))
+            .onClick(() => {
+              this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
+            })
+        }
+        .width('100%')
+        .margin({ top: $r('app.integer.column_space_biggest') })
+
+        // 次入口：使用帮助
+        Button($r('app.string.index_index_page_help_entry'))
+          .type(ButtonType.Normal)
+          .backgroundColor(Color.Transparent)
+          .fontColor($r('app.color.brand'))
+          .fontSize($r('app.float.body_font_size'))
+          .margin({ top: $r('app.integer.page_padding_smaller') })
+          .onClick(() => {
+            this.pages.pushPathByName(AppPagesName.USER_HELP, null);
+          })
+      }
+      .width('100%')
+      .padding({
+        left: $r('app.integer.page_padding'),
+        right: $r('app.integer.page_padding'),
+        top: $r('app.integer.page_padding_smaller'),
+        bottom: $r('app.integer.page_padding_smaller')
+      })
     }
-    .margin({ top: $r('app.integer.page_margin') })
     .width('100%')
     .height('100%')
+    .align(Alignment.Top)
   }
 
   @Builder
