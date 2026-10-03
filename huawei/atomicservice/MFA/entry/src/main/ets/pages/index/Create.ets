@@ -1,10 +1,10 @@
 import { AppStorageV2, LoadingDialogV2 } from '@kit.ArkUI';
-import { CardInput, CardInputItem } from '../../../components/Card';
+import { CardInput, CardInputItem } from '../../components/Card';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { AppPagesName, LogDomain } from '../../../App';
-import { Toast } from '../../../utils/PromptAction';
-import { Totp } from '../../../api/Totp';
-import { Header } from '../../../components/Header';
+import { AppPagesName, LogDomain } from '../../App';
+import { Toast } from '../../utils/PromptAction';
+import { Totp } from '../../api/Totp';
+import { Header } from '../../components/Header';
 
 @Builder
 export function builder() {

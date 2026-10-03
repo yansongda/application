@@ -1,6 +1,6 @@
 import { ItemRuntime } from '../../models/Runtime';
 import { AppPagesName } from '../../App';
-import { EditTextParams } from './edit/Text';
+import { EditTextParams } from './EditText';
 import { Card, CardItem } from '../../components/Card';
 import { Clipboard } from '../../utils/Clipboard';
 import { Toast } from '../../utils/PromptAction';

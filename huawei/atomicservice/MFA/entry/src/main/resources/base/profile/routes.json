@@ -17,17 +17,17 @@
     },
     {
       "name": "index/create",
-      "pageSourceFile": "src/main/ets/pages/index/create/Index.ets",
+      "pageSourceFile": "src/main/ets/pages/index/Create.ets",
       "buildFunction": "builder"
     },
     {
       "name": "index/edit/issuer",
-      "pageSourceFile": "src/main/ets/pages/index/edit/Text.ets",
+      "pageSourceFile": "src/main/ets/pages/index/EditText.ets",
       "buildFunction": "builder"
     },
     {
       "name": "index/edit/username",
-      "pageSourceFile": "src/main/ets/pages/index/edit/Text.ets",
+      "pageSourceFile": "src/main/ets/pages/index/EditText.ets",
       "buildFunction": "builder"
     },
     {

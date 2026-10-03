@@ -1,11 +1,11 @@
 import { application } from '@kit.AbilityKit';
 import { AppStorageV2, KeyboardAvoidMode, LoadingDialogV2 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { Totp } from '../../../api/Totp';
-import { AppPagesName, LogDomain } from '../../../App';
-import { IJumpCallbackResult } from '../../../components/Card';
-import { ItemRuntime } from '../../../models/Runtime';
-import { Toast } from '../../../utils/PromptAction';
+import { Totp } from '../../api/Totp';
+import { AppPagesName, LogDomain } from '../../App';
+import { IJumpCallbackResult } from '../../components/Card';
+import { ItemRuntime } from '../../models/Runtime';
+import { Toast } from '../../utils/PromptAction';
 
 // 编辑页路由参数：显式携带编辑模式，避免依赖路由名推断导致误写字段
 export class EditTextParams {
