@@ -6,30 +6,30 @@ import { LogDomain } from '../App';
 import { User } from '../models/User';
 import { ItemsRuntime } from '../models/totp/ItemsRuntime';
 import { MainTheme } from '../themes/Main';
-import { CardAction } from '../models/card/CardAction';
+import { FormAction } from '../models/form/FormAction';
 
 export default class EntryAbility extends UIAbility {
   // 冷启动：卡片点击拉起时 want 携带卡片动作参数，写入共享状态供 Index 页消费
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    this.handleCardAction(want);
+    this.handleFormAction(want);
   }
 
   // 热启动：元服务已在后台时点卡，不重建 Ability，新 want 直接到达
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    this.handleCardAction(want);
+    this.handleFormAction(want);
   }
 
-  private handleCardAction(want: Want): void {
-    const cardAction: CardAction | undefined = CardAction.fromWant(want);
+  private handleFormAction(want: Want): void {
+    const formAction: FormAction | undefined = FormAction.fromWant(want);
 
-    if ('undefined' === typeof cardAction) {
+    if ('undefined' === typeof formAction) {
       return;
     }
 
-    const shared: CardAction = AppStorageV2.connect(CardAction, () => new CardAction())!;
+    const shared: FormAction = AppStorageV2.connect(FormAction, () => new FormAction())!;
 
-    shared.action = cardAction.action;
-    shared.itemId = cardAction.itemId;
+    shared.action = formAction.action;
+    shared.itemId = formAction.itemId;
     shared.version++;
 
     hilog.info(LogDomain.ABILITY, 'ability/EntryAbility', '卡片动作到达: action=%{public}s, itemId=%{public}s',
@@ -39,7 +39,7 @@ export default class EntryAbility extends UIAbility {
   onWindowStageCreate(windowStage: window.WindowStage): void {
     windowStage.loadContent('pages/Home', (err) => {
       if (err.code) {
-        // 理论上来说，这里不会出现
+        // 加载失败属异常路径，理论上不会出现
         hilog.error(LogDomain.ABILITY, 'ability/EntryAbility', '加载页面失败. Cause: %{public}s', JSON.stringify(err));
 
         return;
@@ -64,7 +64,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onForeground(): void {
-    // 恢复退后台时暂停的验证码刷新定时器（不会额外发起网络请求，数据由页面刷新时统一拉取）
+    // 恢复退后台时暂停的验证码刷新定时器（端内算码为主，secret 缺失/算码失败时回退服务端；列表数据由页面刷新统一拉取）
     AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!.resumeAll();
   }
 

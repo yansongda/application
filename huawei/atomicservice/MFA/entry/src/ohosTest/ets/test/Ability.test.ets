@@ -3,31 +3,25 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 export default function abilityTest() {
   describe('ActsAbilityTest', () => {
-    // Defines a test suite. Two parameters are supported: test suite name and test suite function.
+    // 测试套件：参数为套件名与套件函数。
     beforeAll(() => {
-      // Presets an action, which is performed only once before all test cases of the test suite start.
-      // This API supports only one parameter: preset action function.
+      // 仅在所有用例开始前执行一次；仅接受一个参数：预置函数。
     })
     beforeEach(() => {
-      // Presets an action, which is performed before each unit test case starts.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: preset action function.
+      // 在每个用例开始前执行，执行次数与 it 定义的用例数相同；仅接受一个参数：预置函数。
     })
     afterEach(() => {
-      // Presets a clear action, which is performed after each unit test case ends.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: clear action function.
+      // 在每个用例结束后执行，执行次数与 it 定义的用例数相同；仅接受一个参数：清理函数。
     })
     afterAll(() => {
-      // Presets a clear action, which is performed after all test cases of the test suite end.
-      // This API supports only one parameter: clear action function.
+      // 仅在所有用例结束后执行一次；仅接受一个参数：清理函数。
     })
     it('assertContain', 0, () => {
-      // Defines a test case. This API supports three parameters: test case name, filter parameter, and test case function.
+      // 用例：接受三个参数——用例名、过滤参数、用例函数。
       hilog.info(0x0000, 'testTag', '%{public}s', 'it begin');
       let a = 'abc';
       let b = 'b';
-      // Defines a variety of assertion methods, which are used to declare expected boolean conditions.
+      // 断言方法：声明期望的布尔条件。
       expect(a).assertContain(b);
       expect(a).assertEqual(a);
     })

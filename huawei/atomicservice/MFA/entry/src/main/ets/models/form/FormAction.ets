@@ -1,5 +1,5 @@
 // 卡片动作（主应用侧）：EntryAbility 解析 postCardAction(router) 的 want 参数后写入，
-// Index 页通过 @Monitor('cardAction.version') 感知并消费（点卡取码）。
+// Index 页通过 @Monitor('formAction.version') 感知并消费（点卡取码）。
 // 注意：postCardAction 的 params 被整体包装为 want.parameters.params（JSON 字符串），不逐键平铺；
 // 日志不得出现 token / 密钥 / 验证码。
 import { Want } from '@kit.AbilityKit';
@@ -7,7 +7,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
 
 @ObservedV2
-export class CardAction {
+export class FormAction {
   // 'copy'：复制首个账号验证码
   @Trace
   action?: string;
@@ -22,7 +22,7 @@ export class CardAction {
 
   // 按官方契约解析 want：params 被整体包装为 want.parameters.params（JSON 字符串）。
   // params 完全不存在 → 返回 undefined（参数未到达）；JSON.parse 失败 = 键名/格式错误（实现 bug，打点）。
-  static fromWant(want: Want): CardAction | undefined {
+  static fromWant(want: Want): FormAction | undefined {
     const raw = want?.parameters?.params;
 
     if ('string' !== typeof raw) {
@@ -34,7 +34,7 @@ export class CardAction {
     try {
       params = JSON.parse(raw) as Record<string, string>;
     } catch (e) {
-      hilog.error(LogDomain.MODELS, 'models/card-action', '卡片动作参数解析失败: %{public}s', JSON.stringify(e));
+      hilog.error(LogDomain.MODELS, 'models/form/FormAction', '卡片动作参数解析失败: %{public}s', JSON.stringify(e));
 
       return undefined;
     }
@@ -45,11 +45,11 @@ export class CardAction {
       return undefined;
     }
 
-    const cardAction = new CardAction();
+    const formAction = new FormAction();
 
-    cardAction.action = action;
-    cardAction.itemId = params.mfa_item_id;
+    formAction.action = action;
+    formAction.itemId = params.mfa_item_id;
 
-    return cardAction;
+    return formAction;
   }
 }

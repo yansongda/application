@@ -4,9 +4,6 @@ import { IndexGuide } from '../IndexGuide';
 // 整屏垂直居中，内容高于一屏时自动可滚动；交互全部通过 @Event 上报，由页面决定具体行为。
 @ComponentV2
 export struct EmptyState {
-  @Param isGuideVisible: boolean = false;
-  @Event onDismissGuide: () => void = () => {
-  };
   @Event onScan: () => void = () => {
   };
   @Event onInput: () => void = () => {
@@ -18,7 +15,7 @@ export struct EmptyState {
     Scroll() {
       // 空态整屏垂直居中：内容不足一屏时居中，超过一屏时自动可滚动
       Column() {
-        // 英雄区：图标 + 标题 + 一句话价值说明（原引导块与其下方的要点列表内容重复，已合并为一屏）
+        // 英雄区：图标 + 标题 + 一句话价值说明
         Column({ space: $r('app.integer.column_space_smaller') }) {
           SymbolGlyph($r('sys.symbol.lock_shield'))
             .fontSize($r('app.float.empty_icon_font_size'))
@@ -36,14 +33,8 @@ export struct EmptyState {
         }
         .width('100%')
 
-        // 空态提示卡：首次进入且未跳过时展示；点「不再提示」后仅隐藏该卡
-        if (this.isGuideVisible) {
-          IndexGuide({
-            onDismiss: (): void => {
-              this.onDismissGuide();
-            }
-          })
-        }
+        // 空态提示卡：无账号时固定展示
+        IndexGuide()
 
         // 两个并列主按钮：扫码添加 / 手动输入
         Row({ space: $r('app.integer.column_space_smaller') }) {

@@ -177,7 +177,7 @@ export class ItemRuntime {
     this._intervalId = intervalId;
   }
 
-  // 周期到点：端内重算并重建定时器（不再发起网络请求）
+  // 周期到点：端内重算并重建定时器（以端内算码为主，secret 缺失/算码失败时回退服务端 detail）
   private rotate() {
     this.freshCode().catch(() => {
       // 失败已通过 Toast 提示，这里仅避免 unhandled rejection

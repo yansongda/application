@@ -1,7 +1,7 @@
 import { ItemRuntime } from '../../models/totp/ItemRuntime';
 import { AppPagesName } from '../../App';
 import { EditTextParams } from './EditText';
-import { Card, CardItem } from '../../components/Card';
+import { InfoCard, InfoCardItem } from '../../components/InfoCard';
 import { Clipboard } from '../../utils/Clipboard';
 import { Toast } from '../../utils/PromptAction';
 
@@ -52,15 +52,15 @@ struct Detail {
               })
           }
 
-          Card({
+          InfoCard({
             title: $r('app.string.index_page_basic_information'),
             items: [
-              new CardItem({
+              new InfoCardItem({
                 title: $r('app.string.index_page_issuer'),
                 value: this.runtime?.issuer ?? $r('app.string.index_detail_page_value_unknown'),
                 eventClick: { action: AppPagesName.INDEX_EDIT_ISSUER, params: new EditTextParams(this.runtime, true) },
               }),
-              new CardItem({
+              new InfoCardItem({
                 title: $r('app.string.index_page_username'),
                 value: this.runtime?.username ?? $r('app.string.index_detail_page_value_unknown'),
                 eventClick: { action: AppPagesName.INDEX_EDIT_USERNAME, params: new EditTextParams(this.runtime, false) },
@@ -68,10 +68,10 @@ struct Detail {
             ]
           })
 
-          Card({
+          InfoCard({
             title: $r('app.string.index_page_config_information'),
             items: [
-              new CardItem({
+              new InfoCardItem({
                 title: $r('app.string.index_page_config_period'),
                 value: (this.runtime?.config.period ?? '30').toString() + 's',
               }),
@@ -79,9 +79,9 @@ struct Detail {
           })
 
           // 全局用法说明统一收敛到「使用帮助」页，本页只保留入口：详情页承载全局说明会与帮助页重复
-          Card({
+          InfoCard({
             items: [
-              new CardItem({
+              new InfoCardItem({
                 title: $r('app.string.help_entry'),
                 value: '',
                 eventClick: { action: AppPagesName.HELP },

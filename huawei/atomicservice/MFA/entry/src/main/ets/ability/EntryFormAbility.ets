@@ -1,12 +1,12 @@
-// 服务卡片生命周期（Form Kit）：onAddForm 从 preferences 快照装配卡片初始数据并落 formId；
+// 服务卡片生命周期（Form Kit）：onAddForm 落 formId 并从 preferences 快照装配初始数据；
 // onRemoveForm 清除 formId；onUpdateForm 重读快照推送最新数据（fire-and-forget）。
 // 注意：日志不得出现密钥 / 验证码。
 import { Want } from '@kit.AbilityKit';
 import { FormExtensionAbility, formBindingData, formInfo } from '@kit.FormKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../App';
-import { CardSnapshot, CardSnapshotData } from '../utils/CardSnapshot';
-import { CardBridge } from '../models/card/CardBridge';
+import { Snapshot, SnapshotData } from '../utils/Form';
+import { FormBridge } from '../models/form/FormBridge';
 
 export default class EntryFormAbility extends FormExtensionAbility {
   onAddForm(want: Want): formBindingData.FormBindingData {
@@ -14,25 +14,25 @@ export default class EntryFormAbility extends FormExtensionAbility {
     const formId: string | undefined = want.parameters?.[formInfo.FormParam.IDENTITY_KEY] as string;
 
     if (formId !== undefined) {
-      CardSnapshot.addFormId(this.context, formId);
+      Snapshot.addFormId(this.context, formId);
     }
 
-    const snap: CardSnapshotData = CardSnapshot.read(this.context);
+    const snap: SnapshotData = Snapshot.read(this.context);
 
     hilog.info(LogDomain.FORM, 'ability/EntryFormAbility', 'onAddForm 回调. want: %{public}s',
       JSON.stringify(want));
     hilog.info(LogDomain.FORM, 'ability/EntryFormAbility', 'onAddForm 装配数据. formId: %{public}s, count: %{public}d',
       String(formId), snap.count);
 
-    return CardBridge.bindingData(snap);
+    return FormBridge.bindingData(snap);
   }
 
   onRemoveForm(formId: string): void {
-    CardSnapshot.removeFormId(this.context, formId);
+    Snapshot.removeFormId(this.context, formId);
     hilog.info(LogDomain.FORM, 'ability/EntryFormAbility', 'onRemoveForm 回调. formId: %{public}s', formId);
   }
 
   onUpdateForm(formId: string, wantParams?: Record<string, Object>): void {
-    CardBridge.push(this.context, [formId]);
+    FormBridge.push(this.context, [formId]);
   }
 }

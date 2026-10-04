@@ -1,6 +1,6 @@
 import { authentication } from '@kit.AccountKit';
 import { AdvancedDialogV2Button, AlertDialogV2, AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
-import { Card, CardItem } from '../../components/Card';
+import { InfoCard, InfoCardItem } from '../../components/InfoCard';
 import { User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
@@ -38,14 +38,14 @@ struct Detail {
             this.changeAvatar();
           })
 
-        // 账号统计行（原「我的」页合并进来）：ItemsRuntime 未初始化时 ids 缺失，按 0 展示
+        // 账号统计行：ItemsRuntime 未初始化时 ids 缺失，按 0 展示
         Text($r('app.string.user_detail_page_protected', this.protectedCount))
           .fontSize($r('app.float.caption_font_size'))
           .fontColor($r('sys.color.font_tertiary'))
 
-        Card({
+        InfoCard({
           items: [
-            new CardItem({
+            new InfoCardItem({
               title: $r('app.string.user_detail_page_nickname'),
               value: displayOr(this.user.config.nickname, $r('app.string.default_nickname')),
               eventClick: {
@@ -61,7 +61,7 @@ struct Detail {
                 },
               }
             }),
-            new CardItem({
+            new InfoCardItem({
               title: $r('app.string.user_detail_page_slogan'),
               value: displayOr(this.user.config.slogan, $r('app.string.default_slogan')),
               eventClick: {
@@ -71,29 +71,29 @@ struct Detail {
           ]
         })
 
-        Card({
+        InfoCard({
           title: $r('app.string.user_page_information'),
           items: [
-            new CardItem({
+            new InfoCardItem({
               title: $r('app.string.user_detail_page_phone'),
               value: $r('app.string.user_detail_page_coming_soon'),
             }),
           ]
         })
 
-        Card({
+        InfoCard({
           title: $r('app.string.more'),
           items: [
-            new CardItem({
+            new InfoCardItem({
               title: $r('app.string.help_entry'),
               value: '',
               eventClick: { action: AppPagesName.HELP },
             }),
-            new CardItem({
+            new InfoCardItem({
               title: $r('app.string.user_detail_page_about'),
               value: $r('app.string.user_detail_page_version', App.version),
             }),
-            new CardItem({
+            new InfoCardItem({
               title: $r('app.string.user_detail_page_delete_account'),
               value: '',
               eventClick: { action: AppPagesName.USER_DELETE },

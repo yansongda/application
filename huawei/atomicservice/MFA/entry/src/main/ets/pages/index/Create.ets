@@ -1,5 +1,5 @@
 import { AppStorageV2, LoadingDialogV2 } from '@kit.ArkUI';
-import { CardInput, CardInputItem } from '../../components/CardInput';
+import { InputCard, InputCardItem } from '../../components/InputCard';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../../App';
 import { Toast } from '../../utils/PromptAction';
@@ -28,10 +28,10 @@ struct Index {
   build() {
     NavDestination() {
       Column({ space: $r('app.integer.column_space') }) {
-        CardInput({
+        InputCard({
           title: $r('app.string.index_page_basic_information'),
           items: [
-            new CardInputItem({
+            new InputCardItem({
               title: $r('app.string.index_page_issuer'),
               value: this.issuer,
               placeholder: $r('app.string.index_page_edit_issuer_placeholder'),
@@ -42,7 +42,7 @@ struct Index {
                 }
               }
             }),
-            new CardInputItem({
+            new InputCardItem({
               title: $r('app.string.index_page_username'),
               value: this.username,
               placeholder: $r('app.string.index_page_edit_username_placeholder'),
@@ -56,10 +56,10 @@ struct Index {
           ]
         })
 
-        CardInput({
+        InputCard({
           title: $r('app.string.index_page_config_information'),
           items: [
-            new CardInputItem({
+            new InputCardItem({
               title: $r('app.string.index_page_config_period'),
               value: this.period,
               placeholder: $r('app.string.please_input'),

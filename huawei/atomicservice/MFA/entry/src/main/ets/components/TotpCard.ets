@@ -46,7 +46,7 @@ export struct TotpCard {
             .fontSize($r('app.float.code_font_size'))
         }
         .layoutWeight(6)
-        // 数字即复制入口：不再单列一个复制图标（列表中视觉突兀），点击右侧区域直接复制
+        // 数字即复制入口：点击右侧区域直接复制，不单列复制图标（列表中视觉突兀）
         .onClick(async () => {
           if (this.isSortMode) {
             return;

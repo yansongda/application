@@ -126,8 +126,7 @@ struct Login {
       }
 
       // 先跳转再补用户信息：列表渲染只依赖 itemsRuntime，头像/昵称由全局 User（@ObservedV2/@Trace）异步刷新。
-      // 若把 fetchUser 串在跳转前，登录成功后会停在登录页多等一次与列表无关的网络请求
-      // （实测 0.2~0.8s，网络差时会一直等到 5s 超时），观感上就是「登录成功却卡住」。
+      // 若把 fetchUser 串在跳转前，会在登录页多等一次与列表无关的请求（网络差时至多 5s 超时），表现为「登录成功却卡住」。
       this.pages.pop();
 
       this.fetchUser().catch(() => {

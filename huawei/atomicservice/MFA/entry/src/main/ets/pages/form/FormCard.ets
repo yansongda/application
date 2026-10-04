@@ -2,13 +2,13 @@
 // 整卡点击拉起元服务并请求复制验证码（mfa_action: 'copy'）。
 //
 // 状态管理 V2（ArkTS 卡片自 API 23 起支持）：注入数据按「变量名」匹配，
-// 不再走 LocalStorage / @LocalStorageProp，@Entry 也不传 storage 实例。
-// 契约：下列 @Local 变量名必须与 models/card/CardBridge.ets 的 CARD_FIELD_* 常量逐字一致；
+// 不走 LocalStorage / @LocalStorageProp，@Entry 不传 storage 实例。
+// 契约：下列 @Local 变量名必须与 models/form/FormBridge.ets 的 FORM_FIELD_* 常量逐字一致；
 //       改名不会编译报错、只会静默不刷新，改一侧必须同步改另一侧。
 // 文案只用无参 $r，不用带格式参数的 $r（卡片对格式化的支持未经证实）。
 @Entry
 @ComponentV2
-struct Card {
+struct FormCard {
   // 账号总数（数字字符串，'0' 即空态）
   @Local count: string = '0';
 
@@ -53,7 +53,7 @@ struct Card {
       .textOverflow({ overflow: TextOverflow.Ellipsis })
   }
 
-  // 空态：只讲「没有账号」与「怎么加」，不再挂底部提示（空态点卡不复制）
+  // 空态：只讲「没有账号」与「怎么加」，不挂底部提示（空态点卡不复制）
   @Builder
   Empty() {
     Text($r('app.string.card_empty_title'))

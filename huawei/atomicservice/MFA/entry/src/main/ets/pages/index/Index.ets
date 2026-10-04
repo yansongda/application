@@ -1,7 +1,7 @@
 import { ItemRuntime } from '../../models/totp/ItemRuntime';
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
-import { CardAction } from '../../models/card/CardAction';
-import { CardSnapshotItem } from '../../utils/CardSnapshot';
+import { FormAction } from '../../models/form/FormAction';
+import { SnapshotItem } from '../../utils/Form';
 import { Clipboard } from '../../utils/Clipboard';
 import {
   AdvancedDialogV2Button,
@@ -17,11 +17,10 @@ import { SortRequestItem, Totp } from '../../api/Totp';
 import { scanBarcode } from '@kit.ScanKit';
 import { User } from '../../models/User';
 import { displayOr } from '../../utils/Display';
-import { IndexGuideState } from '../../models/Guide';
 import { EmptyState } from '../../components/index/EmptyState';
 import { AddFab } from '../../components/index/AddFab';
 import { TotpListView } from '../../components/index/TotpListView';
-import { CardBridge } from '../../models/card/CardBridge';
+import { FormBridge } from '../../models/form/FormBridge';
 
 @Builder
 export function builder() {
@@ -30,15 +29,10 @@ export function builder() {
 
 @ComponentV2
 export struct Index {
-  @Local guideState: IndexGuideState =
-    PersistenceV2.globalConnect({ type: IndexGuideState, defaultCreator: () => new IndexGuideState() })!;
   @Local
   private isRefreshing: boolean = false;
   @Local
   private isSortMode: boolean = false;
-  // 本次进入是否展示引导页（内存态；持久化标记只记录「已不再展示」，避免写入标记后立刻把引导页隐藏）
-  @Local
-  private isGuideVisible: boolean = false;
   private snapshotIds: string[] = [];
   // 请求去重：避免 onActive 与下拉刷新并发发起 Totp.all()
   private isFetching: boolean = false;
@@ -50,7 +44,7 @@ export struct Index {
   private swipeActionId?: string;
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
   // 卡片动作（点卡取码）：EntryAbility 写入，@Monitor 感知；必须带 @Local 才能被 @Monitor 监听到变化
-  @Local private cardAction: CardAction = AppStorageV2.connect(CardAction, () => new CardAction())!;
+  @Local private formAction: FormAction = AppStorageV2.connect(FormAction, () => new FormAction())!;
   // 卡片动作消费互斥：避免 @Monitor / onActive / refresh 锚点并发重复消费
   private isConsuming: boolean = false;
 
@@ -60,10 +54,6 @@ export struct Index {
         Refresh({ refreshing: this.isRefreshing!! }) {
           if (this.itemsRuntime.ids.length <= 0) {
             EmptyState({
-              isGuideVisible: this.isGuideVisible,
-              onDismissGuide: (): void => {
-                this.isGuideVisible = false;
-              },
               onScan: (): void => {
                 this.addByScan();
               },
@@ -131,7 +121,7 @@ export struct Index {
       }
 
       // 先消费卡片动作（若已有待办且列表已就绪则立即复制），再常规刷新
-      this.consumeCardAction().catch(() => {
+      this.consumeFormAction().catch(() => {
         // 失败已内部处理，仅避免 unhandled rejection
       });
 
@@ -314,7 +304,6 @@ export struct Index {
           () => Totp.create(uri));
 
       this.itemsRuntime.add(data);
-      this.decideGuide();
       this.syncCards();
     } catch (e) {
       await Dialog.open(() => this.addFailedDialog(e.message));
@@ -351,22 +340,6 @@ export struct Index {
     }
   }
 
-  // 空数据时只首次展示引导卡：是否展示由模型判定并持久化标记，页面只维护本次进入的内存态
-  private decideGuide(): void {
-    if (this.isGuideVisible) {
-      return;
-    }
-
-    if (!this.guideState.canShow(this.itemsRuntime.ids.length)) {
-      this.isGuideVisible = false;
-
-      return;
-    }
-
-    this.isGuideVisible = true;
-    this.guideState.markShown();
-  }
-
   private async refresh(): Promise<void> {
     if (this.isFetching) {
       return;
@@ -380,14 +353,13 @@ export struct Index {
           () => this.fetchFailedDialog(() => this.refresh()));
 
       this.itemsRuntime.reload(items.values());
-      this.decideGuide();
       this.syncCards();
     } finally {
       this.isFetching = false;
 
       // 待办重试锚点：refresh 被去重/未激活时，卡片待办在此补消费（isConsuming 期间会被互斥拦下）
-      if ('undefined' !== typeof this.cardAction.action) {
-        this.consumeCardAction().catch(() => {
+      if ('undefined' !== typeof this.formAction.action) {
+        this.consumeFormAction().catch(() => {
           // 仅避免 unhandled rejection
         });
       }
@@ -402,7 +374,7 @@ export struct Index {
       return;
     }
 
-    CardBridge.sync(context, this.itemsRuntime.ids.map((id: string): CardSnapshotItem => ({
+    FormBridge.sync(context, this.itemsRuntime.ids.map((id: string): SnapshotItem => ({
       id: id,
       issuer: this.itemsRuntime.get(id).issuer,
       username: this.itemsRuntime.get(id).username,
@@ -410,20 +382,20 @@ export struct Index {
   }
 
   // 卡片动作到达（EntryAbility 写入 version++ 触发）；消费失败已内部处理，这里仅避免 unhandled rejection
-  @Monitor('cardAction.version')
-  onCardActionChange(): void {
-    this.consumeCardAction().catch(() => {
+  @Monitor('formAction.version')
+  onFormActionChange(): void {
+    this.consumeFormAction().catch(() => {
       // 仅避免 unhandled rejection
     });
   }
 
   // 消费卡片动作：点卡取码（复制首个/指定账号验证码到剪贴板）。互斥 + 仅成功后清空待办。
-  private async consumeCardAction(): Promise<void> {
+  private async consumeFormAction(): Promise<void> {
     if (this.isConsuming) {
       return;
     }
 
-    if ('copy' !== this.cardAction.action || !(this.cardAction.version > 0)) {
+    if ('copy' !== this.formAction.action || !(this.formAction.version > 0)) {
       return;
     }
 
@@ -445,10 +417,10 @@ export struct Index {
           return;
         }
 
-        // 永挂兜底：refresh 成功但确无账号 → 清空待办，避免日后添加首个账号时意外自动复制
+        // 兜底：refresh 成功但确无账号 → 清空待办，避免日后添加首个账号时意外自动复制
         if (this.itemsRuntime.ids.length <= 0) {
-          this.cardAction.action = undefined;
-          this.cardAction.itemId = undefined;
+          this.formAction.action = undefined;
+          this.formAction.itemId = undefined;
 
           return;
         }
@@ -457,9 +429,9 @@ export struct Index {
       // 定位运行时：itemId 指定且存在则用之，否则（未指定/条目已删）回退首个账号
       let targetId: string = this.itemsRuntime.ids[0];
 
-      if ('undefined' !== typeof this.cardAction.itemId &&
-        this.itemsRuntime.ids.includes(this.cardAction.itemId)) {
-        targetId = this.cardAction.itemId;
+      if ('undefined' !== typeof this.formAction.itemId &&
+        this.itemsRuntime.ids.includes(this.formAction.itemId)) {
+        targetId = this.formAction.itemId;
       }
 
       try {
@@ -480,8 +452,8 @@ export struct Index {
         await Clipboard.copy(code);
 
         // 仅成功后清空待办
-        this.cardAction.action = undefined;
-        this.cardAction.itemId = undefined;
+        this.formAction.action = undefined;
+        this.formAction.itemId = undefined;
 
         Toast.show({ message: $r('app.string.index_index_page_copied'), duration: 3000 });
       } catch (e) {

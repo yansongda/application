@@ -29,6 +29,7 @@ http.defaults.headers.post['Content-Type'] = 'application/json';
 http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   config.headers['Authorization'] = authorization().accessToken;
 
+  // headers/请求体可能含 access token 等敏感信息，统一用 %{private}s 输出，避免落到日志
   hilog.info(LogDomain.UTILS, 'utils/http',
     '发送 http 请求，url: %{private}s, method: %{private}s, headers: %{private}s, request body: %{private}s', config.url,
     config.method,

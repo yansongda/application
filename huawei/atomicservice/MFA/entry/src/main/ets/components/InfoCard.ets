@@ -2,9 +2,9 @@ import { AppStorageV2 } from '@kit.ArkUI';
 import { Header } from './Header';
 
 @ComponentV2
-export struct Card {
+export struct InfoCard {
   @Require @Param
-  items: CardItem[];
+  items: InfoCardItem[];
   @Param
   title?: ResourceStr = undefined;
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
@@ -15,9 +15,9 @@ export struct Card {
 
       List({ space: 10 }) {
         ListItemGroup({ style: ListItemGroupStyle.CARD }) {
-          ForEach(this.items, (item: CardItem) => {
+          ForEach(this.items, (item: InfoCardItem) => {
             this.listItem(item)
-          }, (item: CardItem, index: number) => index + item.title.toString())
+          }, (item: InfoCardItem, index: number) => index + item.title.toString())
         }
         .divider({ strokeWidth: 1 })
       }
@@ -27,7 +27,7 @@ export struct Card {
   }
 
   @Builder
-  listItem(item: CardItem) {
+  listItem(item: InfoCardItem) {
     ListItem({ style: ListItemStyle.CARD }) {
       Row() {
         Text(item.title)
@@ -61,7 +61,7 @@ export struct Card {
       if ('string' === typeof item.eventClick.action) {
         this.pages.pushPathByName(item.eventClick.action, item.eventClick.params, (popInfo: PopInfo) => {
           // 用户取消弹窗时 result 为空，需判空后再回写，避免类型断言掩盖运行时异常
-          const result = popInfo.result as IJumpCallbackResult | undefined;
+          const result = popInfo.result as IInfoCardJumpResult | undefined;
 
           if ('undefined' === typeof result || 'undefined' === typeof result.value) {
             return;
@@ -76,42 +76,42 @@ export struct Card {
 
         // 返回 undefined 表示本次操作未产生变更，保持卡片已有显示内容
         if ('undefined' !== typeof result) {
-          item.callback({ value: result } as IJumpCallbackResult);
+          item.callback({ value: result } as IInfoCardJumpResult);
         }
       }
     })
   }
 }
 
-export interface ICardItemEventClick {
+export interface IInfoCardItemEventClick {
   action: string | CallableFunction;
   params?: object;
 }
 
-export interface ICardItem {
+export interface IInfoCardItem {
   title: ResourceStr;
   value: ResourceStr;
-  eventClick?: ICardItemEventClick;
+  eventClick?: IInfoCardItemEventClick;
 }
 
 @ObservedV2
-export class CardItem {
+export class InfoCardItem {
   title: ResourceStr;
   @Trace
   value: ResourceStr;
-  eventClick?: ICardItemEventClick;
+  eventClick?: IInfoCardItemEventClick;
 
-  constructor(item: ICardItem) {
+  constructor(item: IInfoCardItem) {
     this.title = item.title;
     this.value = item.value;
     this.eventClick = item.eventClick;
   }
 
-  callback(result: IJumpCallbackResult) {
+  callback(result: IInfoCardJumpResult) {
     this.value = result.value;
   }
 }
 
-export interface IJumpCallbackResult {
+export interface IInfoCardJumpResult {
   value: string;
 }

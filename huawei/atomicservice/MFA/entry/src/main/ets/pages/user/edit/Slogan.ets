@@ -4,7 +4,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../../../App';
 import { User as UserApi } from '../../../api/User';
 import { User } from '../../../models/User';
-import { IJumpCallbackResult } from '../../../components/Card';
+import { IInfoCardJumpResult } from '../../../components/InfoCard';
 
 @Builder
 export function builder() {
@@ -70,7 +70,7 @@ struct Slogan {
                 // 仅在保存成功后写入持久化模型
                 this.user.config.slogan = this.slogan;
 
-                this.pages.pop({ value: this.slogan } as IJumpCallbackResult);
+                this.pages.pop({ value: this.slogan } as IInfoCardJumpResult);
               } catch (e) {
                 hilog.warn(LogDomain.PAGES, AppPagesName.USER_EDIT_SLOGAN, '修改 Slogan 失败: %{public}s',
                   JSON.stringify(e));

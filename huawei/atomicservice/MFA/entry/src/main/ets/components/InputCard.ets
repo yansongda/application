@@ -1,10 +1,10 @@
-// 表单输入卡片（CardInput）：与展示型 Card 分文件维护，二者导出与用法均未变。
+// 表单输入卡片（InputCard）：与展示型 InfoCard 分文件维护。
 import { Header } from './Header';
 
 @ComponentV2
-export struct CardInput {
+export struct InputCard {
   @Require @Param
-  items: CardInputItem[];
+  items: InputCardItem[];
   @Param
   title?: ResourceStr = undefined;
 
@@ -14,9 +14,9 @@ export struct CardInput {
 
       List({ space: 10 }) {
         ListItemGroup({ style: ListItemGroupStyle.CARD }) {
-          ForEach(this.items, (item: CardInputItem) => {
+          ForEach(this.items, (item: InputCardItem) => {
             this.listItem(item)
-          }, (item: CardInputItem, index: number) => index + item.title.toString())
+          }, (item: InputCardItem, index: number) => index + item.title.toString())
         }
         .divider({ strokeWidth: 1 })
       }
@@ -26,7 +26,7 @@ export struct CardInput {
   }
 
   @Builder
-  listItem(item: CardInputItem) {
+  listItem(item: InputCardItem) {
     ListItem({ style: ListItemStyle.CARD }) {
       Row() {
         Text(item.title)
@@ -54,15 +54,15 @@ export struct CardInput {
 }
 
 @ObservedV2
-export class CardInputItem {
+export class InputCardItem {
   title: ResourceStr;
   placeholder?: ResourceStr;
   @Trace
   value?: ResourceStr;
-  options?: ICardInputItemOptions;
-  callback?: ICardInputItemCallback;
+  options?: IInputCardItemOptions;
+  callback?: IInputCardItemCallback;
 
-  constructor(item: ICardInputItem) {
+  constructor(item: IInputCardItem) {
     this.title = item.title;
     this.placeholder = item.placeholder;
     this.value = item.value;
@@ -71,19 +71,19 @@ export class CardInputItem {
   }
 }
 
-export interface ICardInputItem {
+export interface IInputCardItem {
   title: ResourceStr;
   placeholder?: ResourceStr;
   value?: ResourceStr;
-  options?: ICardInputItemOptions;
-  callback?: ICardInputItemCallback;
+  options?: IInputCardItemOptions;
+  callback?: IInputCardItemCallback;
 }
 
-export interface ICardInputItemOptions {
+export interface IInputCardItemOptions {
   type?: InputType;
   maxLength?: number;
 }
 
-export interface ICardInputItemCallback {
+export interface IInputCardItemCallback {
   onChange?: (value: string) => void;
 }
