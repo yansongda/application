@@ -66,6 +66,7 @@ MFA/
 - 卡片内「能用哪些组件/属性」**编译期不校验**（SDK `ets-loader/form_components/*.json` 白名单不强制，如 `SymbolGlyph` 不在白名单也能编过），新增组件或属性一律以**真机验证**为准；优先复用已在卡片中跑通的能力（`Text` / `Row` / `Column` / `Blank` / `Divider` / `Image` / `Progress` / 通用属性）。
 - **跨进程 preferences 必须清缓存后再读**：主应用与卡片提供方（`FormExtensionAbility`）是两个进程，`preferences` 实例按进程缓存在内存，某进程首次 `getPreferences` 后不再读持久化文件 → 看不到另一个进程刚写入的值。`utils/Form.ets`（`Snapshot`）已统一走 `prefs()`（内部 `removePreferencesFromCacheSync` 后再 `getPreferencesSync`）；**任何新增的跨进程 preferences 读写都必须复用该路径**，否则会出现「卡片添加后主应用读不到 formId → 不推送 → 卡片数据永远停在添加卡片那一刻」这类静默故障。
 - 卡片渲染在系统进程、与提供方隔离，**不得**在卡内直接读 `preferences`、算码或放密钥；跨进程数据只能以字符串经 `formBindingData` 传递。
+- 卡内交互**只用 `postCardAction` 的 `router` 事件**（不用 `message` / `call`）；入口用 `Text` + 通用属性（背景色 / 圆角 / `onClick`）充当按钮，组件与属性支持一律以真机为准。整卡 `onClick` 与子元素 `onClick` 并存时依赖「子组件优先消费」，真机需确认无冒泡重复触发。
 
 ## 测试
 

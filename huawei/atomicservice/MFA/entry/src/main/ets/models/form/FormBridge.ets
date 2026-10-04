@@ -1,18 +1,17 @@
 // 卡片数据桥接（单一入口）：装配绑定数据 / 主动推送，主应用与 FormExtensionAbility 共用。
 // 卡内只注入字符串（跨进程数据只能以字符串传递），且不得出现密钥 / 验证码。
 //
-// 注入契约：卡片用状态管理 V2，注入字段按「变量名」匹配 pages/form/FormCard.ets 的 @Local 变量，
-// 故下面两个常量必须与那侧变量名逐字一致；写错不会编译报错，只会静默不刷新。
-// 空态不单独注入标记字段，卡片侧以 count == '0' 推导，避免两处状态不同步。
+// 注入契约：卡片用状态管理 V2，注入字段按「变量名」匹配 pages/form/FormCard2x2.ets 的 @Local 变量，
+// 故下面常量必须与那侧变量名逐字一致；写错不会编译报错，只会静默不刷新。
+// 空态不单独注入标记字段，卡片侧以 count == '0' 推导。
 import { Context } from '@kit.AbilityKit';
 import { formBindingData, formProvider } from '@kit.FormKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { Snapshot, SnapshotData, SnapshotItem } from '../../utils/Form';
+import { Snapshot, SnapshotData } from '../../utils/Form';
 import { LogDomain } from '../../App';
 
 // 注入字段名（= 卡片侧 @Local 变量名）
 export const FORM_FIELD_COUNT: string = 'count';
-export const FORM_FIELD_FIRST: string = 'first';
 
 export class FormBridge {
   // 装配卡片绑定数据：onAddForm / onUpdateForm / 主应用主动推送共用同一份口径
@@ -20,7 +19,6 @@ export class FormBridge {
     const data: Record<string, string> = {};
 
     data[FORM_FIELD_COUNT] = String(snap.count);
-    data[FORM_FIELD_FIRST] = snap.items[0]?.issuer ?? '';
 
     hilog.info(LogDomain.MODELS, 'models/form/FormBridge', '装配卡片数据: count=%{public}s',
       data[FORM_FIELD_COUNT]);
@@ -29,10 +27,10 @@ export class FormBridge {
   }
 
   // 账号列表变化后：写快照并推送全部已添加卡片
-  static sync(context: Context, items: SnapshotItem[]): void {
-    hilog.info(LogDomain.MODELS, 'models/form/FormBridge', '卡片同步: 账号数=%{public}d', items.length);
+  static sync(context: Context, ids: string[]): void {
+    hilog.info(LogDomain.MODELS, 'models/form/FormBridge', '卡片同步: 账号数=%{public}d', ids.length);
 
-    Snapshot.write(context, items);
+    Snapshot.write(context, ids.length);
 
     FormBridge.push(context);
   }

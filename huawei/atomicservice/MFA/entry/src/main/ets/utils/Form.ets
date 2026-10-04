@@ -1,6 +1,6 @@
-// 卡片展示快照（preferences 持久化，库名 mfa_card）：主应用写账号数 / 首条 issuer+username /
-// 时间戳，卡片提供方（FormExtensionAbility）同步读取并注入卡片。
-// 快照只允许 id / issuer / username / count / updatedAt 五个字段，禁止写入 secret、验证码、access_token。
+// 卡片展示快照（preferences 持久化，库名 mfa_card）：主应用只写账号数与时间戳，
+// 卡片提供方（FormExtensionAbility）同步读取并注入卡片。
+// 快照只存 count / updatedAt，不落任何账号明细（issuer / username 等一律不入盘）。
 //
 // 方法必须全部同步：FormExtensionAbility.onAddForm 是同步签名
 // （SDK @ohos.app.form.FormExtensionAbility.d.ts:83），异步方法无法在其内 await。
@@ -16,23 +16,11 @@ import { LogDomain } from '../App';
 const PREFERENCES_NAME: string = 'mfa_card';
 const KEY_SNAPSHOT: string = 'card_snapshot';
 const KEY_FORM_IDS: string = 'card_form_ids';
-// 卡片只展示首个账号，快照只留首条（多存即多暴露 issuer / username）
-const SNAPSHOT_MAX_ITEMS: number = 1;
-
-export interface SnapshotItem {
-  id: string;
-
-  issuer: string;
-
-  username: string;
-}
 
 export interface SnapshotData {
   count: number;
 
   updatedAt: number;
-
-  items: SnapshotItem[];
 }
 
 export class Snapshot {
@@ -69,16 +57,7 @@ export class Snapshot {
     }
   }
 
-  // 纯函数装配：count = items.length，items 截断为前 SNAPSHOT_MAX_ITEMS 条
-  private static build(items: SnapshotItem[], updatedAt: number): SnapshotData {
-    return {
-      count: items.length,
-      updatedAt: updatedAt,
-      items: items.slice(0, SNAPSHOT_MAX_ITEMS),
-    };
-  }
-
-  static write(context: Context, items: SnapshotItem[]): void {
+  static write(context: Context, count: number): void {
     try {
       const prefs: preferences.Preferences | undefined = Snapshot.prefs(context);
 
@@ -86,10 +65,12 @@ export class Snapshot {
         return;
       }
 
-      prefs.putSync(KEY_SNAPSHOT, JSON.stringify(Snapshot.build(items, Date.now())));
+      const snapshot: SnapshotData = { count: count, updatedAt: Date.now() };
+
+      prefs.putSync(KEY_SNAPSHOT, JSON.stringify(snapshot));
       prefs.flushSync();
 
-      hilog.info(LogDomain.UTILS, 'utils/form', '快照写入: count=%{public}d', items.length);
+      hilog.info(LogDomain.UTILS, 'utils/form', '快照写入: count=%{public}d', count);
     } catch (e) {
       hilog.error(LogDomain.UTILS, 'utils/form', '快照写入失败: %{public}s', JSON.stringify(e));
     }
@@ -100,7 +81,7 @@ export class Snapshot {
       const prefs: preferences.Preferences | undefined = Snapshot.prefs(context);
 
       if ('undefined' === typeof prefs) {
-        return { count: 0, updatedAt: 0, items: [] };
+        return { count: 0, updatedAt: 0 };
       }
 
       const raw: string = prefs.getSync(KEY_SNAPSHOT, '') as string;
@@ -109,20 +90,20 @@ export class Snapshot {
       hilog.info(LogDomain.UTILS, 'utils/form', '快照读取: rawLen=%{public}d', raw.length);
 
       if ('' === raw) {
-        return { count: 0, updatedAt: 0, items: [] };
+        return { count: 0, updatedAt: 0 };
       }
 
       const snapshot: SnapshotData = JSON.parse(raw) as SnapshotData;
 
-      if (typeof snapshot.count !== 'number' || !Array.isArray(snapshot.items)) {
-        return { count: 0, updatedAt: 0, items: [] };
+      if (typeof snapshot.count !== 'number') {
+        return { count: 0, updatedAt: 0 };
       }
 
       return snapshot;
     } catch (e) {
       hilog.warn(LogDomain.UTILS, 'utils/form', '快照读取失败，回落空快照: %{public}s', JSON.stringify(e));
 
-      return { count: 0, updatedAt: 0, items: [] };
+      return { count: 0, updatedAt: 0 };
     }
   }
 

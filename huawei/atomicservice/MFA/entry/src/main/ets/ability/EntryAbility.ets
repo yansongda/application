@@ -5,35 +5,33 @@ import { Authorization } from '../models/Auth';
 import { LogDomain } from '../App';
 import { User } from '../models/User';
 import { ItemsRuntime } from '../models/totp/ItemsRuntime';
+import { FormIntent } from '../models/form/FormIntent';
 import { MainTheme } from '../themes/Main';
-import { FormAction } from '../models/form/FormAction';
 
 export default class EntryAbility extends UIAbility {
-  // 冷启动：卡片点击拉起时 want 携带卡片动作参数，写入共享状态供 Index 页消费
+  // 冷启动：卡片点击拉起时 want 可能携带快捷意图，写入共享状态供 Index 页消费
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    this.handleFormAction(want);
+    this.handleFormIntent(want);
   }
 
   // 热启动：元服务已在后台时点卡，不重建 Ability，新 want 直接到达
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    this.handleFormAction(want);
+    this.handleFormIntent(want);
   }
 
-  private handleFormAction(want: Want): void {
-    const formAction: FormAction | undefined = FormAction.fromWant(want);
+  private handleFormIntent(want: Want): void {
+    const route: string | undefined = FormIntent.fromWant(want);
 
-    if ('undefined' === typeof formAction) {
+    if ('undefined' === typeof route) {
       return;
     }
 
-    const shared: FormAction = AppStorageV2.connect(FormAction, () => new FormAction())!;
+    const shared: FormIntent = AppStorageV2.connect(FormIntent, () => new FormIntent())!;
 
-    shared.action = formAction.action;
-    shared.itemId = formAction.itemId;
+    shared.route = route;
     shared.version++;
 
-    hilog.info(LogDomain.ABILITY, 'ability/EntryAbility', '卡片动作到达: action=%{public}s, itemId=%{public}s',
-      shared.action ?? 'undefined', shared.itemId ?? 'undefined');
+    hilog.info(LogDomain.ABILITY, 'ability/EntryAbility', '卡片意图到达: route=%{public}s', route);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {

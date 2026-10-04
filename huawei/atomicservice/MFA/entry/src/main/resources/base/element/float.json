@@ -35,6 +35,18 @@
     {
       "name": "empty_icon_font_size",
       "value": "64fp"
+    },
+    {
+      "name": "card_number_font_size",
+      "value": "40fp"
+    },
+    {
+      "name": "card_label_font_size",
+      "value": "11fp"
+    },
+    {
+      "name": "card_action_font_size",
+      "value": "11fp"
     }
   ]
 }

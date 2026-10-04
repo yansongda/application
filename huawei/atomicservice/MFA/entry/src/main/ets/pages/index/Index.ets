@@ -1,8 +1,5 @@
 import { ItemRuntime } from '../../models/totp/ItemRuntime';
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
-import { FormAction } from '../../models/form/FormAction';
-import { SnapshotItem } from '../../utils/Form';
-import { Clipboard } from '../../utils/Clipboard';
 import {
   AdvancedDialogV2Button,
   AlertDialogV2,
@@ -21,6 +18,7 @@ import { EmptyState } from '../../components/index/EmptyState';
 import { AddFab } from '../../components/index/AddFab';
 import { TotpListView } from '../../components/index/TotpListView';
 import { FormBridge } from '../../models/form/FormBridge';
+import { FormIntent } from '../../models/form/FormIntent';
 
 @Builder
 export function builder() {
@@ -43,10 +41,8 @@ export struct Index {
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
   private swipeActionId?: string;
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
-  // 卡片动作（点卡取码）：EntryAbility 写入，@Monitor 感知；必须带 @Local 才能被 @Monitor 监听到变化
-  @Local private formAction: FormAction = AppStorageV2.connect(FormAction, () => new FormAction())!;
-  // 卡片动作消费互斥：避免 @Monitor / onActive / refresh 锚点并发重复消费
-  private isConsuming: boolean = false;
+  // 卡片意图（点卡快捷入口）：EntryAbility 写入，@Monitor 感知；必须带 @Local 才能被 @Monitor 监听到变化
+  @Local private formIntent: FormIntent = AppStorageV2.connect(FormIntent, () => new FormIntent())!;
 
   build() {
     NavDestination() {
@@ -120,10 +116,8 @@ export struct Index {
         return;
       }
 
-      // 先消费卡片动作（若已有待办且列表已就绪则立即复制），再常规刷新
-      this.consumeFormAction().catch(() => {
-        // 失败已内部处理，仅避免 unhandled rejection
-      });
+      // 先消费卡片意图（冷启动时 want 已到达，「添加账号」需立即跳转），再常规刷新
+      this.consumeFormIntent();
 
       this.refresh().catch(() => {
         // 失败已由重试对话框提示，仅避免 unhandled rejection
@@ -356,13 +350,6 @@ export struct Index {
       this.syncCards();
     } finally {
       this.isFetching = false;
-
-      // 待办重试锚点：refresh 被去重/未激活时，卡片待办在此补消费（isConsuming 期间会被互斥拦下）
-      if ('undefined' !== typeof this.formAction.action) {
-        this.consumeFormAction().catch(() => {
-          // 仅避免 unhandled rejection
-        });
-      }
     }
   }
 
@@ -374,95 +361,35 @@ export struct Index {
       return;
     }
 
-    FormBridge.sync(context, this.itemsRuntime.ids.map((id: string): SnapshotItem => ({
-      id: id,
-      issuer: this.itemsRuntime.get(id).issuer,
-      username: this.itemsRuntime.get(id).username,
-    })));
+    FormBridge.sync(context, this.itemsRuntime.ids);
   }
 
-  // 卡片动作到达（EntryAbility 写入 version++ 触发）；消费失败已内部处理，这里仅避免 unhandled rejection
-  @Monitor('formAction.version')
-  onFormActionChange(): void {
-    this.consumeFormAction().catch(() => {
-      // 仅避免 unhandled rejection
-    });
+  // 卡片意图到达（EntryAbility 写入 version++ 触发）
+  @Monitor('formIntent.version')
+  onFormIntentChange(): void {
+    this.consumeFormIntent();
   }
 
-  // 消费卡片动作：点卡取码（复制首个/指定账号验证码到剪贴板）。互斥 + 仅成功后清空待办。
-  private async consumeFormAction(): Promise<void> {
-    if (this.isConsuming) {
+  // 消费卡片意图：'scan' 直达扫码添加、'input' 直达手动输入添加；消费一次即清空，避免重复触发
+  private consumeFormIntent(): void {
+    const route: string | undefined = this.formIntent.route;
+
+    if ('undefined' === typeof route || !(this.formIntent.version > 0)) {
       return;
     }
 
-    if ('copy' !== this.formAction.action || !(this.formAction.version > 0)) {
+    this.formIntent.route = undefined;
+
+    if ('scan' === route) {
+      this.addByScan().catch(() => {
+        // 取消/失败已在 addByScan 内部处理，仅避免 unhandled rejection
+      });
+
       return;
     }
 
-    this.isConsuming = true;
-
-    try {
-      // 列表未就绪时先拉取；refresh 并发时可能被 isFetching 去重而静默返回，需复查 ids
-      if (this.itemsRuntime.ids.length <= 0) {
-        try {
-          await this.refresh();
-        } catch (e) {
-          hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '点卡取码前置刷新失败: %{public}s', JSON.stringify(e));
-
-          return;
-        }
-
-        // 被去重（并发请求进行中）：本轮不消费，保留待办，由 refresh 锚点补消费
-        if (this.isFetching) {
-          return;
-        }
-
-        // 兜底：refresh 成功但确无账号 → 清空待办，避免日后添加首个账号时意外自动复制
-        if (this.itemsRuntime.ids.length <= 0) {
-          this.formAction.action = undefined;
-          this.formAction.itemId = undefined;
-
-          return;
-        }
-      }
-
-      // 定位运行时：itemId 指定且存在则用之，否则（未指定/条目已删）回退首个账号
-      let targetId: string = this.itemsRuntime.ids[0];
-
-      if ('undefined' !== typeof this.formAction.itemId &&
-        this.itemsRuntime.ids.includes(this.formAction.itemId)) {
-        targetId = this.formAction.itemId;
-      }
-
-      try {
-        await this.itemsRuntime.get(targetId).freshCode();
-      } catch (e) {
-        hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '点卡取码计算失败: %{public}s', JSON.stringify(e));
-
-        return;
-      }
-
-      const code: string | undefined = this.itemsRuntime.get(targetId).code;
-
-      if ('undefined' === typeof code || code.length <= 0) {
-        return;
-      }
-
-      try {
-        await Clipboard.copy(code);
-
-        // 仅成功后清空待办
-        this.formAction.action = undefined;
-        this.formAction.itemId = undefined;
-
-        Toast.show({ message: $r('app.string.index_index_page_copied'), duration: 3000 });
-      } catch (e) {
-        hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '点卡取码复制失败，保留待办: %{public}s', JSON.stringify(e));
-
-        Toast.show({ message: $r('app.string.index_index_page_copy_failed'), duration: 3000 });
-      }
-    } finally {
-      this.isConsuming = false;
+    if ('input' === route) {
+      this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
     }
   }
 }

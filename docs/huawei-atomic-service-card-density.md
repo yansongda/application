@@ -11,9 +11,9 @@
 
 | # | 决策 | 结论 |
 |---|---|---|
-| D1 | 卡片形态 | 不做卡内实时验证码（受系统刷新机制硬约束），改为**清单型入口卡片 + 点击直达即复制** |
-| D2 | 卡片数据 | 卡片不持有 TOTP secret，只读非敏感展示快照（账号数 / 首个 issuer） |
-| D3 | 卡片尺寸 | 只做 `2*2`；`2*4` 列为候选 |
+| D1 | 卡片形态 | 不做卡内实时验证码（受系统刷新机制硬约束），改为**入口卡片**：账号数主视觉 + 「扫码添加 / 输入添加」两个快捷入口（卡内不取码） |
+| D2 | 卡片数据 | 卡片不持有 TOTP secret，只读非敏感展示快照（仅账号数，不落任何账号明细） |
+| D3 | 卡片尺寸 | 只做 `2*2`（卡片页按尺寸命名，为 `2*4` 预留）；`2*4` 列为候选 |
 | D4 | 引导页 | 不做「首次展示 + 可关闭 + 持久化标记」；空态提示卡**无数据时固定展示** |
 | D5 | 列表项 | 不加独立复制图标；**点击验证码数字区域即复制**，进度条形态保持不变 |
 | D6 | 详情页 | 新增复制按钮；全局使用说明**收敛到「使用帮助」页**，详情页只留入口 |
@@ -41,22 +41,22 @@
 huawei/atomicservice/MFA/
 ├── module.json5                                     # extensionAbilities(form) + metadata(client_id/env)
 ├── resources/base/
-│   ├── profile/form_config.json                     # 卡片配置（2*2，src 指向 pages/form/FormCard.ets）
+│   ├── profile/form_config.json                     # 卡片配置（2*2，src 指向 pages/form/FormCard2x2.ets）
 │   ├── profile/routes.json                          # NavDestination 路由（含 help）
 │   ├── profile/pages.json                           # 仅 pages/Home
 │   └── element/string.json                          # card_* / index_* / user_* / help_* 文案
 └── ets/
     ├── App.ets                                      # LogDomain / HttpDomain / AppEnv / AppPagesName / App
     ├── ability/
-    │   ├── EntryAbility.ets                         # UIAbility：卡片动作解析、页面栈与主题初始化
+    │   ├── EntryAbility.ets                         # UIAbility：页面栈与主题初始化
     │   └── EntryFormAbility.ets                     # 服务卡片 FormExtensionAbility（独立进程）
     ├── models/
     │   ├── Auth.ets  User.ets                       # 登录态 / 用户配置（PersistenceV2）
-    │   ├── form/FormAction.ets                      # 卡片待办动作（AppStorageV2）
     │   ├── form/FormBridge.ets                      # 卡片数据桥接（单一入口）
+    │   ├── form/FormIntent.ets                      # 卡片意图（快捷入口路由）
     │   └── totp/{ItemRuntime,ItemsRuntime}.ets      # TOTP 条目运行时（端内算码 + 倒计时）
     ├── utils/
-    │   ├── FormForm.ets                                 # 卡片展示快照读写（preferences，跨进程）
+    │   ├── Form.ets                                  # 卡片展示快照读写（preferences，跨进程）
     │   ├── Clipboard.ets  Display.ets  Http.ets  Nav.ets  PromptAction.ets  Totp.ets
     ├── components/
     │   ├── InfoCard.ets  InputCard.ets  Header.ets  TotpCard.ets
@@ -64,7 +64,7 @@ huawei/atomicservice/MFA/
     │   └── index/{AddFab,EmptyState,TotpListView}.ets
     ├── pages/
     │   ├── Home.ets  Login.ets  Help.ets            # Home 为 Navigation 容器（唯一 @Entry）
-    │   ├── card/Card.ets                            # 卡片 UI（不注册到 routes.json）
+    │   ├── form/FormCard2x2.ets                      # 2*2 卡片 UI（不注册到 routes.json）
     │   ├── index/{Index,Detail,Create,EditText}.ets
     │   └── user/{Detail,Delete}.ets  user/edit/Slogan.ets
     ├── themes/Main.ets   types/Item.ets
@@ -76,15 +76,15 @@ huawei/atomicservice/MFA/
 
 ```
 ① 卡片数据下行（主应用 → 卡片刷新）
-   Index.syncCards() ──▶ FormBridge.sync() ──▶ Snapshot.write(preferences: mfa_card)
+   Index.syncCards() ──▶ FormBridge.sync(ids) ──▶ Snapshot.write(count)
                                           └─▶ FormBridge.push() ──▶ formProvider.updateForm(formId)
    （卡片侧由系统在创建/定时刷新时经 EntryFormAbility.onAddForm / onUpdateForm 读快照装配）
 
-② 卡片点击上行（点卡即复制）
-   卡片整卡 onClick ──▶ postCardAction(router, {mfa_action:'copy'})
-        ──▶ EntryAbility.onCreate / onNewWant ──▶ FormAction(AppStorageV2).version++
-        ──▶ Index @Monitor('formAction.version') / onActive / refresh 锚点 ──▶ consumeFormAction()
-        ──▶ ItemRuntime.freshCode()（端内算码，secret 缺失回落 Totp.detail）──▶ Clipboard.copy() + Toast
+② 卡片点击（快捷入口）
+   整卡点击 ──▶ postCardAction(router, abilityName:'EntryAbility')  ──▶ 打开元服务首页（列表）
+   「扫码添加」/「输入添加」──▶ postCardAction(router, params:{mfa_route:'scan'|'input'})
+        ──▶ EntryAbility.onCreate / onNewWant ──▶ FormIntent(AppStorageV2).version++
+        ──▶ Index @Monitor('formIntent.version') / onActive ──▶ addByScan() / pushPathByName('index/create')
 
 ③ 首屏（并行）
    无账号 ──▶ EmptyState（英雄区 + IndexGuide 固定提示卡 + 扫码/输入 + 帮助入口）
@@ -110,7 +110,7 @@ huawei/atomicservice/MFA/
       "name": "mfa_card",
       "displayName": "$string:card_display_name",
       "description": "$string:card_description",
-      "src": "./ets/pages/form/FormCard.ets",
+      "src": "./ets/pages/form/FormCard2x2.ets",
       "uiSyntax": "arkts",
       "isDynamic": true,
       "isDefault": true,
@@ -136,28 +136,28 @@ huawei/atomicservice/MFA/
 **卡片内容（2\*2）**：
 
 ```
-┌──────────────────────┐
+┌──────────────────────┐  2*2 = 150×150vp，内容预算 ≈126×130vp
 │  ▣ MFA认证            │   ← 品牌角标 Image + 标题
 │  ─────────────────    │
-│  3 个账号             │   ← count（品牌色加粗）+ 后缀
-│  GitHub              │   ← first（首个 issuer，单行省略）
-│  点击复制验证码        │   ← 底部提示语
+│                      │
+│         3            │   ← count（40fp 品牌色）与单位说明贴成一组
+│     个账号已保护       │      整组在标题与入口之间居中
+│ [扫码添加] [输入添加]   │   ← 两枚等宽入口（11fp，主 / 次）
 └──────────────────────┘
-        count == '0' 时  →  「还没有账号」+「点击添加第一个账号」
+        count == '0' 时  →  「还没有账号」+「点击添加第一个账号」在同一区间居中，入口行**保留**
 ```
 
-UI 见 `pages/form/FormCard.ets`：`@Entry @ComponentV2`，两个 `@Local`（`count` / `first`），`Title()` / `Filled()` / `Empty()` 三个 `@Builder`；标题与首个 issuer 均 `maxLines(1)` + `textOverflow`，`Blank()` 撑底使提示语贴底。空态由 `count == '0'` 推导，**不单独注入标记字段**。
+UI 见 `pages/form/FormCard2x2.ets`：`@Entry @ComponentV2`，一个 `@Local`（`count`），`Title()` / `Filled()` / `Empty()` / `Actions()` 四个 `@Builder`；文本均 `maxLines(1)` + `textOverflow`；账号数区（`Filled()` / `Empty()`）带 `layoutWeight(1)` **吃掉标题与入口之间的剩余高度**——数字贴顶、单位说明贴底，把卡片撑满；`Actions()` 在**有账号与空态下都渲染**（空态正是最需要添加入口的时候）。空态由 `count == '0'` 推导，**不单独注入标记字段**。
+
+**尺寸预算（2\*2）**：官方规格「小卡片 2\*2 = 150×150vp」（最小 132vp 宽），四周需留 12vp 安全边距，即**内容高度 ≈130vp、宽 ≈126vp**。当前排布在该预算内留有余量。**数字字号已接近 2\*2 的上限**（40fp）：账号数区（`layoutWeight(1)`）高度 ≈ 130 − 标题行 26 − 分割线 1 − 入口行 21 − 行距 9 ≈ 73vp，需同时容纳「数字行 + 说明行」（两组间不留额外内边距、整组居中）；再往上加会顶掉说明行或裁切入口行。若确需更大，只能牺牲标题行（可到约 50fp）。**新增卡片内容前必须先核对这个预算**：126vp 宽放不下两枚 5 字胶囊（12fp 需 128vp），故入口文字取 11fp、等宽均分。
 
 **数据链路（快照）**：`utils/Form.ets` 的 `Snapshot` 类，preferences 库名 `mfa_card`。
 
 ```jsonc
-// key: card_snapshot（示例值；不含 secret、不含验证码）
+// key: card_snapshot（示例值；只含账号数与时间戳）
 {
   "count": 3,
-  "updatedAt": 1790000000,
-  "items": [
-    { "id": "0192…", "issuer": "GitHub", "username": "me@x.com" }
-  ]
+  "updatedAt": 1790000000
 }
 ```
 
@@ -167,38 +167,30 @@ UI 见 `pages/form/FormCard.ets`：`@Entry @ComponentV2`，两个 `@Local`（`co
 
 ```ts
 // utils/Form.ets
-write(context, items: SnapshotItem[])   // 落盘 card_snapshot，items 截断为前 1 条
-read(context): SnapshotData             // JSON → { count, updatedAt, items[] }，异常回落空快照
+write(context, count: number)           // 落盘 card_snapshot：{ count, updatedAt }
+read(context): SnapshotData             // JSON → { count, updatedAt }，异常回落空快照
 addFormId(context, formId)              // 卡片添加时登记 formId
 removeFormId(context, formId)           // 卡片移除时清除
 listFormIds(context): string[]          // 供主动刷新遍历
-// 内部：private prefs() / private parseFormIds() / private build()
+// 内部：private prefs() / private parseFormIds()
 ```
 
 **卡片数据注入约定**：卡片使用**状态管理 V2**，`updateForm` 注入的数据按**变量名**匹配卡片内 `@Local`，只注入字符串：
 
-- `count`：账号数（数字字符串）；
-- `first`：首个 issuer（空态为 `''`）。
+- `count`：账号数（数字字符串）。
 
-对应常量在 `models/form/FormBridge.ets`：`FORM_FIELD_COUNT = 'count'`、`FORM_FIELD_FIRST = 'first'`。**卡片侧文案一律用无参 `$r('app.string.card_*')`**，不使用带格式参数（`%d`/`%s`）的 `$r`（卡片渲染进程对带参格式化的支持未经证实），数量行用 `Text(this.count)` + `$r('app.string.card_count_suffix')`（「个账号」）拼接规避。
+对应常量在 `models/form/FormBridge.ets`：`FORM_FIELD_COUNT = 'count'`。**卡片侧文案一律用无参 `$r('app.string.card_*')`**，不使用带格式参数（`%d`/`%s`）的 `$r`（卡片渲染进程对带参格式化的支持未经证实），数量行用 `Text(this.count)` + `$r('app.string.card_count_suffix')`（「个账号」）拼接规避。
 
 > **契约警示**：注入 key 必须与卡片 `@Local` 变量名逐字一致。写错/改名**不会编译报错，只会静默不刷新**，改一侧必须同步改另一侧。
 
 **主动刷新链路**：主应用 `FormBridge.push()` 遍历 `Snapshot.listFormIds(context)` → `formProvider.updateForm(formId, data)`；失败仅记日志，不打断主流程。formId 在 `EntryFormAbility.onAddForm` 写入、`onRemoveForm` 清除。
 
-**拉起链路**：卡片整卡 `postCardAction({action:'router', abilityName:'EntryAbility', params:{mfa_action:'copy'}})` → `EntryAbility.onCreate/onNewWant` 解析（`FormAction.fromWant`）→ `models/form/FormAction`（AppStorageV2，`version++`）→ `Index` 消费 → `ItemRuntime.freshCode()` 端内算码（`secret` 缺失时回落 `Totp.detail(id)`）→ `Clipboard.copy()` → Toast「验证码已复制」。
+**点击链路**：
 
-**关键契约与消费语义**：
+- **整卡 / 「打开验证码」**：`postCardAction({action:'router', abilityName:'EntryAbility'})` —— 不携带参数，仅拉起元服务（冷启动落在首页列表）。
+- **「添加账号」**：`postCardAction({action:'router', abilityName:'EntryAbility', params:{mfa_route:'add'}})` → `EntryAbility.onCreate/onNewWant` 解析（`FormIntent.fromWant`）→ `FormIntent`（AppStorageV2，`version++`）→ `Index` 的 `@Monitor('formIntent.version')` / `onActive` 消费 → `pushPathByName('index/create')`。意图**消费一次即清空**，避免重复跳转。
 
-- **want 参数是 JSON 字符串**：`postCardAction` 的 `params` 被整体包装为 `want.parameters.params`（string），卡片侧 `params` **不逐键平铺**；解析须 `JSON.parse(want.parameters.params as string)` 后取 `mfa_action`。
-- **消费互斥**：`Index` 内用 `isConsuming` 互斥标志，避免 `@Monitor` 与 `onActive` 双路径并发消费。
-- **失败不清空**：仅**复制成功**后清空 `FormAction`；失败保留待办（「无论成败都清空」会把一次瞬时失败变成永久失败）。
-- **待办重试锚点**：在 `refresh()` 的 `finally`（`isFetching = false` 之后）重试消费待办 —— 关闭「热启动时页面未重新激活、且该次 refresh 被 `isFetching` 去重静默返回」导致待办永不消费的时序漏洞。
-- **失败与永挂边界**：`refresh()` 失败会 reject，故消费内部必须 try/catch 且各调用点 `.catch()`；`refresh()` 成功但账号数仍为 0 → 清空待办（避免日后添加首个账号时意外自动复制）。
-- **空列表点卡**：`ids` 为空时不做复制，只静默进入列表（首屏已可见添加入口），不弹「复制失败」。
-- **监听必须用状态装饰器**：`@Monitor('formAction.version')` 的目标变量须为 `@Local`，否则监听不到变化。
-
-**边界（Must NOT）**：不做卡内按钮 message 事件、不做 `FormExtensionAbility` 算码、不放 secret、不做秒级刷新、不做 `dataProxy`、不做 `2*4`。
+**边界（Must NOT）**：不做卡内按钮 message 事件、不做 `FormExtensionAbility` 算码、不放 secret、不做秒级刷新、不做 `dataProxy`。卡内交互一律走 `router` 事件（不用 `message` / `call`）。
 
 ### 3.2 首屏信息密度改造
 
@@ -225,8 +217,6 @@ listFormIds(context): string[]          // 供主动刷新遍历
 | `postCardAction` 支持 router/call/message；`call` 元服务暂不支持 | 官方文档 + 社区转述 | router 高 / call 限制 中 |
 | 卡片刷新机制清单（定时 30min、`setFormNextRefreshTime` 最短 5min、`updateForm` 主动、`dataProxy` 仅系统应用） | 官方文档（被动刷新/页面刷新概述） | 已验证（外部官方源码） |
 | `FormExtensionAbility` 独立进程、与主应用共享文件沙箱、创建后 10 秒无操作被清理 | `arkts-ui-widget-process.md`、`js-apis-app-form-formExtensionAbility.md` | 已验证（外部官方源码） |
-| `postCardAction` 的 `params` 经 `want.parameters.params`（JSON **字符串**）传递，需 `JSON.parse` 后取值 | `arkts-ui-widget-event-router.md:110-123` | 已验证（外部官方源码） |
-| `@Monitor` 目标变量必须被 `@Local`/`@Param`/`@Provider`/`@Consumer`/`@Computed` 装饰 | `arkts-new-monitor.md:28,156` | 已验证（外部官方源码） |
 | `FormExtensionAbility.onAddForm(want): formBindingData.FormBindingData` 为**同步**签名，`onUpdateForm`/`onRemoveForm` 返回 void | SDK `@ohos.app.form.FormExtensionAbility.d.ts:83/129/207` | 已验证（本机 SDK 源码） |
 | `preferences` 同步 API（`getPreferencesSync`/`getSync`/`putSync`/`flushSync`）存在且带 `@atomicservice` | SDK `@ohos.data.preferences.d.ts:452/1114/1480/1743` | 已验证（本机 SDK 源码） |
 | `formInfo.FormParam.IDENTITY_KEY = "ohos.extra.param.key.form_identity"`（卡片 formId 取值） | SDK `@ohos.app.form.formInfo.d.ts:679` | 已验证（本机 SDK 源码） |
@@ -245,28 +235,29 @@ listFormIds(context): string[]          // 供主动刷新遍历
 4. **卡片组件白名单编译期不校验**：新增组件/属性一律以真机验证为准，优先复用已在卡片中跑通的组件。
 5. **`onAddForm` 是同步签名**：卡片提供方侧读取快照、装配绑定数据必须全同步，无法 await 异步方法。
 6. **preferences 不保证多进程并发安全**（官方只保证单进程安全）：当前数据量极小、写入频率极低，采用官方推荐的「清缓存读」作为读侧补偿。
+7. **2\*2 卡片内容有硬尺寸预算**（≈126×130vp，见 §3.1「尺寸预算」）：新增元素前先核算；宁可减少内容也不要溢出——溢出会被卡片圆角裁切，且编译期不报错。
 
 ## 5. 风险与对策
 
 | # | 风险 | 严重度 | 状态 / 对策 |
 |---|---|---|---|
 | R1 | preferences 在 `FormExtensionAbility` 不可用 → 卡片拿不到账号数据 | 高 | **已关闭**：文件沙箱共享，R1 证伪（见 §7） |
-| R2 | `pasteboard` 在元服务页面不可用 → 「点卡片即复制」不成立 | 高 | 真机 PoC 通过；降级方案为「点卡片直达详情页」 |
-| R3 | router 事件拉起后 want 参数缺失/格式不符 | 中 | `onCreate`（冷启动）与 `onNewWant`（热启动）两路都实现；参数缺失时静默进列表 |
+| R2 | `pasteboard` 在元服务页面不可用 → 列表/详情页复制不成立 | 高 | 真机 PoC 通过 |
 | R4 | 卡片定时刷新有配额（50 次/日/卡），主动刷新依赖 formId 持久化 | 中 | formId 在 `onAddForm` 落 preferences、`onRemoveForm` 清除；仅数据真变更时 `updateForm` |
 | R5 | 每声明一个尺寸需同尺寸快照素材，缺失导致 AGC 上传报错 | 中 | 只声明 `2*2`；快照素材与 AGC 说明人工出图 |
-| R6 | 快照把 issuer/username 明文写入 preferences，扩大暴露面 | 中 | 只存展示字段（无 secret、无验证码），代码注释与本文档标注该取舍 |
+| R6 | 快照落盘明文账号信息，扩大暴露面 | 中 | **已消除**：快照只存 `count`/`updatedAt`，不落任何账号明细 |
 | R7 | 首页 `Repeat + virtualScroll`、`swipeAction`、`onMove` 索引耦合，新增元素可能错位 | 中 | 新增元素一律放在 `List` **之外**，不动 `List` 内部结构 |
 | R8 | 列表项复制区域点击同时触发「进详情」 | 低 | 复制区域独立 `onClick` 消费并判排序态 |
 | R9 | 审核仍认为场景不足 | 中 | 回复附卡片截图/动图 + 首屏改版对比 + 候选清单 |
-| R10 | 卡片动作被双路径并发消费 → 重复复制/Toast 叠显，或一次瞬时失败后待办被清空 | 中 | `isConsuming` 互斥 + 列表未就绪时不消费 + **仅成功后清空**；空列表点卡静默引导 |
-| R11 | want 参数格式理解错误（误按平铺取值）导致取不到参数 | 中 | 按官方契约 `JSON.parse(want.parameters.params)`；区分「参数缺失」与「解析/键名错误」 |
 | R12 | 卡片侧 `$r` 带参格式化（`%d`）支持未证实 → 文案渲染异常 | 低 | 卡片侧只用无参 `$r`，数量行用拼接 |
 | R13 | V2 卡片的数据接收（按变量名匹配）失败形态是静默不刷新 | 中 | **已实测可用**（负一屏每次可见重建卡片视图，创建时注入最新值） |
 | R14 | min API 抬到 23 后 6.0.x/5.x 设备不可安装 | 中 | AGC 上架信息与版本说明需同步；如需保留老设备只能回退卡片到 V1 |
 | R15 | 「注入 key = 卡片 `@Local` 变量名」是编译期不可校验的隐性契约 | 中 | 两侧文件头均已写明；改任一侧必须同步另一侧 |
 | R16 | 卡内新增的 `Image` / `Divider` 属白名单内但无真机证据 | 低 | 真机验收确认；异常则先撤 `Image`，再撤 `Divider`（可分级回退） |
 | R17 | 任何新增的跨进程 preferences 读写若忘记清缓存，会复现同类静默故障 | 中 | 已写入 `AGENTS.md` 约束，统一复用 `Snapshot.prefs()` |
+| R18 | 卡片内子元素 `onClick` 与整卡 `onClick` 可能同时触发 → 动作重复 | 低 | 依赖 ArkUI「子组件 onClick 优先消费」；真机验证，若出现冒泡则给入口元素加 `hitTestBehavior(HitTestMode.Block)` |
+| R19 | 卡内以 `Text` + 通用属性（背景色/圆角/onClick）充当按钮，未经真机验证 | 低 | 只复用卡片已跑通的 `Text` 与通用属性；真机确认渲染与点击均正常 |
+| R20 | 卡片内容超出 2\*2 尺寸预算（≈126×130vp）会被圆角裁切，且**编译期不报错** | 中 | 新增内容前按 §3.1「尺寸预算」核算；必要时改走 2\*4（316×150vp） |
 
 ## 6. 监控与可观测性
 
@@ -275,13 +266,11 @@ listFormIds(context): string[]          // 供主动刷新遍历
 ```jsonc
 {"domain":4,"tag":"ability/EntryFormAbility","event":"onAddForm","formId":"…","count":3}
 {"domain":4,"tag":"ability/EntryFormAbility","event":"onRemoveForm","formId":"…"}
-{"domain":3,"tag":"pages/index","event":"formAction","action":"copy","result":"success|fail"}
 ```
 
 | 指标 | 计算方式 | 关注阈值 |
 |---|---|---|
-| 卡片动作消费成功率 | `result=success` / `action=copy` 总数 | 真机验收期要求 100% |
-| 快照读写失败率 | `utils/form-snapshot` 异常日志次数 | > 0 即排查 |
+| 快照读写失败率 | `utils/form` 异常日志次数 | > 0 即排查 |
 | 卡片刷新失败率 | `updateForm` 失败日志次数 | > 0 即排查 |
 
 ## 7. 变更记录（里程碑）
@@ -294,14 +283,21 @@ listFormIds(context): string[]          // 供主动刷新遍历
 | 2026-10-04 晚 | **复盘：卡片不刷新的真实根因是 preferences 跨进程缓存**。现象：加账号后卡片仍显示空态，「过一会儿重进负一屏」又正常。根因链：卡片添加时提供方写 formId → 主应用进程已缓存 `preferences` 实例、读不到 → `push()` 因 targets 为空直接 return → 从未 `updateForm`；应用被系统回收重启后实例重新从文件加载 → 读到 formId → 推送成功。**修复**：`Snapshot.prefs()` 先 `removePreferencesFromCacheSync` 再 `getPreferencesSync`，`write/read/addFormId/removeFormId/listFormIds` 全部改走它。R1 证伪、R13 降级为「已实测可用」 |
 | 2026-10-04 | **重构与简化**：卡片快照模块 `utils/CardSnapshot.ets` → `utils/Card.ets`（类 `CardSnapshot` → `Snapshot`，`buildSnapshot` 收敛为私有静态方法 `Snapshot.build`，`CardSnapshotItem/Data` → `SnapshotItem/Data`）；引导页改为**无数据时固定展示**，删除 `models/Guide.ets`（`IndexGuideState`）与「不再提示」入口 |
 | 2026-10-04 | **命名梳理（消除 Card 歧义）**：服务卡片族统一为 `Form*` —— `utils/Card.ets` → `utils/Form.ets`（类名保持 `Snapshot`）、`models/card/` → `models/form/`（`CardAction` → `FormAction`、`CardBridge` → `FormBridge`）、`pages/card/Card.ets` → `pages/form/FormCard.ets`、`CARD_FIELD_*` → `FORM_FIELD_*`；页面内通用卡片组件 `components/Card.ets` → `components/InfoCard.ets`（`Card`/`CardItem` → `InfoCard`/`InfoCardItem`）、`components/CardInput.ets` → `components/InputCard.ets` |
+| 2026-10-04 | **卡片交互简化**：2*2 卡片去掉「点卡复制验证码」，改为只展示「标题 / X 个账号 / 打开查看验证码」三行（**去掉 issuer 展示**），整卡点击仅打开元服务首页；随之移除失效的复制链路（`FormAction`、`EntryAbility` 的 want 处理、`Index` 的 `formAction`/`consumeFormAction`/`@Monitor`、`FORM_FIELD_FIRST`），快照简化为只存 `count`/`updatedAt`（**顺带关闭 R6**）；卡片页 `FormCard.ets` → `FormCard2x2.ets`（struct 同名，为 2*4 预留） |
+| 2026-10-04 | **卡片充实（方案 A+C）**：2×2 卡片改为「账号数主视觉（36fp）+ 状态小字」加「打开验证码 / 添加账号」双入口，主内容块上下各一个 `Blank()` 垂直居中；新增 `models/form/FormIntent.ets`（意图路由）支持「添加账号」直达 `index/create`，`EntryAbility` 恢复 `onCreate`/`onNewWant` 解析 `mfa_route`；文案 `card_count_suffix`/`card_hint` 替换为 `card_protected_label`/`card_status_hint`/`card_action_open`/`card_action_add`，新增尺寸 `card_number_font_size` |
+| 2026-10-04 | **修正 2\*2 内容溢出**：原布局（20fp 标题 + 36fp 数字 + 状态小字 + 10vp 行距 + 两枚 12fp 胶囊）约 167vp，超出 2\*2 预算。按官方规格重排——大数字 36fp→28fp 并与单位说明同行、去掉状态小字、列间距 10vp→6vp、入口文字 12fp→11fp 等宽均分；新增 `card_action_font_size`（11fp），移除 `card_status_hint` |
+| 2026-10-04 | **卡片入口改为添加流程**：底部两枚入口由「打开验证码 / 添加账号」改为「**扫码添加 / 输入添加**」（`card_action_scan` / `card_action_input`），各带 `mfa_route`（`scan` / `input`）直达扫码或手动输入；账号数改为**两行居中**（`1` 独占一行、`个账号已保护` 独占一行），数字 28fp→24fp；`Actions()` 改为**空态也保留** |
+| 2026-10-04 | **卡片排版撑满**：账号数区改为 `layoutWeight(1)` 吃掉剩余高度——数字 24fp→**30fp** 并贴顶（区顶 `padding-top: 6vp`）、单位说明 12fp→**11fp**（新增 `card_label_font_size`）并贴底（区内 `Blank()` 撑开）；列间距 5vp→4vp |
+| 2026-10-04 | **数字加大**：`card_number_font_size` 30fp→**38fp**（接近 2\*2 上限，推导见 §3.1「尺寸预算」）；行距 4vp→3vp、账号数区顶部内边距 6vp→4vp，把空间让给数字，消除数字与说明之间的空洞 |
+| 2026-10-05 | **卡片排版改为「成组居中」**：数字与单位说明贴成一组、整组在标题与入口之间居中（去掉原「数字贴顶、说明贴底」写法与数字区顶部内边距）；数字 38fp→**40fp**；入口胶囊内边距 4vp→3vp 让出高度；`Filled()` 与 `Empty()` 形态统一（同为 `layoutWeight(1)` + `justifyContent(Center)`） |
 
 ## 8. 附录：本次不做、候选清单
 
 | 项 | 是否需后端 | 说明 |
 |---|---|---|
-| 卡片内「复制验证码」按钮（message 事件 + 提供方算码 + 剪贴板） | 否 | 需评估 secret 共享的安全代价，PoC 通过后单独评估 |
+| 卡片内取码（`message` 事件 + 提供方算码 + 剪贴板），或 2×4 逐行点击复制 | 否 | 前者需评估 secret 共享的安全代价；后者只需 `postCardAction` 带 `mfa_item_id`，成本较低 |
 | 「卡片实时显示验证码」 | 否 | **当前系统机制下不可实现**（无秒级刷新） |
-| `2*4` 卡片规格 | 否 | 第二套布局 + 快照素材 |
+| `2*4` 卡片规格 | 否 | 第二套布局 + 快照素材；卡片页已按尺寸命名（`FormCard2x2.ets`），新增即 `FormCard2x4.ets` |
 | 批量导入（相册选图识别二维码，`ScanKit`） | 否 | 价值高，端内可取 |
 | 搜索与分组（条目 > 10 时出现） | 否 | 端内可取 |
 | 应用锁（生物识别） | 否 | 需核实元服务 API 集 |

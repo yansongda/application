@@ -238,7 +238,7 @@
     },
     {
       "name": "card_ability_desc",
-      "value": "在桌面直接取码"
+      "value": "在桌面查看账号保护状态"
     },
     {
       "name": "card_display_name",
@@ -246,15 +246,15 @@
     },
     {
       "name": "card_description",
-      "value": "桌面卡片，点一下取码"
+      "value": "桌面卡片，查看账号保护状态"
     },
     {
       "name": "card_title",
       "value": "MFA认证"
     },
     {
-      "name": "card_count_suffix",
-      "value": "个账号"
+      "name": "card_protected_label",
+      "value": "个账号已保护"
     },
     {
       "name": "card_empty_title",
@@ -265,8 +265,12 @@
       "value": "点击添加第一个账号"
     },
     {
-      "name": "card_hint",
-      "value": "点击复制验证码"
+      "name": "card_action_scan",
+      "value": "扫码添加"
+    },
+    {
+      "name": "card_action_input",
+      "value": "输入添加"
     },
     {
       "name": "index_index_page_empty_title",
