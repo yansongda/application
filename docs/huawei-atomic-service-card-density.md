@@ -157,12 +157,14 @@ docs/evidence/huawei-atomic-service-card-density/    [新] 逐任务证据
 
 主应用写入时机（均在 `pages/index/Index.ets` 既有分支上挂一行）：`refresh()` 成功后、`addByScan()` 成功后、删除成功后、`saveSort()` 成功后。
 
-**卡片数据注入约定**（跨进程数据只能以字符串传递）：`FormExtensionAbility` 注入 3 个字符串 key —— `count`（数字字符串）、`first`（首个 issuer）、`hasItems`（`'1'`/`'0'`）。**卡片侧文案一律用无参 `$r('app.string.card_*')` 渲染，不使用带格式参数（`%d`/`%s`）的 `$r`**——卡片渲染进程对带参格式化的支持未经核实（官方文档仅有「支持部分组件/事件/动效/数据管理能力、接口带‘卡片能力’标记」的描述），因此数量行用 `Text(this.count)` + `$r('app.string.card_count_suffix')`（“个账号”）拼接规避；`hasItems !== '1'` 时渲染 `card_empty_title` + `card_empty_hint`。提供方是非 UI 上下文，**不得**在其中调用 `$r`。
+**卡片数据注入约定**（跨进程数据只能以字符串传递）：`FormExtensionAbility` 注入字符串 key —— `count`（数字字符串）、`first`（首个 issuer）。**卡片侧文案一律用无参 `$r('app.string.card_*')` 渲染，不使用带格式参数（`%d`/`%s`）的 `$r`**——卡片渲染进程对带参格式化的支持未经核实（官方文档仅有「支持部分组件/事件/动效/数据管理能力、接口带‘卡片能力’标记」的描述），因此数量行用 `Text(this.count)` + `$r('app.string.card_count_suffix')`（“个账号”）拼接规避；空态由 `count == '0'` 推导，渲染 `card_empty_title` + `card_empty_hint`。提供方是非 UI 上下文，**不得**在其中调用 `$r`。
+
+> ⚠️ 2026-10-04 变更：原设计注入第 3 个 key `hasItems`、卡片侧用 `@LocalStorageProp` 接收；现已改为**状态管理 V2**（卡片按变量名匹配，仅注入 `count` / `first`，`hasItems` 作为冗余字段删除）。以 **§8 变更记录** 为准，本节其余内容仍有效。
 
 伪代码：
 ```
 // utils/CardSnapshot.ets（全部同步方法，首参 context）
-write(context, items): prefs.put('card_snapshot', json(buildSnapshot(items)))   // buildSnapshot 截断前 2 条
+write(context, items): prefs.put('card_snapshot', json(buildSnapshot(items)))   // buildSnapshot 截断前 1 条（2026-10-04 起）
 read(context):        json → { count, items[] } | 空快照兜底
 addFormId(context, formId) / removeFormId(context, formId) / listFormIds(context): string[]   // 供主动刷新
 ```
@@ -201,7 +203,7 @@ addFormId(context, formId) / removeFormId(context, formId) / listFormIds(context
 | 契约 | 结论 | 状态 |
 |---|---|---|
 | 卡片配置文件字段、`supportDimensions` 取值、`updateDuration` 单位为 30 分钟 | OpenHarmony docs `arkts-ui-widget-configuration.md` | 已验证（外部官方源码） |
-| 卡片渲染在系统统一进程，与提供方内存隔离；数据经 `LocalStorageProp`/`formBindingData` 注入 | `arkts-ui-widget-process.md`、`arkts-ui-widget-interaction-overview.md` | 已验证（外部官方源码） |
+| 卡片渲染在系统统一进程，与提供方内存隔离；数据经 `LocalStorageProp`/`formBindingData` 注入 | `arkts-ui-widget-process.md`、`arkts-ui-widget-interaction-overview.md` | 已验证（外部官方源码）；**V2 接收机制见 §8** |
 | `postCardAction` 支持 router/call/message；`call` 元服务暂不支持 | 官方文档 + 社区转述 | router 高 / call 限制 中 |
 | 卡片刷新机制清单（定时 30min、`setFormNextRefreshTime` 最短 5min、`updateForm` 主动、`dataProxy` 仅系统应用） | 官方文档（被动刷新/页面刷新概述） | 已验证（外部官方源码） |
 | `FormExtensionAbility` 独立进程、与主应用共享文件沙箱、创建后 10 秒无操作被清理 | `arkts-ui-widget-process.md`、`js-apis-app-form-formExtensionAbility.md` | 已验证（外部官方源码） |
@@ -215,7 +217,7 @@ addFormId(context, formId) / removeFormId(context, formId) / listFormIds(context
 | preferences / pasteboard 的接口带 `@atomicservice` 标注（在元服务 API 集内） | SDK d.ts 标注（`preferences`/`pasteboard`/`formProvider`） | 接口归属已验证；**运行时行为待真机 PoC（假设 A/B）** |
 | 主应用 `Totp.all()` 依赖登录态（`PersistenceV2` Authorization + Http 拦截器） | `utils/Http.ets:10`、`api/Totp.ets` | 已验证（读过源码） |
 | `EntryAbility` 当前不处理 want（无 `onCreate`/`onNewWant`，全文件 47 行） | `ability/EntryAbility.ets` | 已验证（读过源码） |
-| 卡片数据必须经 `LocalStorageProp` 注入，卡片侧不能读 preferences | 同上进程模型文档 | 已验证（外部官方源码） |
+| 卡片数据必须经 `LocalStorageProp` 注入，卡片侧不能读 preferences | 同上进程模型文档 | 已验证（外部官方源码）；**2026-10-04 起卡片改用 V2 按变量名接收，见 §8** |
 | 构建命令可用性 | 2026-10-02 实测：`hvigorw.js assembleHap --mode module -p product=default --no-daemon` → `BUILD SUCCESSFUL`，`git status` 无脏文件 | 已验证（本机实测） |
 
 ## 4. 推进策略
@@ -285,3 +287,87 @@ Wave 5 Task 8 AGC 材料与审核回复文档
 | 云端备份版本历史、跨端同步状态查询 | **是** | 需 `application-rs` 增加接口 |
 | 意图框架 / 搜索直达接入 | 否（需 AGC 配置） | 需元服务侧配置与联调 |
 | `2in1` 等多设备适配 | 否 | `deviceTypes` + UI 双端适配成本 |
+
+## 8. 变更记录（2026-10-04）：卡片状态管理 V2 迁移 + 卡片展示重排
+
+> **状态**：经用户确认后实施（决策：① min API 由 6.0.0(20) 抬到 6.1.0(23)；② 展示优化做「档位 A+B」；③ 去掉冗余注入字段 `hasItems`）。
+> **性质**：本节取代 §3.1「卡片数据注入约定」中关于 `@LocalStorageProp` / `hasItems` 的描述；§3 其余内容（快照链路、主动刷新、拉起链路、消费互斥）不变。
+
+### 8.1 为什么要抬 min API
+
+- ArkTS 卡片**自 API 23 起才支持状态管理 V2**（官方《卡片状态变量迁移》：V2 卡片按**变量名**匹配注入数据，入口组件用裸 `@Entry`、不再传 LocalStorage 实例；`@Local` 的「卡片能力」标注同样自 API 23 起）。
+- 卡片 UI 跑在**系统卡片渲染服务进程**（非应用进程），因此这条能力由**设备系统版本**决定，不由编译 SDK 决定：在 API < 23 的设备上，V2 卡片推断为「数据永不刷新、恒显示默认值 0」的**静默失效**。为避免这种失败形态，min API 随之抬到 23。
+- 代价（官方设备占比，2026-06-19 数据）：6.1.0(23) 60.20% + 6.1.1(24) 34.40% ≈ **94.6%**；`compatibleSdkVersion` 抬到 23 后，6.0.2(22)/6.0.1(21)/6.0.0(20) 及 5.x 合计约 **5.2%** 设备不再可安装。
+
+### 8.2 改动清单
+
+| 文件 | 改动 |
+|---|---|
+| `entry/src/main/ets/pages/card/Card.ets` | `@Component` → `@ComponentV2`；3 个 `@LocalStorageProp` → 2 个 `@Local`（`count` / `first`）；`hasItems` 删除，空态由 `count == '0'` 推导；拆 `Title()` / `Filled()` / `Empty()` 三个 `@Builder`；标题加品牌角标与 `Divider`；全部文本补 `maxLines(1)` + `textOverflow`；数量行改品牌色 + 小号后缀分层；`Blank()` 撑底 |
+| `entry/src/main/ets/models/card/CardBridge.ets` | 去掉 `hasItems` 注入；新增 `CARD_FIELD_COUNT` / `CARD_FIELD_FIRST` 常量并以 `Record<string, string>` 装配，把「注入 key = 卡片 `@Local` 变量名」的契约写成显式注释 |
+| `entry/src/main/ets/utils/CardSnapshot.ets` | `SNAPSHOT_MAX_ITEMS` 2 → 1（卡片只消费 `items[0]`，多存即多暴露 issuer/username） |
+| `entry/src/main/resources/base/element/string.json` | `card_hint`：`点击查看验证码` → `点击复制验证码`（与「点卡即复制」的真实行为对齐） |
+| `build-profile.json5` | 两个 product 的 `targetSdkVersion` / `compatibleSdkVersion`：`6.0.0(20)` → `6.1.0(23)` |
+
+### 8.3 卡片展示改动明细
+
+- **缺陷修复 1**：`first`（发行方）与标题此前**无 `maxLines` / `textOverflow`**，长发行方（如 `GitHub Enterprise Cloud`）会换行挤压 2x2 布局 → 全部单行省略。
+- **缺陷修复 2**：`card_hint` 此前**在空态也渲染**（空列表点卡不会复制，只静默进列表），语义不成立 → 空态不再渲染底部提示。
+- 文案对齐：`card_hint` 由「查看」改为「复制」，与 `postCardAction({mfa_action:'copy'})` 的真实行为一致。
+- 视觉：标题加 16vp `Image($r('app.media.icon'))` 品牌角标 + 1vp `Divider()` 分栏；数量数字用 `$r('app.color.brand')` 加粗放大、后缀「个账号」降为 12fp 次要色；`Blank()` 让提示语贴底。
+- **保持不做**（本次仍未做，理由见 §7 与 §8.5）：卡内实时验证码、卡内按钮、`dataProxy`、`2*4` 规格。
+
+### 8.4 实施期实测（本机，非推断）
+
+| 验证项 | 结论 |
+|---|---|
+| V2 卡片能否编译（`compatibleSdkVersion=6.0.0(20)`） | ✅ BUILD SUCCESSFUL，产物为 `class Card extends ViewV2`；V1 时代的 `'@Entry' should have a parameter` 告警消失（V2 本就不传 storage） |
+| 抬到 `6.1.0(23)` 能否编译 | ✅ BUILD SUCCESSFUL（本机仅装 6.1.1(24) SDK，跨版本可用） |
+| `@Builder` / `Blank` / `Divider` / `Image` / `maxLines`+`textOverflow` 在卡片中 | ✅ 编译全部通过 |
+| 卡片组件白名单是否在编译期强制 | ❌ **不强制**：`SymbolGlyph` 不在 `ets-loader/form_components/*.json` 白名单中却编译通过 → 卡内「能不能用某组件」**只能靠真机判定**，不能靠编译 |
+| `SymbolGlyph` 用于卡内图标 | **不采用**（不在卡片白名单，且编译期不拦） |
+
+### 8.5 新增风险与验收要求
+
+| # | 风险 | 对策 |
+|---|---|---|
+| R13 | V2 卡片的数据接收（按变量名匹配）**缺乏真机证据**，失败形态是静默不刷新 | 验收前必须真机跑：加 2 个账号 → 桌面加卡 → 应显示「2 个账号 + 首个发行方」；删 1 个 → 「1 个」；清空 → 空态。若恒为 0 → 判定 V2 接收失败 |
+| R14 | min API 抬到 23 后 6.0.x/5.x 设备不可安装 | AGC 上架信息与版本说明需同步；如需保留老设备，只能回退卡片到 V1（见回滚） |
+| R15 | 「注入 key = 卡片 `@Local` 变量名」是**编译期不可校验**的隐性契约 | 两侧文件头均已写明；改任一侧必须同步另一侧 |
+| R16 | 卡内新增的 `Image` / `Divider` 属白名单内但无真机证据 | 真机验收时一并确认渲染正常；异常则先撤 `Image`，再撤 `Divider`（两处独立，可分级回退） |
+
+**回滚**：卡片链路本次改动集中在 4 个文件 + `build-profile.json5`（1 行 ×2 处），`git revert` 单次提交即可；若只需临时规避 V2 风险而不回退 min API，需同时把 `Card.ets` 回退为 V1 接收方式。
+
+## 9. 复盘（2026-10-04 晚）：卡片不刷新的真实根因是 preferences 跨进程缓存
+
+> 现象：v1.5.0 装到模拟器后，添加账号，卡片仍显示空态；「过一会儿重新进负一屏」又正常了。
+> 结论：**不是 V1/V2 的问题，也不是「preferences 跨进程不可用」（R1）**，而是**主应用进程缓存了 preferences 实例，读不到卡片提供方进程写入的 formId**。
+
+### 9.1 根因链
+
+1. 卡片添加 → `EntryFormAbility.onAddForm`（**提供方进程**）把 formId 写入 preferences（`mfa_card` / `card_form_ids`）。
+2. 主应用（**另一个进程**）在卡片添加之前就已打开过 `mfa_card`，`preferences` 实例按进程缓存在内存里，**之后 getPreferences 不会重新读持久化文件** → `CardSnapshot.listFormIds()` 读到的是「没有 formId」的旧值。
+3. `CardBridge.push()` 因 `formTargets.length <= 0` 直接 return → **`updateForm` 一次都没发出** → 卡片停在「添加卡片那一刻」的数据（那次 `count=0`）。
+4. 应用被系统回收后重新启动（元服务进程存活很短）→ 实例重新从文件加载 → 读到 formId → 推送成功 → 卡片显示正确数据。这就是「什么都没做、重新进负一屏就有了」的真相：中间发生过一次应用重启。
+
+### 9.2 证据（模拟器 OpenHarmony 6.1.1 / API 24，hdc 实测）
+
+| 证据 | 内容 |
+|---|---|
+| 一次冷启动后的完整成功链路 | `sync: items=1` → `snapshot write count=1` → `push: formIds=1 targets=["564639218"]` → `updateForm 成功`；系统侧 `form_mgr_adapter[UpdateForm]` → `RequestRefresh` → `UpdateByProviderData` → `UpdateRenderingForm` → `form_cache_mgr[AddData]` → `refresh_cache_mgr[AddRenderTask]` |
+| 跨进程 preferences 文件本身是共享的 | 提供方进程与主应用进程打印的 `context.filesDir` 一致（`/data/storage/el2/base/haps/entry/files`），快照 `rawLen` 非 0 —— **R1 证伪** |
+| 卡片会应用推送值 | 用假数据探针推送 `first="Example*"`，负一屏卡片实际渲染出 `Example*`（截图确认） |
+| 卡片视图是「每次可见时新建」 | 每次负一屏可见都打 `AceForm: JSForm Create, info.id: 564639218` → V1/V2 都在**创建时**注入最新数据，因此 **V2 卡片不是问题**（当时基于错误假设改的 V1 版本已还原回 V2） |
+| 官方同款案例 | 华为 FAQ（HarmonyOS SDK 闭源开放能力 — Form Kit）与开发者论坛均有「卡片进程写 formId、主应用读不到；杀掉应用重启就能读到」的案例，官方解法即 `preferences.removePreferencesFromCache` 后再 `getPreferences` |
+
+### 9.3 修复
+
+`utils/CardSnapshot.ets` 新增 `private static prefs(context)`：先 `preferences.removePreferencesFromCacheSync(context, { name })` 再 `getPreferencesSync`，**write / read / addFormId / removeFormId / listFormIds 全部改走它**；`addFormId` / `removeFormId` 调整为先 `listFormIds`（内部已清缓存）再取实例写入，避免使用被逐出缓存的旧实例。
+
+> 备注：官方文档同时说明 preferences「不保证多进程并发安全（只保证单进程安全）」，因此该方案是**读侧补偿**；若要彻底规避，可把 formId 改存普通文件（`filesDir` 下自管 JSON）。当前数据量极小、写入频率极低，采用官方推荐的清缓存读法。
+
+### 9.4 风险表更新
+
+- **R1（preferences 在元服务 FormExtensionAbility 不可用）→ 关闭**：文件沙箱共享，读不到是**进程内缓存**导致。
+- **R13（V2 卡片数据接收）→ 降级为「已实测可用」**：V2 的变量名注入在卡片视图创建时生效；负一屏每次可见都会重建卡片视图，实测能拿到最新推送值。
+- 新增 **R17**：任何新增的跨进程 preferences 读写若忘记清缓存，会复现同类静默故障 → 已写入 `AGENTS.md` 约束。

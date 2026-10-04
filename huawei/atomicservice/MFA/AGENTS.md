@@ -58,6 +58,15 @@ MFA/
 - 弹窗/对话框统一用组件内的成员 `@Builder` 方法：**不要在 `Dialog.open/execute`、`Toast.execute` 等自定义函数的闭包里调用全局 `@Builder` 函数**（编译器不会给全局 builder 注入组件上下文，运行时报 `Cannot read property observeComponentCreation2 of undefined`）；因此加载/失败/重试弹窗各页保留自己的成员实现，不做跨页抽取
 - 未确认工程已有命令前，不凭空引入新的构建或测试流程，优先遵循工程内现有配置文件
 
+## 服务卡片（`pages/card/`）
+
+- 卡片使用**状态管理 V2**（`@Entry @ComponentV2`）：`updateForm` 注入的数据按**变量名**匹配卡片内的 `@Local` 变量，入口组件用裸 `@Entry`、**不传** LocalStorage 实例；`@LocalStorageProp` 等 V1 组件内装饰器在 `@ComponentV2` 中**编译报错**，两套不可混用。
+- **注入契约**：卡片侧 `@Local` 变量名必须与 `models/card/CardBridge.ets` 的 `CARD_FIELD_*` 常量逐字一致。写错/改名**不会编译报错，只会静默不刷新**，改一侧必须同步改另一侧。
+- 卡片状态管理 V2 自 **API 23（HarmonyOS 6.1.0）**起支持，因此 `build-profile.json5` 的 `compatibleSdkVersion` 不得低于 `6.1.0(23)`。
+- 卡片内「能用哪些组件/属性」**编译期不校验**（SDK `ets-loader/form_components/*.json` 白名单不强制，如 `SymbolGlyph` 不在白名单也能编过），新增组件或属性一律以**真机验证**为准；优先复用已在卡片中跑通的能力（`Text` / `Row` / `Column` / `Blank` / `Divider` / `Image` / `Progress` / 通用属性）。
+- **跨进程 preferences 必须清缓存后再读**：主应用与卡片提供方（`FormExtensionAbility`）是两个进程，`preferences` 实例按进程缓存在内存，某进程首次 `getPreferences` 后不再读持久化文件 → 看不到另一个进程刚写入的值。`utils/CardSnapshot.ets` 已统一走 `prefs()`（内部 `removePreferencesFromCacheSync` 后再 `getPreferencesSync`）；**任何新增的跨进程 preferences 读写都必须复用该路径**，否则会出现「卡片添加后主应用读不到 formId → 不推送 → 卡片数据永远停在添加卡片那一刻」这类静默故障。
+- 卡片渲染在系统进程、与提供方隔离，**不得**在卡内直接读 `preferences`、算码或放密钥；跨进程数据只能以字符串经 `formBindingData` 传递。
+
 ## 测试
 
 - 本地测试目录：`entry/src/test/`

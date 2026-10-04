@@ -21,6 +21,8 @@ export default class EntryFormAbility extends FormExtensionAbility {
 
     hilog.info(LogDomain.FORM, 'ability/EntryFormAbility', 'onAddForm 回调. want: %{public}s',
       JSON.stringify(want));
+    hilog.info(LogDomain.FORM, 'ability/EntryFormAbility', 'onAddForm 装配数据. formId: %{public}s, count: %{public}d',
+      String(formId), snap.count);
 
     return CardBridge.bindingData(snap);
   }
