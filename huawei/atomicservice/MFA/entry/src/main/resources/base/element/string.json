@@ -233,43 +233,43 @@
       "value": "确认注销"
     },
     {
-      "name": "card_ability_label",
+      "name": "form_ability_label",
       "value": "MFA 验证码卡片"
     },
     {
-      "name": "card_ability_desc",
+      "name": "form_ability_desc",
       "value": "在桌面查看账号保护状态"
     },
     {
-      "name": "card_display_name",
+      "name": "form_display_name",
       "value": "验证码"
     },
     {
-      "name": "card_description",
+      "name": "form_description",
       "value": "桌面卡片，查看账号保护状态"
     },
     {
-      "name": "card_title",
+      "name": "form_title",
       "value": "MFA认证"
     },
     {
-      "name": "card_protected_label",
+      "name": "form_protected_label",
       "value": "个账号已保护"
     },
     {
-      "name": "card_empty_title",
+      "name": "form_empty_title",
       "value": "还没有账号"
     },
     {
-      "name": "card_empty_hint",
+      "name": "form_empty_hint",
       "value": "点击添加第一个账号"
     },
     {
-      "name": "card_action_scan",
+      "name": "form_action_scan",
       "value": "扫码添加"
     },
     {
-      "name": "card_action_input",
+      "name": "form_action_input",
       "value": "输入添加"
     },
     {

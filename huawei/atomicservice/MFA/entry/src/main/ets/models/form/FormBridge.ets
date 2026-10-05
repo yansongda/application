@@ -1,7 +1,7 @@
 // 卡片数据桥接（单一入口）：装配绑定数据 / 主动推送，主应用与 FormExtensionAbility 共用。
 // 卡内只注入字符串（跨进程数据只能以字符串传递），且不得出现密钥 / 验证码。
 //
-// 注入契约：卡片用状态管理 V2，注入字段按「变量名」匹配 pages/form/FormCard2x2.ets 的 @Local 变量，
+// 注入契约：卡片用状态管理 V2，注入字段按「变量名」匹配 pages/form/Form2x2.ets 的 @Local 变量，
 // 故下面常量必须与那侧变量名逐字一致；写错不会编译报错，只会静默不刷新。
 // 空态不单独注入标记字段，卡片侧以 count == '0' 推导。
 import { Context } from '@kit.AbilityKit';

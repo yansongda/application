@@ -38,8 +38,8 @@
       {
         "name": "EntryFormAbility",
         "srcEntry": "./ets/ability/EntryFormAbility.ets",
-        "label": "$string:card_ability_label",
-        "description": "$string:card_ability_desc",
+        "label": "$string:form_ability_label",
+        "description": "$string:form_ability_desc",
         "type": "form",
         "metadata": [
           {

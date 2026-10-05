@@ -11,7 +11,7 @@
 // 文案只用无参 $r，不用带格式参数的 $r（卡片对格式化的支持未经证实）。
 @Entry
 @ComponentV2
-struct FormCard2x2 {
+struct Form2x2 {
   // 账号总数（数字字符串，'0' 即空态）
   @Local count: string = '0';
 
@@ -22,7 +22,7 @@ struct FormCard2x2 {
       Image($r('app.media.icon'))
         .width(16)
         .height(16)
-      Text($r('app.string.card_title'))
+      Text($r('app.string.form_title'))
         .fontSize($r('app.float.subtitle_font_size'))
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.font_primary'))
@@ -37,13 +37,13 @@ struct FormCard2x2 {
   Filled() {
     Column({ space: 2 }) {
       Text(this.count)
-        .fontSize($r('app.float.card_number_font_size'))
+        .fontSize($r('app.float.form_number_font_size'))
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.brand'))
         .maxLines(1)
 
-      Text($r('app.string.card_protected_label'))
-        .fontSize($r('app.float.card_label_font_size'))
+      Text($r('app.string.form_protected_label'))
+        .fontSize($r('app.float.form_label_font_size'))
         .fontColor($r('sys.color.font_secondary'))
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -58,13 +58,13 @@ struct FormCard2x2 {
   @Builder
   Empty() {
     Column({ space: 2 }) {
-      Text($r('app.string.card_empty_title'))
+      Text($r('app.string.form_empty_title'))
         .fontSize($r('app.float.body_font_size'))
         .fontColor($r('sys.color.font_primary'))
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-      Text($r('app.string.card_empty_hint'))
+      Text($r('app.string.form_empty_hint'))
         .fontSize($r('app.float.caption_smaller_font_size'))
         .fontColor($r('sys.color.font_secondary'))
         .maxLines(1)
@@ -80,8 +80,8 @@ struct FormCard2x2 {
   @Builder
   Actions() {
     Row({ space: 6 }) {
-      Text($r('app.string.card_action_scan'))
-        .fontSize($r('app.float.card_action_font_size'))
+      Text($r('app.string.form_action_scan'))
+        .fontSize($r('app.float.form_action_font_size'))
         .fontColor($r('sys.color.font_on_primary'))
         .textAlign(TextAlign.Center)
         .maxLines(1)
@@ -98,8 +98,8 @@ struct FormCard2x2 {
           });
         })
 
-      Text($r('app.string.card_action_input'))
-        .fontSize($r('app.float.card_action_font_size'))
+      Text($r('app.string.form_action_input'))
+        .fontSize($r('app.float.form_action_font_size'))
         .fontColor($r('app.color.brand'))
         .textAlign(TextAlign.Center)
         .maxLines(1)

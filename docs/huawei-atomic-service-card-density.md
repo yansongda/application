@@ -41,10 +41,10 @@
 huawei/atomicservice/MFA/
 ├── module.json5                                     # extensionAbilities(form) + metadata(client_id/env)
 ├── resources/base/
-│   ├── profile/form_config.json                     # 卡片配置（2*2，src 指向 pages/form/FormCard2x2.ets）
+│   ├── profile/form_config.json                     # 卡片配置（2*2，src 指向 pages/form/Form2x2.ets）
 │   ├── profile/routes.json                          # NavDestination 路由（含 help）
 │   ├── profile/pages.json                           # 仅 pages/Home
-│   └── element/string.json                          # card_* / index_* / user_* / help_* 文案
+│   └── element/string.json                          # form_*（服务卡片）/ card_*（应用内卡片）/ index_* / user_* / help_* 文案
 └── ets/
     ├── App.ets                                      # LogDomain / HttpDomain / AppEnv / AppPagesName / App
     ├── ability/
@@ -64,7 +64,7 @@ huawei/atomicservice/MFA/
     │   └── index/{AddFab,EmptyState,TotpListView}.ets
     ├── pages/
     │   ├── Home.ets  Login.ets  Help.ets            # Home 为 Navigation 容器（唯一 @Entry）
-    │   ├── form/FormCard2x2.ets                      # 2*2 卡片 UI（不注册到 routes.json）
+    │   ├── form/Form2x2.ets                          # 2*2 卡片 UI（不注册到 routes.json）
     │   ├── index/{Index,Detail,Create,EditText}.ets
     │   └── user/{Detail,Delete}.ets  user/edit/Slogan.ets
     ├── themes/Main.ets   types/Item.ets
@@ -107,10 +107,10 @@ huawei/atomicservice/MFA/
 {
   "forms": [
     {
-      "name": "mfa_card",
-      "displayName": "$string:card_display_name",
-      "description": "$string:card_description",
-      "src": "./ets/pages/form/FormCard2x2.ets",
+      "name": "mfa_form",
+      "displayName": "$string:form_display_name",
+      "description": "$string:form_description",
+      "src": "./ets/pages/form/Form2x2.ets",
       "uiSyntax": "arkts",
       "isDynamic": true,
       "isDefault": true,
@@ -147,14 +147,14 @@ huawei/atomicservice/MFA/
         count == '0' 时  →  「还没有账号」+「点击添加第一个账号」在同一区间居中，入口行**保留**
 ```
 
-UI 见 `pages/form/FormCard2x2.ets`：`@Entry @ComponentV2`，一个 `@Local`（`count`），`Title()` / `Filled()` / `Empty()` / `Actions()` 四个 `@Builder`；文本均 `maxLines(1)` + `textOverflow`；账号数区（`Filled()` / `Empty()`）带 `layoutWeight(1)` **吃掉标题与入口之间的剩余高度**——数字贴顶、单位说明贴底，把卡片撑满；`Actions()` 在**有账号与空态下都渲染**（空态正是最需要添加入口的时候）。空态由 `count == '0'` 推导，**不单独注入标记字段**。
+UI 见 `pages/form/Form2x2.ets`：`@Entry @ComponentV2`，一个 `@Local`（`count`），`Title()` / `Filled()` / `Empty()` / `Actions()` 四个 `@Builder`；文本均 `maxLines(1)` + `textOverflow`；账号数区（`Filled()` / `Empty()`）带 `layoutWeight(1)` **吃掉标题与入口之间的剩余高度**——数字贴顶、单位说明贴底，把卡片撑满；`Actions()` 在**有账号与空态下都渲染**（空态正是最需要添加入口的时候）。空态由 `count == '0'` 推导，**不单独注入标记字段**。
 
 **尺寸预算（2\*2）**：官方规格「小卡片 2\*2 = 150×150vp」（最小 132vp 宽），四周需留 12vp 安全边距，即**内容高度 ≈130vp、宽 ≈126vp**。当前排布在该预算内留有余量。**数字字号已接近 2\*2 的上限**（40fp）：账号数区（`layoutWeight(1)`）高度 ≈ 130 − 标题行 26 − 分割线 1 − 入口行 21 − 行距 9 ≈ 73vp，需同时容纳「数字行 + 说明行」（两组间不留额外内边距、整组居中）；再往上加会顶掉说明行或裁切入口行。若确需更大，只能牺牲标题行（可到约 50fp）。**新增卡片内容前必须先核对这个预算**：126vp 宽放不下两枚 5 字胶囊（12fp 需 128vp），故入口文字取 11fp、等宽均分。
 
-**数据链路（快照）**：`utils/Form.ets` 的 `Snapshot` 类，preferences 库名 `mfa_card`。
+**数据链路（快照）**：`utils/Form.ets` 的 `Snapshot` 类，preferences 库名 `mfa_form`。
 
 ```jsonc
-// key: card_snapshot（示例值；只含账号数与时间戳）
+// key: form_snapshot（示例值；只含账号数与时间戳）
 {
   "count": 3,
   "updatedAt": 1790000000
@@ -167,9 +167,9 @@ UI 见 `pages/form/FormCard2x2.ets`：`@Entry @ComponentV2`，一个 `@Local`（
 
 ```ts
 // utils/Form.ets
-write(context, count: number)           // 落盘 card_snapshot：{ count, updatedAt }
+write(context, count: number)           // 落盘 form_snapshot：{ count, updatedAt }
 read(context): SnapshotData             // JSON → { count, updatedAt }，异常回落空快照
-addFormId(context, formId)              // 卡片添加时登记 formId
+addFormId(context, formId)              // 卡片添加时登记 formId（落盘 form_ids）
 removeFormId(context, formId)           // 卡片移除时清除
 listFormIds(context): string[]          // 供主动刷新遍历
 // 内部：private prefs() / private parseFormIds()
@@ -179,7 +179,7 @@ listFormIds(context): string[]          // 供主动刷新遍历
 
 - `count`：账号数（数字字符串）。
 
-对应常量在 `models/form/FormBridge.ets`：`FORM_FIELD_COUNT = 'count'`。**卡片侧文案一律用无参 `$r('app.string.card_*')`**，不使用带格式参数（`%d`/`%s`）的 `$r`（卡片渲染进程对带参格式化的支持未经证实），数量行用 `Text(this.count)` + `$r('app.string.card_count_suffix')`（「个账号」）拼接规避。
+对应常量在 `models/form/FormBridge.ets`：`FORM_FIELD_COUNT = 'count'`。**卡片侧文案一律用无参 `$r('app.string.form_*')`**，不使用带格式参数（`%d`/`%s`）的 `$r`（卡片渲染进程对带参格式化的支持未经证实），数量行用 `Text(this.count)` + `$r('app.string.form_protected_label')`（「个账号已保护」）拼接规避。
 
 > **契约警示**：注入 key 必须与卡片 `@Local` 变量名逐字一致。写错/改名**不会编译报错，只会静默不刷新**，改一侧必须同步改另一侧。
 
@@ -205,7 +205,7 @@ listFormIds(context): string[]          // 供主动刷新遍历
 
 > 行为变化：引导页不再记忆「已展示过 / 已关闭」。**只要没有账号就固定显示引导**；把账号删光后引导会重新出现。
 
-**资源规范**：新字符串加在 `entry/src/main/resources/base/element/string.json`，前缀沿用 `index_index_page_*` / `index_detail_page_*` / `user_*` / `help_*` / `card_*`；尺寸加在 `AppScope/resources/base/element/integer.json`。跨模块通用文案才放 `AppScope/resources/base/element/string.json`。
+**资源规范**：新字符串加在 `entry/src/main/resources/base/element/string.json`，前缀沿用 `index_index_page_*` / `index_detail_page_*` / `user_*` / `help_*` / `form_*`（**服务卡片专用**）/ `card_*`（页面内通用卡片，如 InfoCard / InputCard / TotpCard）；尺寸加在 `AppScope/resources/base/element/integer.json`。跨模块通用文案才放 `AppScope/resources/base/element/string.json`。
 
 ### 3.3 契约核对
 
@@ -290,6 +290,7 @@ listFormIds(context): string[]          // 供主动刷新遍历
 | 2026-10-04 | **卡片排版撑满**：账号数区改为 `layoutWeight(1)` 吃掉剩余高度——数字 24fp→**30fp** 并贴顶（区顶 `padding-top: 6vp`）、单位说明 12fp→**11fp**（新增 `card_label_font_size`）并贴底（区内 `Blank()` 撑开）；列间距 5vp→4vp |
 | 2026-10-04 | **数字加大**：`card_number_font_size` 30fp→**38fp**（接近 2\*2 上限，推导见 §3.1「尺寸预算」）；行距 4vp→3vp、账号数区顶部内边距 6vp→4vp，把空间让给数字，消除数字与说明之间的空洞 |
 | 2026-10-05 | **卡片排版改为「成组居中」**：数字与单位说明贴成一组、整组在标题与入口之间居中（去掉原「数字贴顶、说明贴底」写法与数字区顶部内边距）；数字 38fp→**40fp**；入口胶囊内边距 4vp→3vp 让出高度；`Filled()` 与 `Empty()` 形态统一（同为 `layoutWeight(1)` + `justifyContent(Center)`） |
+| 2026-10-05 | **命名对齐：服务卡片族残留的 `card_*` 全部收敛为 `form_*`**。① `form_config.json`：卡片名 `mfa_card` → `mfa_form`、`src` → `pages/form/Form2x2.ets`；② `string.json` 10 条：`card_ability_label`/`card_ability_desc`/`card_display_name`/`card_description`/`card_title`/`card_protected_label`/`card_empty_title`/`card_empty_hint`/`card_action_scan`/`card_action_input` → `form_*`（文案值不变）；③ `float.json` 3 条：`card_number_font_size`/`card_label_font_size`/`card_action_font_size` → `form_*`；④ 卡片页 `pages/form/FormCard2x2.ets` → `Form2x2.ets`（struct 同名）；⑤ `utils/Form.ets`：preferences 库名 `mfa_card` → `mfa_form`、key `card_snapshot` → `form_snapshot`、`card_form_ids` → `form_ids`。**注意**：卡片名与 preferences 库名变更后，设备上已添加的卡片需**重新添加**（旧 formId 与新库名均不再生效）；应用内通用卡片命名（`card_radius`/`card_height` 等 integer、InfoCard/InputCard/TotpCard 及其文案）**刻意不动**，避免与服务卡片语义混淆 |
 
 ## 8. 附录：本次不做、候选清单
 
@@ -297,7 +298,7 @@ listFormIds(context): string[]          // 供主动刷新遍历
 |---|---|---|
 | 卡片内取码（`message` 事件 + 提供方算码 + 剪贴板），或 2×4 逐行点击复制 | 否 | 前者需评估 secret 共享的安全代价；后者只需 `postCardAction` 带 `mfa_item_id`，成本较低 |
 | 「卡片实时显示验证码」 | 否 | **当前系统机制下不可实现**（无秒级刷新） |
-| `2*4` 卡片规格 | 否 | 第二套布局 + 快照素材；卡片页已按尺寸命名（`FormCard2x2.ets`），新增即 `FormCard2x4.ets` |
+| `2*4` 卡片规格 | 否 | 第二套布局 + 快照素材；卡片页已按尺寸命名（`Form2x2.ets`），新增即 `Form2x4.ets` |
 | 批量导入（相册选图识别二维码，`ScanKit`） | 否 | 价值高，端内可取 |
 | 搜索与分组（条目 > 10 时出现） | 否 | 端内可取 |
 | 应用锁（生物识别） | 否 | 需核实元服务 API 集 |

@@ -1,4 +1,4 @@
-// 卡片展示快照（preferences 持久化，库名 mfa_card）：主应用只写账号数与时间戳，
+// 卡片展示快照（preferences 持久化，库名 mfa_form）：主应用只写账号数与时间戳，
 // 卡片提供方（FormExtensionAbility）同步读取并注入卡片。
 // 快照只存 count / updatedAt，不落任何账号明细（issuer / username 等一律不入盘）。
 //
@@ -13,9 +13,9 @@ import { preferences } from '@kit.ArkData';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../App';
 
-const PREFERENCES_NAME: string = 'mfa_card';
-const KEY_SNAPSHOT: string = 'card_snapshot';
-const KEY_FORM_IDS: string = 'card_form_ids';
+const PREFERENCES_NAME: string = 'mfa_form';
+const KEY_SNAPSHOT: string = 'form_snapshot';
+const KEY_FORM_IDS: string = 'form_ids';
 
 export interface SnapshotData {
   count: number;
