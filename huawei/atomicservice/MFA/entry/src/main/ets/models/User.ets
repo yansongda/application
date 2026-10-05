@@ -91,7 +91,7 @@ export class User {
 
   // 用接口返回的数据原地更新。
   // 注意：不能写成 `this.config = source.config` —— 接口返回的是普通 JSON 对象，
-  // 那样会把被观测的 Config 实例替换成普通对象，之后 user.config.xxx 的修改将不再触发 UI 刷新
+  // 那样会把被观测的 Config 实例替换成普通对象，之后 user.config.xxx 的修改将不会触发 UI 刷新
   // （表现为：后端已更新成功，页面仍显示旧值，重启应用才正常）。
   apply(source: IUser): void {
     this.phone = source.phone;

@@ -1,10 +1,6 @@
 {
   "float": [
     {
-      "name": "page_text_font_size",
-      "value": "50fp"
-    },
-    {
       "name": "title_font_size",
       "value": "30fp"
     },
@@ -37,12 +33,20 @@
       "value": "35fp"
     },
     {
-      "name": "guide_icon_font_size",
-      "value": "100fp"
+      "name": "empty_icon_font_size",
+      "value": "64fp"
     },
     {
-      "name": "empty_icon_font_size",
-      "value": "50fp"
+      "name": "form_number_font_size",
+      "value": "40fp"
+    },
+    {
+      "name": "form_label_font_size",
+      "value": "10fp"
+    },
+    {
+      "name": "form_action_font_size",
+      "value": "13fp"
     }
   ]
 }

@@ -3,7 +3,7 @@
 // SHA1 为 RFC 6238/TOTP 互操作与后端 build_noncompliant（SHA1 + 6 位）对齐的硬性要求；
 // 命中 @security/no-unsafe-mac 告警属预期，不放宽规则、不加 disable 注释。
 // 本文件顶层导入了系统 kit（CryptoArchitectureKit），因此 entry/src/test 的本地单测
-// 加载本文件时可能需要系统 kit（Plan A 已确认接受该后果）。
+// 加载本文件时可能需要系统 kit。
 // 算法语义与 RFC 4226/6238、后端 build_noncompliant（SHA1 + 6 位）及微信端实现一致。
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 
@@ -150,7 +150,7 @@ export class TotpCode {
       return zeroPad6(truncate(new Uint8Array(digest.data)));
     } catch (e) {
       // 端内算码失败：本层不吞错、不打日志、不输出 secret，归一化后抛给调用方，
-      // 由 Runtime.freshCode() 回落 /totp/detail 兜底。
+      // 由 ItemRuntime.freshCode() 回落 /totp/detail 兜底。
       throw new Error('端内 TOTP 算码失败');
     }
   }

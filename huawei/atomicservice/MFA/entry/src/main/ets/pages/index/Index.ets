@@ -1,11 +1,11 @@
-import { ItemRuntime, ItemsRuntime } from '../../models/Runtime';
+import { ItemRuntime } from '../../models/totp/ItemRuntime';
+import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import {
   AdvancedDialogV2Button,
   AlertDialogV2,
   AppStorageV2,
   LoadingDialogV2,
-  PersistenceV2,
-  SymbolGlyphModifier
+  PersistenceV2
 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Dialog, Toast } from '../../utils/PromptAction';
@@ -14,9 +14,11 @@ import { SortRequestItem, Totp } from '../../api/Totp';
 import { scanBarcode } from '@kit.ScanKit';
 import { User } from '../../models/User';
 import { displayOr } from '../../utils/Display';
-import { IndexGuideState } from '../../models/Guide';
-import { IndexGuide } from '../../components/IndexGuide';
-import { TotpCard } from '../../components/TotpCard';
+import { EmptyState } from '../../components/index/EmptyState';
+import { AddFab } from '../../components/index/AddFab';
+import { TotpListView } from '../../components/index/TotpListView';
+import { FormBridge } from '../../models/form/FormBridge';
+import { FormIntent } from '../../models/form/FormIntent';
 
 @Builder
 export function builder() {
@@ -25,15 +27,10 @@ export function builder() {
 
 @ComponentV2
 export struct Index {
-  @Local guideState: IndexGuideState =
-    PersistenceV2.globalConnect({ type: IndexGuideState, defaultCreator: () => new IndexGuideState() })!;
   @Local
   private isRefreshing: boolean = false;
   @Local
   private isSortMode: boolean = false;
-  // 本次进入是否展示引导页（内存态；持久化标记只记录「已不再展示」，避免写入标记后立刻把引导页隐藏）
-  @Local
-  private isGuideVisible: boolean = false;
   private snapshotIds: string[] = [];
   // 请求去重：避免 onActive 与下拉刷新并发发起 Totp.all()
   private isFetching: boolean = false;
@@ -42,32 +39,41 @@ export struct Index {
   @Local
   private user: User =
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
-  private scroller: ListScroller = new ListScroller();
   private swipeActionId?: string;
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
+  // 卡片意图（点卡快捷入口）：EntryAbility 写入，@Monitor 感知；必须带 @Local 才能被 @Monitor 监听到变化
+  @Local private formIntent: FormIntent = AppStorageV2.connect(FormIntent, () => new FormIntent())!;
 
   build() {
     NavDestination() {
       Stack({ alignContent: Alignment.BottomEnd }) {
         Refresh({ refreshing: this.isRefreshing!! }) {
           if (this.itemsRuntime.ids.length <= 0) {
-            if (this.isGuideVisible) {
-              IndexGuide({
-                onScan: (): void => {
-                  this.addByScan();
-                },
-                onInput: (): void => {
-                  this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
-                },
-                onDismiss: (): void => {
-                  this.isGuideVisible = false;
-                }
-              })
-            } else {
-              this.empty()
-            }
+            EmptyState({
+              onScan: (): void => {
+                this.addByScan();
+              },
+              onInput: (): void => {
+                this.openCreate();
+              },
+              onHelp: (): void => {
+                this.openHelp();
+              }
+            })
           } else {
-            this.main()
+            TotpListView({
+              itemsRuntime: this.itemsRuntime,
+              isSortMode: this.isSortMode,
+              onToggleSort: (): void => {
+                this.toggleSort();
+              },
+              onDetail: (id: string): void => {
+                this.openDetail(id);
+              },
+              onDelete: (id: string): void => {
+                this.requestDelete(id);
+              }
+            })
           }
         }
         .onRefreshing(() => {
@@ -86,37 +92,16 @@ export struct Index {
         .refreshOffset(64)
         .pullToRefresh(true)
 
-        if (!this.isSortMode && !this.isGuideVisible) {
-          Button({ type: ButtonType.Circle }) {
-            SymbolGlyph($r('sys.symbol.plus'))
-              .fontSize($r('app.float.fab_icon_font_size'))
-              .fontColor([$r('sys.color.font_on_primary')])
-          }
-          .backgroundColor($r('app.color.brand'))
-          .fontColor($r('sys.color.font_on_primary'))
-          .padding({
-            top: $r('app.integer.page_padding'),
-            bottom: $r('app.integer.page_padding'),
-            left: $r('app.integer.page_padding'),
-            right: $r('app.integer.page_padding')
-          })
-          .margin({ bottom: $r('app.integer.page_margin'), right: $r('app.integer.page_margin') })
-          .bindMenu([
-            {
-              value: $r('app.string.index_index_page_add_by_scan'),
-              symbolIcon: new SymbolGlyphModifier($r('sys.symbol.line_viewfinder')),
-              action: () => {
-                this.addByScan();
-              },
+        // 空态已有两个等价主入口（扫码/输入），隐藏 FAB 避免重复；排序态同样隐藏
+        if (!this.isSortMode && this.itemsRuntime.ids.length > 0) {
+          AddFab({
+            onScan: (): void => {
+              this.addByScan();
             },
-            {
-              value: $r('app.string.index_index_page_add_by_input'),
-              symbolIcon: new SymbolGlyphModifier($r('sys.symbol.doc_plaintext_and_pencil')),
-              action: () => {
-                this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
-              },
+            onInput: (): void => {
+              this.openCreate();
             }
-          ])
+          })
         }
       }
     }
@@ -130,6 +115,9 @@ export struct Index {
       if (this.isSortMode) {
         return;
       }
+
+      // 先消费卡片意图（冷启动时 want 已到达，「添加账号」需立即跳转），再常规刷新
+      this.consumeFormIntent();
 
       this.refresh().catch(() => {
         // 失败已由重试对话框提示，仅避免 unhandled rejection
@@ -168,172 +156,39 @@ export struct Index {
     .alignItems(VerticalAlign.Center)
   }
 
-  @Builder
-  empty() {
-    Column() {
-      Text() {
-        SymbolSpan($r('sys.symbol.exclamationmark_circle'))
-      }
-      .fontSize($r('app.float.empty_icon_font_size'))
+  // 排序态切换：进入排序 / 保存排序（失败由 Toast 提示并回滚）
+  private toggleSort(): void {
+    if (this.isSortMode) {
+      this.saveSort().catch(() => {
+        // 失败已由 Toast 提示，仅避免 unhandled rejection
+      });
 
-      Text($r('app.string.index_index_page_data_empty'))
-        .margin({ top: 10 })
+      return;
     }
-    .margin({ top: $r('app.integer.page_margin') })
-    .width('100%')
-    .height('100%')
+
+    this.enterSortMode();
   }
 
-  @Builder
-  main() {
-    Column() {
-      this.header()
-
-      if (this.isSortMode) {
-        this.sortTip()
-      }
-
-      this.items()
-    }
-    .width('100%')
-    .height('100%')
+  // 打开验证码详情：复用列表项持有的运行时实例
+  private openDetail(id: string): void {
+    this.pages.pushPathByName(AppPagesName.INDEX_DETAIL, new ItemRuntime(this.itemsRuntime.get(id)));
   }
 
-  // 排序入口与列表统计放在内容区（与微信小程序一致）：胶囊占据顶部右侧，标题栏不适合再放控件
-  @Builder
-  header() {
-    Row() {
-      Text($r('app.string.index_index_page_total', this.itemsRuntime.ids.length))
-        .fontSize($r('app.float.caption_font_size'))
-        .fontColor($r('sys.color.font_tertiary'))
+  // 请求删除：记录待删 id 并弹确认框（真正删除在 deleteDialog 内）
+  private requestDelete(id: string): void {
+    this.swipeActionId = id;
 
-      Blank()
-
-      Button(this.isSortMode ? $r('app.string.index_index_page_sort_mode_done') :
-        $r('app.string.index_index_page_edit'))
-        .type(ButtonType.Normal)
-        .height(32)
-        .padding({ left: 0, right: 0 })
-        .backgroundColor(Color.Transparent)
-        .fontColor($r('app.color.brand'))
-        .fontSize($r('app.float.body_font_size'))
-        .onClick(() => {
-          if (this.isSortMode) {
-            this.saveSort().catch(() => {
-              // 失败已由 Toast 提示，仅避免 unhandled rejection
-            });
-
-            return;
-          }
-
-          this.enterSortMode();
-        })
-    }
-    .width('100%')
-    .padding({
-      left: $r('app.integer.page_padding'),
-      right: $r('app.integer.page_padding'),
-      top: $r('app.integer.page_padding_smaller'),
-      bottom: $r('app.integer.page_padding_smaller')
-    })
+    Dialog.open(() => this.deleteDialog());
   }
 
-  @Builder
-  sortTip() {
-    Row() {
-      Text($r('app.string.index_index_page_sort_tip'))
-        .fontSize($r('app.float.caption_smaller_font_size'))
-        .fontColor($r('sys.color.font_tertiary'))
-    }
-    .width('100%')
-    .justifyContent(FlexAlign.Center)
-    .padding({ bottom: $r('app.integer.page_padding_smaller') })
+  // 手动输入添加
+  private openCreate(): void {
+    this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
   }
 
-  @Builder
-  items() {
-    List({ scroller: this.scroller }) {
-      Repeat<string>(this.itemsRuntime.ids)
-        .each((ri: RepeatItem<string>) => {
-          ListItem() {
-            TotpCard({
-              runtime: this.itemsRuntime.get(ri.item.valueOf()),
-              isSortMode: this.isSortMode
-            })
-          }
-          .borderRadius($r('app.integer.card_radius'))
-          .height($r('app.integer.card_height'))
-          .backgroundColor($r('sys.color.background_primary'))
-          .swipeAction(this.isSortMode ? undefined : {
-            end: {
-              builder: () => {
-                this.swipeAction(ri.item.valueOf())
-              },
-            },
-            edgeEffect: SwipeEdgeEffect.None,
-          })
-          .onAttach(() => {
-            this.itemsRuntime.start(ri.item.valueOf());
-          })
-          .onDetach(() => {
-            this.itemsRuntime.stop(ri.item.valueOf());
-          })
-          .onClick(() => {
-            if (this.isSortMode) {
-              return;
-            }
-            this.pages.pushPathByName(AppPagesName.INDEX_DETAIL,
-              new ItemRuntime(this.itemsRuntime.get(ri.item.valueOf())))
-          })
-        })
-        // 键值需稳定唯一，拖拽落位动画依赖它（缺省时 Repeat 会生成随机键值）
-        .key((id: string): string => id)
-        // 拖拽排序由框架接管：仅排序态开启，长按浮起后拖动，离手时在回调中同步数据顺序
-        .onMove(this.isSortMode ? (from: number, to: number): void => {
-          hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '拖拽排序: %{public}d -> %{public}d', from, to);
-
-          this.itemsRuntime.move(from, to);
-        } : undefined)
-        .virtualScroll({ totalCount: this.itemsRuntime.ids.length })
-    }
-    .width('100%')
-    .layoutWeight(1)
-  }
-
-  @Builder
-  swipeAction(id: string) {
-    Row() {
-      Button() {
-        Text($r("app.string.index_index_page_detail_name"))
-          .fontColor($r('sys.color.font_on_primary'))
-      }
-      .height('100%')
-      .width(60)
-      .type(ButtonType.Normal)
-      .backgroundColor($r('app.color.brand'))
-      .onClick(() => {
-        this.pages.pushPathByName(AppPagesName.INDEX_DETAIL, new ItemRuntime(this.itemsRuntime.get(id)));
-
-        try {
-          this.scroller.closeAllSwipeActions();
-        } catch (error) {
-          hilog.error(LogDomain.PAGES, AppPagesName.INDEX, '调用 `closeAllSwipeActions` 失败')
-        }
-      })
-
-      Button() {
-        Text($r("app.string.index_index_page_delete_name")).fontColor($r('sys.color.font_on_primary'))
-      }
-      .height('100%')
-      .width(60)
-      .type(ButtonType.Normal)
-      .backgroundColor($r('sys.color.warning'))
-      .onClick(() => {
-        this.swipeActionId = id;
-
-        Dialog.open(() => this.deleteDialog());
-      })
-    }
+  // 使用帮助
+  private openHelp(): void {
+    this.pages.pushPathByName(AppPagesName.HELP, null);
   }
 
   @Builder
@@ -377,6 +232,7 @@ export struct Index {
             await Totp.delete(this.swipeActionId);
             this.itemsRuntime.delete(this.swipeActionId);
             this.swipeActionId = undefined;
+            this.syncCards();
 
             Dialog.close(dialogId);
           } catch (e) {
@@ -442,7 +298,7 @@ export struct Index {
           () => Totp.create(uri));
 
       this.itemsRuntime.add(data);
-      this.decideGuide();
+      this.syncCards();
     } catch (e) {
       await Dialog.open(() => this.addFailedDialog(e.message));
     }
@@ -465,6 +321,7 @@ export struct Index {
       await Dialog.execute(() => this.loadingDialog(), () => Totp.sort(reqItems));
 
       this.isSortMode = false;
+      this.syncCards();
     } catch (e) {
       hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '排序失败: %{public}s', JSON.stringify(e));
 
@@ -475,23 +332,6 @@ export struct Index {
     } finally {
       this.snapshotIds = [];
     }
-  }
-
-  // 空数据时只首次展示引导页：决定展示的同时立刻持久化标记，之后数据仍为空也只展示空状态
-  private decideGuide(): void {
-    if (this.itemsRuntime.ids.length > 0) {
-      this.isGuideVisible = false;
-
-      return;
-    }
-
-    if (this.isGuideVisible || this.guideState.isSkipped) {
-      return;
-    }
-
-    this.isGuideVisible = true;
-    this.guideState.isSkipped = true;
-    PersistenceV2.save(IndexGuideState);
   }
 
   private async refresh(): Promise<void> {
@@ -507,9 +347,49 @@ export struct Index {
           () => this.fetchFailedDialog(() => this.refresh()));
 
       this.itemsRuntime.reload(items.values());
-      this.decideGuide();
+      this.syncCards();
     } finally {
       this.isFetching = false;
+    }
+  }
+
+  // 卡片快照同步（单入口）：账号列表变化后写 preferences 并主动推送最新数据到已添加的卡片
+  private syncCards(): void {
+    const context = this.getUIContext().getHostContext();
+
+    if ('undefined' === typeof context) {
+      return;
+    }
+
+    FormBridge.sync(context, this.itemsRuntime.ids);
+  }
+
+  // 卡片意图到达（EntryAbility 写入 version++ 触发）
+  @Monitor('formIntent.version')
+  onFormIntentChange(): void {
+    this.consumeFormIntent();
+  }
+
+  // 消费卡片意图：'scan' 直达扫码添加、'input' 直达手动输入添加；消费一次即清空，避免重复触发
+  private consumeFormIntent(): void {
+    const route: string | undefined = this.formIntent.route;
+
+    if ('undefined' === typeof route || !(this.formIntent.version > 0)) {
+      return;
+    }
+
+    this.formIntent.route = undefined;
+
+    if ('scan' === route) {
+      this.addByScan().catch(() => {
+        // 取消/失败已在 addByScan 内部处理，仅避免 unhandled rejection
+      });
+
+      return;
+    }
+
+    if ('input' === route) {
+      this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
     }
   }
 }

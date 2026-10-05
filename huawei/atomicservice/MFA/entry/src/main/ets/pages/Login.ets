@@ -125,9 +125,13 @@ struct Login {
         }
       }
 
-      await this.fetchUser();
-
+      // 先跳转再补用户信息：列表渲染只依赖 itemsRuntime，头像/昵称由全局 User（@ObservedV2/@Trace）异步刷新。
+      // 若把 fetchUser 串在跳转前，会在登录页多等一次与列表无关的请求（网络差时至多 5s 超时），表现为「登录成功却卡住」。
       this.pages.pop();
+
+      this.fetchUser().catch(() => {
+        // fetchUser 内部已吞掉异常，这里仅避免 unhandled rejection
+      });
     } catch (e) {
       // 用户在重试对话框选择取消，停留在登录页并提供重试按钮
       hilog.warn(LogDomain.PAGES, AppPagesName.LOGIN, '登录失败: %{public}s', JSON.stringify(e));

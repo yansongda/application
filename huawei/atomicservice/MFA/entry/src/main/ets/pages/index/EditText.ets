@@ -1,11 +1,11 @@
 import { application } from '@kit.AbilityKit';
 import { AppStorageV2, KeyboardAvoidMode, LoadingDialogV2 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { Totp } from '../../../api/Totp';
-import { AppPagesName, LogDomain } from '../../../App';
-import { IJumpCallbackResult } from '../../../components/Card';
-import { ItemRuntime } from '../../../models/Runtime';
-import { Toast } from '../../../utils/PromptAction';
+import { Totp } from '../../api/Totp';
+import { AppPagesName, LogDomain } from '../../App';
+import { IInfoCardJumpResult } from '../../components/InfoCard';
+import { ItemRuntime } from '../../models/totp/ItemRuntime';
+import { Toast } from '../../utils/PromptAction';
 
 // 编辑页路由参数：显式携带编辑模式，避免依赖路由名推断导致误写字段
 export class EditTextParams {
@@ -23,8 +23,8 @@ export function builder() {
   EditText()
 }
 
-// 发行方 / 用户名编辑共用页：原 Issuer.ets 与 Username.ets 逐行同构，合并为一个可配置页面。
-// 调用方仍按原路由名 pushPathByName，参数改为 EditTextParams（携带 runtime 与编辑模式）。
+// 发行方 / 用户名编辑共用页：由 isIssuer 切换标题、占位符与提交字段。
+// 调用方按各自路由名 pushPathByName，参数为 EditTextParams（携带 runtime 与编辑模式）。
 @ComponentV2
 struct EditText {
   @Local
@@ -166,7 +166,7 @@ struct EditText {
         $r('app.string.operation_success'),
       );
 
-      this.pages.pop({ value: value } as IJumpCallbackResult);
+      this.pages.pop({ value: value } as IInfoCardJumpResult);
     } catch (e) {
       hilog.warn(LogDomain.PAGES, this.logPage(), '修改失败: %{public}s', JSON.stringify(e));
     }

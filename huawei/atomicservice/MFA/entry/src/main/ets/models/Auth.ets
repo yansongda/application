@@ -115,12 +115,12 @@ export class Authorization {
       return State.EMPTY_AUTHORIZATION;
     }
 
-    // 提前5分钟刷新 token
+    // 提前 5 分钟刷新 token
     if (dateformat.create(this._expiredAt).isBefore(dateformat.now().add(5, 'minute'))) {
       return State.NEED_REFRESH;
     }
 
-    // refresh_token 有效期30天，提前1天刷新
+    // refresh_token 有效期 30 天，提前 1 天刷新
     if (this._authorizedAt && dateformat.create(this._authorizedAt).add(29, 'day').isBefore(dateformat.now())) {
       return State.REFRESH_TOKEN_EXPIRED;
     }

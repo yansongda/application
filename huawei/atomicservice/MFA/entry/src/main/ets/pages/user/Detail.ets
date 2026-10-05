@@ -1,12 +1,13 @@
 import { authentication } from '@kit.AccountKit';
-import { AdvancedDialogV2Button, AlertDialogV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
-import { Card, CardItem } from '../../components/Card';
+import { AdvancedDialogV2Button, AlertDialogV2, AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
+import { InfoCard, InfoCardItem } from '../../components/InfoCard';
 import { User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
+import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Dialog } from '../../utils/PromptAction';
 import { User as UserApi } from '../../api/User';
-import { AppPagesName, LogDomain } from '../../App';
+import { App, AppPagesName, LogDomain } from '../../App';
 import { displayOr } from '../../utils/Display';
 
 @Builder
@@ -19,6 +20,8 @@ struct Detail {
   @Local
   private user: User =
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
+  @Local
+  private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
 
   build() {
     NavDestination() {
@@ -35,9 +38,14 @@ struct Detail {
             this.changeAvatar();
           })
 
-        Card({
+        // 账号统计行：ItemsRuntime 未初始化时 ids 缺失，按 0 展示
+        Text($r('app.string.user_detail_page_protected', this.protectedCount))
+          .fontSize($r('app.float.caption_font_size'))
+          .fontColor($r('sys.color.font_tertiary'))
+
+        InfoCard({
           items: [
-            new CardItem({
+            new InfoCardItem({
               title: $r('app.string.user_detail_page_nickname'),
               value: displayOr(this.user.config.nickname, $r('app.string.default_nickname')),
               eventClick: {
@@ -53,7 +61,7 @@ struct Detail {
                 },
               }
             }),
-            new CardItem({
+            new InfoCardItem({
               title: $r('app.string.user_detail_page_slogan'),
               value: displayOr(this.user.config.slogan, $r('app.string.default_slogan')),
               eventClick: {
@@ -63,30 +71,46 @@ struct Detail {
           ]
         })
 
-        Card({
+        InfoCard({
           title: $r('app.string.user_page_information'),
           items: [
-            new CardItem({
+            new InfoCardItem({
               title: $r('app.string.user_detail_page_phone'),
               value: $r('app.string.user_detail_page_coming_soon'),
             }),
           ]
         })
 
-        Card({
+        InfoCard({
           title: $r('app.string.more'),
           items: [
-            new CardItem({
+            new InfoCardItem({
+              title: $r('app.string.help_entry'),
+              value: '',
+              eventClick: { action: AppPagesName.HELP },
+            }),
+            new InfoCardItem({
+              title: $r('app.string.user_detail_page_about'),
+              value: $r('app.string.user_detail_page_version', App.version),
+            }),
+            new InfoCardItem({
               title: $r('app.string.user_detail_page_delete_account'),
               value: '',
               eventClick: { action: AppPagesName.USER_DELETE },
-            })
+            }),
           ]
         })
       }
     }
     .backgroundColor($r('sys.color.background_secondary'))
     .title($r('app.string.user_detail_page_name'))
+  }
+
+  // 统计行兜底：ItemsRuntime 可能尚未初始化，ids 缺失时按 0 展示
+  private get protectedCount(): number {
+    const ids: string[] | undefined = this.itemsRuntime.ids;
+
+    return 'undefined' === typeof ids ? 0 : ids.length;
   }
 
   // 请求华为账号 profile 授权，失败或用户取消时返回 undefined
