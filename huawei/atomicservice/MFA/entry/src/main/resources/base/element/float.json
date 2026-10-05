@@ -42,11 +42,11 @@
     },
     {
       "name": "form_label_font_size",
-      "value": "11fp"
+      "value": "10fp"
     },
     {
       "name": "form_action_font_size",
-      "value": "11fp"
+      "value": "13fp"
     }
   ]
 }

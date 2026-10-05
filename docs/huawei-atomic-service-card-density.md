@@ -1,6 +1,6 @@
 # 华为元服务「服务卡片 + 首屏信息密度」方案（MFA 元服务）
 
-> **首次成文**：2026-10-02 ｜ **最近更新**：2026-10-04（对齐当前代码实现）
+> **首次成文**：2026-10-02 ｜ **最近更新**：2026-10-05（卡片入口收敛为单枚「扫码添加」）
 > **作者**：DeepSeek V4.1 Flash + yansongda
 > **状态**：已实现并经人工审核确认
 > **基线目录**：`huawei/atomicservice/MFA/`
@@ -11,7 +11,7 @@
 
 | # | 决策 | 结论 |
 |---|---|---|
-| D1 | 卡片形态 | 不做卡内实时验证码（受系统刷新机制硬约束），改为**入口卡片**：账号数主视觉 + 「扫码添加 / 输入添加」两个快捷入口（卡内不取码） |
+| D1 | 卡片形态 | 不做卡内实时验证码（受系统刷新机制硬约束），改为**入口卡片**：账号数主视觉 + 「扫码添加」单个快捷入口（卡内不取码；手动输入在 App 内入口） |
 | D2 | 卡片数据 | 卡片不持有 TOTP secret，只读非敏感展示快照（仅账号数，不落任何账号明细） |
 | D3 | 卡片尺寸 | 只做 `2*2`（卡片页按尺寸命名，为 `2*4` 预留）；`2*4` 列为候选 |
 | D4 | 引导页 | 不做「首次展示 + 可关闭 + 持久化标记」；空态提示卡**无数据时固定展示** |
@@ -82,9 +82,9 @@ huawei/atomicservice/MFA/
 
 ② 卡片点击（快捷入口）
    整卡点击 ──▶ postCardAction(router, abilityName:'EntryAbility')  ──▶ 打开元服务首页（列表）
-   「扫码添加」/「输入添加」──▶ postCardAction(router, params:{mfa_route:'scan'|'input'})
+   「扫码添加」──▶ postCardAction(router, params:{mfa_route:'scan'})
         ──▶ EntryAbility.onCreate / onNewWant ──▶ FormIntent(AppStorageV2).version++
-        ──▶ Index @Monitor('formIntent.version') / onActive ──▶ addByScan() / pushPathByName('index/create')
+        ──▶ Index @Monitor('formIntent.version') / onActive ──▶ addByScan()
 
 ③ 首屏（并行）
    无账号 ──▶ EmptyState（英雄区 + IndexGuide 固定提示卡 + 扫码/输入 + 帮助入口）
@@ -136,20 +136,22 @@ huawei/atomicservice/MFA/
 **卡片内容（2\*2）**：
 
 ```
-┌──────────────────────┐  2*2 = 150×150vp，内容预算 ≈126×130vp
-│  ▣ MFA认证            │   ← 品牌角标 Image + 标题
+┌──────────────────────┐  标称 2*2 = 150×150vp（本机实测盒 ≈166×166vp，内容区 ≈146×146vp）
+│  ▣ MFA认证            │   ← 品牌角标 Image + 标题（20fp）
 │  ─────────────────    │
 │                      │
-│         3            │   ← count（40fp 品牌色）与单位说明贴成一组
-│     个账号已保护       │      整组在标题与入口之间居中
-│ [扫码添加] [输入添加]   │   ← 两枚等宽入口（11fp，主 / 次）
+│         3            │   ← count（40fp 品牌色）与单位说明成一组
+│     个账号已保护       │      （10fp）整组在标题与入口之间居中
+│ [    扫码添加     ]   │   ← 单个入口占满内容宽（13fp，上下内边距 5vp）
 └──────────────────────┘
         count == '0' 时  →  「还没有账号」+「点击添加第一个账号」在同一区间居中，入口行**保留**
 ```
 
-UI 见 `pages/form/Form2x2.ets`：`@Entry @ComponentV2`，一个 `@Local`（`count`），`Title()` / `Filled()` / `Empty()` / `Actions()` 四个 `@Builder`；文本均 `maxLines(1)` + `textOverflow`；账号数区（`Filled()` / `Empty()`）带 `layoutWeight(1)` **吃掉标题与入口之间的剩余高度**——数字贴顶、单位说明贴底，把卡片撑满；`Actions()` 在**有账号与空态下都渲染**（空态正是最需要添加入口的时候）。空态由 `count == '0'` 推导，**不单独注入标记字段**。
+UI 见 `pages/form/Form2x2.ets`：`@Entry @ComponentV2`，一个 `@Local`（`count`），`Title()` / `Filled()` / `Empty()` / `Actions()` 四个 `@Builder`；文本均 `maxLines(1)` + `textOverflow`；账号数区（`Filled()` / `Empty()`）带 `layoutWeight(1)` **吃掉标题与入口之间的剩余高度**——数字与单位说明成组居中、把卡片撑满；`Actions()` 在**有账号与空态下都渲染**（空态正是最需要添加入口的时候）。空态由 `count == '0'` 推导，**不单独注入标记字段**。
 
-**尺寸预算（2\*2）**：官方规格「小卡片 2\*2 = 150×150vp」（最小 132vp 宽），四周需留 12vp 安全边距，即**内容高度 ≈130vp、宽 ≈126vp**。当前排布在该预算内留有余量。**数字字号已接近 2\*2 的上限**（40fp）：账号数区（`layoutWeight(1)`）高度 ≈ 130 − 标题行 26 − 分割线 1 − 入口行 21 − 行距 9 ≈ 73vp，需同时容纳「数字行 + 说明行」（两组间不留额外内边距、整组居中）；再往上加会顶掉说明行或裁切入口行。若确需更大，只能牺牲标题行（可到约 50fp）。**新增卡片内容前必须先核对这个预算**：126vp 宽放不下两枚 5 字胶囊（12fp 需 128vp），故入口文字取 11fp、等宽均分。
+**尺寸预算（2\*2）**：官方规格「小卡片 2\*2 = 150×150vp」（最小 132vp 宽），四周需留 12vp 安全边距，即标称**内容高度 ≈130vp、宽 ≈126vp**；**本机实测**（模拟器截图反推，`px/vp = 3.5`）卡片盒实际 **≈166×166vp、内容区 ≈146×146vp**——服务中心列宽 = 16 页边距 + 166 + 12 列间距 + 166 + 16 = 376vp = 屏宽，桌面 2\*2 网格同为该值，且内边距 10vp、列间距 6vp 的实测像素与代码值精确吻合。字号与间距仍按最小盒收紧，**新增内容前先核对这个预算**。
+
+当前内容自然高度 ≈ **145vp**（上下内边距 20 + 标题行 26 + 行距 2×3 + 分割线 1 + 数字块 ≈66 + 入口 ≈27），在 166vp 盒内留有余量；若某设备盒严格为 150vp，会被卡片圆角裁切且**编译期不报错**。入口收敛为单枚后**宽度不再是约束**（13fp × 4 字 ≈ 52vp ≪ 146vp）；**数字 40fp 已到上限**（行高 ≈52vp），单入口的高度（≈27vp，原两枚 ≈20vp）是靠**单位说明 11fp→10fp、数字块内间距 2vp→0**（合计让出 ≈3vp）加原有余量换来的，**数字字号保持不变**。
 
 **数据链路（快照）**：`utils/Form.ets` 的 `Snapshot` 类，preferences 库名 `mfa_form`。
 
@@ -188,7 +190,7 @@ listFormIds(context): string[]          // 供主动刷新遍历
 **点击链路**：
 
 - **整卡 / 「打开验证码」**：`postCardAction({action:'router', abilityName:'EntryAbility'})` —— 不携带参数，仅拉起元服务（冷启动落在首页列表）。
-- **「添加账号」**：`postCardAction({action:'router', abilityName:'EntryAbility', params:{mfa_route:'add'}})` → `EntryAbility.onCreate/onNewWant` 解析（`FormIntent.fromWant`）→ `FormIntent`（AppStorageV2，`version++`）→ `Index` 的 `@Monitor('formIntent.version')` / `onActive` 消费 → `pushPathByName('index/create')`。意图**消费一次即清空**，避免重复跳转。
+- **「扫码添加」**：`postCardAction({action:'router', abilityName:'EntryAbility', params:{mfa_route:'scan'}})` → `EntryAbility.onCreate/onNewWant` 解析（`FormIntent.fromWant`）→ `FormIntent`（AppStorageV2，`version++`）→ `Index` 的 `@Monitor('formIntent.version')` / `onActive` 消费 → `addByScan()` 进扫码流程。意图**消费一次即清空**，避免重复跳转。`FormIntent` 的 `'input'` 分支保留（通用机制；App 内「手动输入」仍走 FAB 菜单 / 空态按钮，不再由卡片触发）。
 
 **边界（Must NOT）**：不做卡内按钮 message 事件、不做 `FormExtensionAbility` 算码、不放 secret、不做秒级刷新、不做 `dataProxy`。卡内交互一律走 `router` 事件（不用 `message` / `call`）。
 
@@ -235,7 +237,7 @@ listFormIds(context): string[]          // 供主动刷新遍历
 4. **卡片组件白名单编译期不校验**：新增组件/属性一律以真机验证为准，优先复用已在卡片中跑通的组件。
 5. **`onAddForm` 是同步签名**：卡片提供方侧读取快照、装配绑定数据必须全同步，无法 await 异步方法。
 6. **preferences 不保证多进程并发安全**（官方只保证单进程安全）：当前数据量极小、写入频率极低，采用官方推荐的「清缓存读」作为读侧补偿。
-7. **2\*2 卡片内容有硬尺寸预算**（≈126×130vp，见 §3.1「尺寸预算」）：新增元素前先核算；宁可减少内容也不要溢出——溢出会被卡片圆角裁切，且编译期不报错。
+7. **2\*2 卡片内容有硬尺寸预算**（标称 ≈126×130vp；本机实测盒 ≈166vp、内容区 ≈146vp，见 §3.1「尺寸预算」）：新增元素前先核算；宁可减少内容也不要溢出——溢出会被卡片圆角裁切，且编译期不报错。
 
 ## 5. 风险与对策
 
@@ -257,7 +259,7 @@ listFormIds(context): string[]          // 供主动刷新遍历
 | R17 | 任何新增的跨进程 preferences 读写若忘记清缓存，会复现同类静默故障 | 中 | 已写入 `AGENTS.md` 约束，统一复用 `Snapshot.prefs()` |
 | R18 | 卡片内子元素 `onClick` 与整卡 `onClick` 可能同时触发 → 动作重复 | 低 | 依赖 ArkUI「子组件 onClick 优先消费」；真机验证，若出现冒泡则给入口元素加 `hitTestBehavior(HitTestMode.Block)` |
 | R19 | 卡内以 `Text` + 通用属性（背景色/圆角/onClick）充当按钮，未经真机验证 | 低 | 只复用卡片已跑通的 `Text` 与通用属性；真机确认渲染与点击均正常 |
-| R20 | 卡片内容超出 2\*2 尺寸预算（≈126×130vp）会被圆角裁切，且**编译期不报错** | 中 | 新增内容前按 §3.1「尺寸预算」核算；必要时改走 2\*4（316×150vp） |
+| R20 | 卡片内容超出 2\*2 尺寸预算（标称 ≈126×130vp；本机实测内容区 ≈146vp）会被圆角裁切，且**编译期不报错** | 中 | 新增内容前按 §3.1「尺寸预算」核算；必要时改走 2\*4（316×150vp） |
 
 ## 6. 监控与可观测性
 
@@ -291,6 +293,7 @@ listFormIds(context): string[]          // 供主动刷新遍历
 | 2026-10-04 | **数字加大**：`card_number_font_size` 30fp→**38fp**（接近 2\*2 上限，推导见 §3.1「尺寸预算」）；行距 4vp→3vp、账号数区顶部内边距 6vp→4vp，把空间让给数字，消除数字与说明之间的空洞 |
 | 2026-10-05 | **卡片排版改为「成组居中」**：数字与单位说明贴成一组、整组在标题与入口之间居中（去掉原「数字贴顶、说明贴底」写法与数字区顶部内边距）；数字 38fp→**40fp**；入口胶囊内边距 4vp→3vp 让出高度；`Filled()` 与 `Empty()` 形态统一（同为 `layoutWeight(1)` + `justifyContent(Center)`） |
 | 2026-10-05 | **命名对齐：服务卡片族残留的 `card_*` 全部收敛为 `form_*`**。① `form_config.json`：卡片名 `mfa_card` → `mfa_form`、`src` → `pages/form/Form2x2.ets`；② `string.json` 10 条：`card_ability_label`/`card_ability_desc`/`card_display_name`/`card_description`/`card_title`/`card_protected_label`/`card_empty_title`/`card_empty_hint`/`card_action_scan`/`card_action_input` → `form_*`（文案值不变）；③ `float.json` 3 条：`card_number_font_size`/`card_label_font_size`/`card_action_font_size` → `form_*`；④ 卡片页 `pages/form/FormCard2x2.ets` → `Form2x2.ets`（struct 同名）；⑤ `utils/Form.ets`：preferences 库名 `mfa_card` → `mfa_form`、key `card_snapshot` → `form_snapshot`、`card_form_ids` → `form_ids`。**注意**：卡片名与 preferences 库名变更后，设备上已添加的卡片需**重新添加**（旧 formId 与新库名均不再生效）；应用内通用卡片命名（`card_radius`/`card_height` 等 integer、InfoCard/InputCard/TotpCard 及其文案）**刻意不动**，避免与服务卡片语义混淆 |
+| 2026-10-05 | **卡片入口收敛为单枚「扫码添加」**：去掉次入口「输入添加」（手动输入在 App 内仍可走 FAB 菜单 / 空态按钮），入口宽度 ≈70→**146vp**、字号 11fp→**13fp**、上下内边距 3vp→5vp（高 ≈20→**27vp**）；为它腾高度：单位说明 11fp→**10fp**、数字块内间距 2vp→0（**数字 40fp 不变**），内容自然高度 ≈142→145vp；删除已无引用的 `form_action_input` 文案；同步记录实测卡片盒 ≈166×166vp 与 `Form2x2.ets` 文件头约束 |
 
 ## 8. 附录：本次不做、候选清单
 
