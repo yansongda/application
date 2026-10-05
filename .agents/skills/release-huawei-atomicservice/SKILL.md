@@ -198,6 +198,7 @@ git push origin huawei-atomicservice-mfa/vX.Y.Z
 1. 用 **DevEco Studio** 打开 `huawei/atomicservice/MFA`
 2. `Build > Build Hap(s)/APP(s) > Build APP(s)`，使用 release 签名配置（`default` product、`release` build mode）
 3. 取签名包：`huawei/atomicservice/MFA/build/outputs/default/MFA-default-signed.app`
+   - **上传前自检（含服务卡片的元服务必做）**：`unzip -l <该 .app> | grep pack.res` 必须命中。缺 `pack.res` 说明工程根 `EntryCard/` 快照缺失或被静默跳过（详见下方错误码 13 一行）
 4. AGC（AppGallery Connect）→ **我的应用** → **HarmonyOS** → 「应用信息」补全资料 → 「软件包管理」上传该 `.app`
 5. 「版本信息」→「准备提交」→ **必须在该页面重新选择刚上传的软件包并保存**（只上传不选包时，提交的仍可能是旧包）
 6. 「提交审核」→ 审核通过后发布（正式发布前可先走开放式测试）
@@ -211,6 +212,7 @@ git push origin huawei-atomicservice-mfa/vX.Y.Z
 | 非法软件包 | 包未签名 | 用签名配置重新构建；绝不要手动重新打包/重签 |
 | 软件包中使用证书失效 | 证书被删除或已过期 | 重新申请证书后重新构建 |
 | 错误码 1010（非元服务软件包） | 把 HarmonyOS **应用**包上传到了元服务应用 | 构建/签名 `atomicService` 包 |
+| 错误码 13（软件包中卡片与快照不符合要求） | 包内缺 `pack.res`：工程根没有 `EntryCard/` 目录，或快照缺失 / 命名不符 / 非 PNG。**本地编译不报错** —— hvigor 的 `GeneratePackRes` 以 `existsSync(<工程根>/EntryCard)` 为开关，目录缺失时静默跳过 | 补 `<工程根>/EntryCard/<模块名>/base/snapshot/<formName>-<尺寸>.png`（文件名 = `form_config.json` 的 `name` + 尺寸，如 `mfa_form-2x2.png`；**必须含 2x2**、只收 PNG、与卡片 1:1），重新 `Build APP(s)` 后用 `unzip -l <app> \| grep pack.res` 自检；若版本号已被 AGC 接受过，需再提升 `versionCode` 并打新 tag |
 
 - 元服务审核额外关注：快照、卡片大小、外部跳转 —— 见[《元服务审核指南》](https://developer.huawei.com/consumer/cn/doc/app/50129)
 - 签名材料（`.p12` / `.cer` / `.p7b`）不在仓库内，仅存于本机；口令为 DevEco 写入的密文，换机通常不可直接复用。缺失时无法产出签名包 —— 属本地环境问题，需在 DevEco Studio 重新生成/配置签名。
@@ -266,6 +268,7 @@ git pull main → 打 tag huawei-atomicservice-mfa/vX.Y.Z → 推送 tag
 | 写成 `## v1.4.0`（没有方括号、没有日期） | 沿用了迁移前的旧段落习惯 | 所有段落都使用 `## [X.Y.Z] - YYYY-MM-DD` |
 | 照抄迁移过来的旧条目，保留其 `feat:` / `optimize:` 类型前缀 | 旧条目带类型前缀 | 新条目用朴素的中文行为描述 + ` (#PR)` |
 | 上传了包但没在「版本信息」里选中它 | 上传看起来成功了 | 提交审核前，在版本页面重新选择并保存新包 |
+| 新增卡片后没补 `EntryCard/` 快照，AGC 报错误码 13 | 本地编译/签名/安装全不报错，容易以为包没问题 | 见「上传时常见的包解析错误」错误码 13 一行；上传前用 `unzip -l <app> \| grep pack.res` 自检 |
 | PR 合并前就打 tag | 打得太早 | 合并后先 `git pull origin main` 再打 tag |
 | 推了 tag 后看到 CI skipped 就慌了 | workflow 监听 `**` | 全部 skipped 属预期；不存在 huawei 相关 job |
 | 混入无关目录的改动 | 想当然认为分支只涉及 huawei | 用 `-- huawei/` 显式过滤 |

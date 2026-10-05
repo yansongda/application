@@ -9,6 +9,7 @@
 ```
 MFA/
   AppScope/
+  EntryCard/           # 卡片快照（服务卡片上架必需，见「服务卡片」节）
   entry/
     src/main/ets/      # 主要业务代码
     src/test/          # 本地测试
@@ -67,6 +68,21 @@ MFA/
 - **跨进程 preferences 必须清缓存后再读**：主应用与卡片提供方（`FormExtensionAbility`）是两个进程，`preferences` 实例按进程缓存在内存，某进程首次 `getPreferences` 后不再读持久化文件 → 看不到另一个进程刚写入的值。`utils/Form.ets`（`Snapshot`）已统一走 `prefs()`（内部 `removePreferencesFromCacheSync` 后再 `getPreferencesSync`）；**任何新增的跨进程 preferences 读写都必须复用该路径**，否则会出现「卡片添加后主应用读不到 formId → 不推送 → 卡片数据永远停在添加卡片那一刻」这类静默故障。
 - 卡片渲染在系统进程、与提供方隔离，**不得**在卡内直接读 `preferences`、算码或放密钥；跨进程数据只能以字符串经 `formBindingData` 传递。
 - 卡内交互**只用 `postCardAction` 的 `router` 事件**（不用 `message` / `call`）；入口用 `Text` + 通用属性（背景色 / 圆角 / `onClick`）充当按钮，组件与属性支持一律以真机为准。整卡 `onClick` 与子元素 `onClick` 并存时依赖「子组件优先消费」，真机需确认无冒泡重复触发。
+- **卡片快照（上架必需，本地不报错）**：工程根必须有 `EntryCard/<模块名>/base/snapshot/<formName>-<尺寸>.png`，与卡片数量 **1:1** 对应（`<formName>` 取 `form_config.json` 的 `name`，尺寸取值 `1x2` / `1x1` / `2x2` / `2x4` / `4x4` / `6x4`，且**必须含 `2x2`**）。hvigor 的 `GeneratePackRes` 以 `existsSync(<工程根>/EntryCard)` 为开关，目录缺失时**静默跳过**：本地编译/签名/安装一切正常，但包内没有 `pack.res`，AGC 上传报**错误码 13「软件包中卡片与快照不符合要求」**。新增卡片或改尺寸时必须同步新增/替换快照。
+- 快照是系统分发卡片时给用户的**预览图**（负一屏 / 应用市场 / 智慧搜索），必须是真实卡片截图：真机加卡（元服务运行中右上胶囊 `::` → Add widget）后截图裁剪，去掉桌面壁纸残色与边缘抗锯齿混色带，避免四角残留背景。
+- 快照自检（不必完整构建即可验证结构；`DEVECO` 按安装位置调整）：
+  ```bash
+  # 1) 产出的包必须含 pack.res（体积约等于快照）
+  unzip -l build/outputs/default/MFA-default-signed.app | grep pack.res
+
+  # 2) 直接跑打包器 res 模式验证 EntryCard 树（依赖 build/outputs/default/pack.info）
+  DEVECO=/Applications/DevEco-Studio.app
+  "$DEVECO/Contents/jbr/Contents/Home/bin/java" \
+    -jar "$DEVECO/Contents/sdk/default/openharmony/toolchains/lib/app_packing_tool.jar" \
+    --mode res --entrycard-path "$PWD/EntryCard" \
+    --pack-info-path "$PWD/build/outputs/default/pack.info" --out-path /tmp/pack.res --force true
+  ```
+  常见反例报错（便于搜索定位）：`The name is not same as formName`（文件名 ≠ form name）、`The level-4 directory of EntryCard must be named as snapshot`（四级目录名错）、`entry/<form>-2x2 has no related snapshot`（缺 2x2 快照）、`No image in PNG format is found`（非 PNG）。
 
 ## 测试
 
@@ -77,7 +93,7 @@ MFA/
 ## 提交约束
 
 - 禁止提交：`build/`、`oh_modules/`、`.hvigor/`、`.idea/`、`.preview/`
-- 必须提交：`oh-package-lock.json5`
+- 必须提交：`oh-package-lock.json5`、`EntryCard/` 下的卡片快照（上架必需，见「服务卡片」节）
 
 ## 联动开发说明
 
