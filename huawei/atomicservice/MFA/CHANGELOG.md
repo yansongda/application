@@ -2,6 +2,12 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.5.1] - 2026-10-05
+
+### Fixed
+
+- 补充 2*2 卡片快照，修复上架包缺少卡片快照导致应用市场提交审核失败（错误码 13） (#171)
+
 ## [1.5.0] - 2026-10-05
 
 ### Added
