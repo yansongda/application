@@ -4,7 +4,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../../App';
 import { Toast } from '../../utils/PromptAction';
 import { Totp } from '../../api/Totp';
-import { TotpCode } from '../../utils/Totp';
+import { TOTP } from '@yansongda/otp';
 
 // TOTP 条目运行时（端内算码 + 周期倒计时）。
 // 服务端未返回周期/进度时的兜底值（秒）
@@ -192,7 +192,7 @@ export class ItemRuntime {
 
     if ('undefined' !== typeof secret && secret.length > 0) {
       try {
-        const code = await TotpCode.compute(secret, this._config.period, Date.now());
+        const code: string = new TOTP({ secret: secret, period: this._config.period }).generate();
 
         if (seq === this._computeSeq) {
           this._code = code;

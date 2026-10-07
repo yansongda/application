@@ -38,7 +38,7 @@
         "buildOption": {
           "strictMode": {
             "caseSensitiveCheck": true,
-            "useNormalizedOHMUrl": false
+            "useNormalizedOHMUrl": true
           }
         }
       },
@@ -51,7 +51,7 @@
         "buildOption": {
           "strictMode": {
             "caseSensitiveCheck": true,
-            "useNormalizedOHMUrl": false
+            "useNormalizedOHMUrl": true
           }
         }
       }

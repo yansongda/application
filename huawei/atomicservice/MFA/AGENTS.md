@@ -43,6 +43,16 @@ MFA/
 
 - `@ohos/axios`
 - `@developers/dateformat`
+- `@yansongda/otp`（ArkTS 端内 TOTP/HOTP 算码库，字节码 HAR）
+
+依赖声明层级约定：**新增依赖声明在「使用它的模块」的 `oh-package.json5`**（`@yansongda/otp` 声明在 `entry/oh-package.json5`，ohpm 会生成模块级 `entry/oh-package-lock.json5`）。工程级 `oh-package.json5` 的既有依赖（`@ohos/axios`、`@developers/dateformat`）保持不变，不迁移。官方依据见「字节码 HAR」节。
+
+## 字节码 HAR 与 useNormalizedOHMUrl（硬约束）
+
+- 工程级 `build-profile.json5` 的 `strictMode.useNormalizedOHMUrl` **必须为 `true`**：一旦改回 `false`，依赖字节码 HAR（`@yansongda/otp`）会立刻构建失败，报 `00306046 Specification Limit Violation / Bytecode HAR [@yansongda/otp] not supported when useNormalizedOHMUrl is not true.`
+- 官方依据：构建 HAR 文档「依赖字节码HAR包时，该工程的build-profile.json5中的 useNormalizedOHMUrl 必须设置为true」（[构建 HAR](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-hvigor-build-har)）；工程级 build-profile.json5 文档「若工程引用了HAR/HSP，需确保工程的useNormalizedOHMUrl配置和HAR/HSP的useNormalizedOHMUrl配置保持一致，同时配置为true或false」（[工程级 build-profile.json5](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-hvigor-build-profile-app)）
+- 开启后须遵守：文件路径不含 `&`；不用相对路径跨模块或绝对路径导入；`oh-package.json5` 依赖别名须与依赖包 `name` 一致
+- 该开关自 DevEco Studio 5.0.3.800 起为新工程默认值（本工程原先为 `false` 属遗留默认）
 
 ## lint 约束
 
@@ -50,6 +60,7 @@ MFA/
 - 忽略目录包括：`src/ohosTest/`、`src/test/`、`src/mock/`、`node_modules/`、`oh_modules/`、`build/`、`.preview/`
 - 当前规则集包含性能与 TypeScript 相关推荐规则
 - 安全相关规则对不安全加密算法有限制，修改安全或加密相关逻辑时要特别谨慎
+- `@security/no-unsafe-mac`（warn）此前命中自研 `utils/Totp.ets` 的 HMAC-SHA1；改用 `@yansongda/otp` 后该告警不再出现在工程源码（`oh_modules/`、`src/test/**`、`src/ohosTest/**` 在 `code-linter.json5` 中被 ignore）。**规则与豁免策略不变**（不放宽规则、不加 disable 注释）
 
 ## 开发约束
 
@@ -89,11 +100,12 @@ MFA/
 - 本地测试目录：`entry/src/test/`
 - Ohos 测试目录：`entry/src/ohosTest/`
 - 修改公共组件、页面跳转、接口调用或运行时模型时，应同步检查相关测试是否需要更新
+- 端内算码的真 crypto 路径**只在设备侧可验证**：官方「本地测试（Local Test）」明载不支持测试系统 API；库 barrel 顶层值导入 `internal/CryptoSource`（库内唯一 import kit 的文件）→ 真 crypto 用例放 `entry/src/ohosTest/ets/test/`（如 `TotpDevice.test.ets`，运行需真机/模拟器）
 
 ## 提交约束
 
 - 禁止提交：`build/`、`oh_modules/`、`.hvigor/`、`.idea/`、`.preview/`
-- 必须提交：`oh-package-lock.json5`、`EntryCard/` 下的卡片快照（上架必需，见「服务卡片」节）
+- 必须提交：`oh-package-lock.json5`、`entry/oh-package-lock.json5`、`EntryCard/` 下的卡片快照（上架必需，见「服务卡片」节）
 
 ## 联动开发说明
 

@@ -2,6 +2,12 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Changed
+
+- 端内验证码计算改用 `@yansongda/otp` 库实现，替换自研 TOTP 算法；算法与输出不变（SHA1 + 6 位，仍与后端一致），用户可见行为无变化 (#173)
+
 ## [1.5.1] - 2026-10-05
 
 ### Fixed
