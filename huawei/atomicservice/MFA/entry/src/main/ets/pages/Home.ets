@@ -1,7 +1,9 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppStorageV2, PersistenceV2 } from '@kit.ArkUI';
 import { Authorization, State } from '../models/Auth';
+import { AppLock } from '../models/Security';
 import { AppPagesName, LogDomain } from '../App';
+import { LockScreen } from '../components/LockScreen';
 import { redirectLoginPage } from '../utils/Nav';
 
 @Entry
@@ -10,6 +12,8 @@ struct Home {
   @Local
   private authorization: Authorization =
     PersistenceV2.globalConnect({ type: Authorization, defaultCreator: () => new Authorization() })!;
+  @Local
+  private appLock: AppLock = AppLock.shared();
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
 
   onPageShow(): void {
@@ -20,13 +24,25 @@ struct Home {
     }
   }
 
+  onBackPress(): boolean {
+    return this.appLock.locked;
+  }
+
   build() {
-    Column() {
-      Navigation(this.pages, { name: 'index' })
-        .titleMode(NavigationTitleMode.Mini)
-        .mode(NavigationMode.Stack)
+    Stack() {
+      Column() {
+        Navigation(this.pages, { name: 'index' })
+          .titleMode(NavigationTitleMode.Mini)
+          .mode(NavigationMode.Stack)
+      }
+      .backgroundColor($r('sys.color.background_secondary'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+
+      if (this.appLock.locked) {
+        LockScreen()
+      }
     }
-    .backgroundColor($r('sys.color.background_secondary'))
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+    .width('100%')
+    .height('100%')
   }
 }
