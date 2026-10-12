@@ -264,10 +264,16 @@ export class AppLock {
       skipLockedBiometricAuth: true,
     };
     // 不设置结果复用参数（reuseUnlockResult）——会让「设备已解锁但手机被他人拿走」失效
-    const widgetParam: userAuth.WidgetParam = {
-      // 该参数类型为 string（不接受 Resource）；本机 SDK 无 resourceToString 全局函数
-      title: context.resourceManager.getStringSync($r('app.string.lock_page_verify_title').id),
-    };
+    // title 类型为 string（不接受 Resource）；本机 SDK 无 resourceToString 全局函数
+    let title: string = '';
+
+    try {
+      title = context.resourceManager.getStringSync($r('app.string.lock_page_verify_title').id);
+    } catch (e) {
+      // 文案读取失败属资源异常路径：记 error 后用空标题继续发起认证（防锁死优先，R2：不得让用户失去解锁路径）
+      hilog.error(LogDomain.MODELS, 'models/security', 'title_get_failed: %{public}s', JSON.stringify(e));
+    }
+    const widgetParam: userAuth.WidgetParam = { title: title };
     // 不设置导航按钮文本、不设置 2in1 弹窗上下文（见技术设计 §3.3 参数表）
 
     // f. 发起认证：每次验证新建实例（每个 UserAuthInstance 只能用于一次认证，官方原文）
