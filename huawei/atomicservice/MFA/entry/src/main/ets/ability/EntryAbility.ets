@@ -7,6 +7,8 @@ import { User } from '../models/User';
 import { ItemsRuntime } from '../models/totp/ItemsRuntime';
 import { FormIntent } from '../models/form/FormIntent';
 import { MainTheme } from '../themes/Main';
+import { Security, AppLock } from '../models/Security';
+import { Privacy } from '../utils/Privacy';
 
 export default class EntryAbility extends UIAbility {
   // 冷启动：卡片点击拉起时 want 可能携带快捷意图，写入共享状态供 Index 页消费
@@ -55,6 +57,14 @@ export default class EntryAbility extends UIAbility {
       }
 
       ThemeControl.setDefaultTheme(MainTheme.create());
+
+      const context = this.context;
+      const security = Security.shared();
+
+      security.load(context);
+      Privacy.attach(windowStage);
+      Privacy.apply(security.screenProtect, 'cold_start');
+      AppLock.shared().reset(security.appLock);
     });
   }
 
@@ -64,10 +74,23 @@ export default class EntryAbility extends UIAbility {
   onForeground(): void {
     // 恢复退后台时暂停的验证码刷新定时器（端内算码为主，secret 缺失/算码失败时回退服务端；列表数据由页面刷新统一拉取）
     AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!.resumeAll();
+
+    const security = Security.shared();
+
+    Privacy.apply(security.screenProtect, 'foreground');
+    AppLock.shared().onForeground();
   }
 
   onBackground(): void {
     // 退后台暂停所有验证码刷新定时器，避免后台空转与无效网络请求
     AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!.stopAll();
+
+    const security = Security.shared();
+
+    AppLock.shared().onBackground();
+
+    if (security.appLock) {
+      Privacy.apply(true, 'background');
+    }
   }
 }
