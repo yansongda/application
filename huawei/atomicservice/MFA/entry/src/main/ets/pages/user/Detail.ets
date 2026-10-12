@@ -1,11 +1,14 @@
 import { authentication } from '@kit.AccountKit';
 import { AdvancedDialogV2Button, AlertDialogV2, AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
 import { InfoCard, InfoCardItem } from '../../components/InfoCard';
+import { SettingCard } from '../../components/SettingCard';
 import { User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
+import { Security, AppLock, VerifyOutcome } from '../../models/Security';
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { Dialog } from '../../utils/PromptAction';
+import { Dialog, Toast } from '../../utils/PromptAction';
+import { Privacy } from '../../utils/Privacy';
 import { User as UserApi } from '../../api/User';
 import { App, AppPagesName, LogDomain } from '../../App';
 import { displayOr } from '../../utils/Display';
@@ -22,6 +25,8 @@ struct Detail {
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
+  @Local
+  private security: Security = Security.shared();
 
   build() {
     NavDestination() {
@@ -78,6 +83,32 @@ struct Detail {
               title: $r('app.string.user_detail_page_phone'),
               value: $r('app.string.user_detail_page_coming_soon'),
             }),
+          ]
+        })
+
+        SettingCard({
+          title: $r('app.string.user_detail_page_security'),
+          items: [
+            {
+              title: $r('app.string.user_detail_page_screen_protect'),
+              description: $r('app.string.user_detail_page_screen_protect_desc'),
+              toggle: {
+                isOn: this.security.screenProtect,
+                action: (next: boolean): void => {
+                  this.toggleScreenProtect(next);
+                },
+              },
+            },
+            {
+              title: $r('app.string.user_detail_page_app_lock'),
+              description: $r('app.string.user_detail_page_app_lock_desc'),
+              toggle: {
+                isOn: this.security.appLock,
+                action: (next: boolean): void => {
+                  this.toggleAppLock(next);
+                },
+              },
+            },
           ]
         })
 
@@ -209,5 +240,50 @@ struct Detail {
       // 用户取消重试，返回 undefined 保持原有昵称显示
       return undefined;
     }
+  }
+
+  // 防截屏开关：先写盘（失败则内存已回滚、开关复位），再经 Privacy.apply 应用隐私模式
+  private toggleScreenProtect(next: boolean): void {
+    const context = this.getUIContext().getHostContext();
+
+    if ('undefined' === typeof context) {
+      return;
+    }
+    if (!this.security.setScreenProtect(context, next)) {
+      // 写盘失败：setScreenProtect 内已回滚内存值，这里提示「设置保存失败」并保持开关原位
+      Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
+      return;
+    }
+    Privacy.apply(next, 'setting');
+  }
+
+  // 应用锁开关：开启前必须通过系统认证，认证成功才写盘；关闭直接写盘
+  private toggleAppLock(next: boolean): void {
+    const context = this.getUIContext().getHostContext();
+
+    if ('undefined' === typeof context) {
+      return;
+    }
+    if (next) {
+      AppLock.shared().verify(context, (outcome: VerifyOutcome): void => {
+        if (VerifyOutcome.SUCCESS === outcome) {
+          // 成功不弹「已开启」提示（开关本身就是反馈）；但写盘失败必须提示，否则开关静默弹回、用户不知原因
+          if (!this.security.setAppLock(context, true)) {
+            Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
+          }
+          return;
+        }
+        if (VerifyOutcome.NO_CREDENTIAL === outcome) {
+          Toast.show({ message: $r('app.string.user_detail_page_app_lock_no_credential'), duration: 3000 });
+          return;
+        }
+        if (VerifyOutcome.SKIPPED === outcome) {
+          return;
+        }
+        Toast.show({ message: $r('app.string.user_detail_page_app_lock_enable_failed'), duration: 3000 });
+      });
+      return;
+    }
+    this.security.setAppLock(context, false);
   }
 }
