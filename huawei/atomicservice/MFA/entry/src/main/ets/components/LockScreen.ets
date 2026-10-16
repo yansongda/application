@@ -1,6 +1,8 @@
 // 锁定遮罩（LockScreen）：不注册路由、由 pages/Home 在锁定态条件渲染；
 // 不触碰导航栈（底层 Navigation 保持挂载），因此无法被返回键/弹栈绕过。
 import { userAuth } from '@kit.UserAuthenticationKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { AppPagesName, LogDomain } from '../App';
 import { AppLock, VerifyOutcome } from '../models/Security';
 import { Toast } from '../utils/PromptAction';
 
@@ -35,6 +37,9 @@ export struct LockScreen {
     const context = this.getUIContext().getHostContext();
 
     if ('undefined' === typeof context) {
+      // 拿不到 context 属异常路径：记日志便于排查「锁定后点解锁没反应」
+      hilog.warn(LogDomain.PAGES, AppPagesName.HOME, 'lock_screen: context_undefined');
+
       return;
     }
     this.appLock.verify(context, (outcome: VerifyOutcome, code?: number): void => { this.onOutcome(outcome, code); });

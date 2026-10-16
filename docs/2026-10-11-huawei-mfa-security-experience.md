@@ -130,16 +130,20 @@ huawei/atomicservice/MFA/
 
 ```
 Privacy.attach(stage: window.WindowStage)   // onWindowStageCreate 内缓存；规避 getLastWindow 的异步延迟竞态
-Privacy.apply(on: boolean, cause: string)   // 唯一写入口；内部链式排队（Promise 串联），保证后调用者最终生效
+Privacy.apply(on: boolean, cause: string)   // 唯一写入口；内部「目标值 + 单飞 + 补写」，保证后调用者最终生效
 ```
 
 ```
 apply(on, cause):
   attach 未调用 → 记 warn 并返回
-  链式排队 → stage.getMainWindowSync().setWindowPrivacyMode(on)
+  记录目标值并置脏位；若已有写入在途则直接返回（结束后自动补写最新目标值）
+  → stage.getMainWindowSync().setWindowPrivacyMode(on)（单次写入 1s 超时兑底）
     成功: hilog.info(utils/privacy, set, privacyMode=on, cause=cause)
     失败: hilog.error(utils/privacy, set_failed, code)   // 该 API 在 API 26 d.ts 仅列 201（无权限）/ 1300002（窗口状态异常），其余按通用失败处理
+    超时: hilog.error(utils/privacy, set_timeout, privacyMode=on, cause=cause)   // 本轮结束不重试，下一次 apply 再试
 ```
+
+**不变量**：① 每次 `apply` 至少写入一次（生命周期节点需重断言，不能被「值没变」吞掉）；② 写入在途期间再 `apply` 只改目标值，当前写入结束后补写一次——快速连续切换最多 2 次系统调用，不再出现排队堆积；③ 单次写入超时兑底：写入 Promise 永不 settle 时不会把后续所有切换永久堵死（防截屏静默失效且监控看不到）。
 
 **调用点（4 处：1-3 在 Ability 层，4 在设置页——但 4 仍经 `Privacy.apply` 这一唯一入口，不构成页面级直调）**：
 
@@ -491,7 +495,7 @@ Task 0（改动前基线，只读 + 一次性装依赖）
 | 10 | 连续验证两次（验证实例复用回归，R14） | 两次都能正常弹出并成功 |
 | 11 | 删除系统锁屏密码/人脸指纹后再启动 | 自动解锁 + 自动关闭应用锁 + 提示（不被锁死，R2） |
 | 12 | 锁定期按返回键 / 点卡片意图 | 返回键不穿透（底层页面不可操作）；解锁后落在预期页面 |
-| 13 | 连续两次「点开应用锁开关 → 取消系统验证」（R7） | 每次都回到关闭视觉，不残留"开启"外观 |
+| 13 | 连续两次「点开应用锁开关 → 取消系统验证」（R7） | 每次都回到关闭视觉，不残留"开启"外观。**预期表现（加固后）**：点开关的瞬间开关即先回弹为「关」（不做乐观更新，父组件强制重建该行），验证成功后变「开」 |
 | 14 | 冷启动「未登录 + 应用锁开启」 | 遮罩优先出现且可正常解锁；底层登录流程（华为账号授权 / loading 弹窗）并存但不阻塞；解锁后能正常进入列表或登录页，无卡死。**若同时叠加第 11 项（设备无凭据）**：解锁照常发生，但降级提示可能被登录页栈顶吞掉（既有 `Toast` 行为，见 §3.3 ③）——属已知边界，不算失败 |
 
 ## 5. 风险与对策
@@ -504,7 +508,7 @@ Task 0（改动前基线，只读 + 一次性装依赖）
 | R4 | 系统弹窗/自定义弹窗浮在遮罩之上（`openCustomDialog` 属 `UIContext` 级） | 中 | 锁定期不产生新的网络刷新动作；弹窗文案不含验证码 → 泄露面为零；不为此增加拦截层 |
 | R5 | 系统认证控件与遮罩叠加表现未知：手机端**恒为系统模态弹窗**（`uiContext` 仅 2in1 可用，**不能作为手机兜底**），官方未承诺是否全屏；官方亦未给出「退后台是否自动取消认证」依据 | 中 | 真机验证（冒烟 6/7/12）；退后台由**主动 `cancel()`** 兜底；若控件被遮挡或表现异常 → 回退为 `bindContentCover`（`ModalTransition.NONE`）遮罩 + 认证前收起业务弹层（**不改认证参数**） |
 | R6 | 生命周期时序导致误锁/漏锁（`onForeground` 冷启动时也会触发） | 中 | 规则单向：`onForeground` **只加锁、绝不解锁**；冷启动锁态只由 `AppLock.reset(appLock)` 决定；`backgroundAt` 判定后清空 |
-| R7 | 用户取消系统验证 → 开关视觉未复位（`Toggle.isOn` 与模型不一致） | 低 | `isOn` 由模型真值驱动、不做乐观更新；真机回归（冒烟 13）；若仍不复位 → 备选实现：整行 `onClick` 触发流程 + `Toggle` 置 `.enabled(false)` 只读呈现 |
+| R7 | 用户取消系统验证 / 写盘失败 / 验证中退后台 → 开关视觉未复位（`Toggle.isOn` 与模型不一致） | 低 | `isOn` 由模型真值驱动（不做乐观更新）；父组件每次开关尝试后递增 `revision`，`SettingCard` 的 `ForEach` 键值含 `revision`，强制重建该行覆盖三条不回滚路径（`Toggle` 自带内部状态，键值不变时框架不会重建它，仅靠模型回滚不复位）；真机回归（冒烟 13）；若仍不复位 → 备选实现：整行 `onClick` 触发流程 + `Toggle` 置 `.enabled(false)` 只读呈现 |
 | R8 | AGC 审核/客服排查时截屏黑屏，被误判为崩溃 | 低 | 提交说明中注明"隐私窗口特性"；必要时审核期用关闭防截屏的测试包 |
 | R9 | 未来有人在页面级再写 `setWindowPrivacyMode` → 复现官方 FAQ 的"全局防截屏失效"故障 | 中 | ① `utils/Privacy.ets` 文件头注释（执行计划 Task 2）；② `huawei/atomicservice/MFA/AGENTS.md` 的「开发约束」节新增一句硬约束（执行计划 Task 1）。隐私模式**只允许**经 `Privacy.apply` 修改 |
 | R10 | `onBackPress` 在 `@Entry @ComponentV2` 页面行为不符预期 | 低 | 真机验证（冒烟 12）；即使失效也不影响安全性（仅体验），可退化为不消费返回键 |
@@ -524,8 +528,9 @@ Task 0（改动前基线，只读 + 一次性装依赖）
 {"domain":2,"tag":"models/security","event":"load","screenProtect":true,"appLock":true}
 {"domain":1,"tag":"utils/privacy","event":"set","privacyMode":true,"cause":"background"}
 {"domain":1,"tag":"utils/privacy","event":"set_failed","code":201}
+{"domain":1,"tag":"utils/privacy","event":"set_timeout","privacyMode":true,"cause":"foreground"}
 {"domain":2,"tag":"models/security","event":"lock","reason":"cold_start|timeout","elapsedMs":92500}
-{"domain":2,"tag":"models/security","event":"unlock","result":12500000,"authType":4}
+{"domain":2,"tag":"models/security","event":"verify_result","outcome":"FAILED","code":12500009}
 {"domain":2,"tag":"models/security","event":"disable","reason":"no_credential"}
 {"domain":2,"tag":"models/security","event":"verify_skip","reason":"in_flight|debounce"}
 ```
@@ -534,7 +539,7 @@ Task 0（改动前基线，只读 + 一次性装依赖）
 |---|---|---|
 | 隐私模式调用失败率 | `utils/privacy` 的 `set_failed` 计数 | > 0 即排查（元服务兼容性，R1） |
 | 应用锁因无凭据自动关闭次数 | `models/security` 的 `disable(no_credential)` 计数 | > 0 需评估探测逻辑是否过严 |
-| 解锁失败分布 | `models/security` 的 `unlock` 结果码分布 | `GENERAL_ERROR`/`BUSY` 占比高说明调用时机有问题 |
+| 解锁失败分布 | `models/security` 的 `verify_result` 的 outcome/code 分布 | `GENERAL_ERROR`/`BUSY` 占比高说明调用时机有问题 |
 | 冷启动锁定次数 | `lock(cold_start)` / 启动次数 | 与开关开启率对齐，验证设置读取链路 |
 | 验证被跳过次数 | `verify_skip` 计数 | 异常偏高说明有重复触发（R14） |
 | 降级落盘失败次数 | `models/security` 的 `disable_persist_failed` 计数 | > 0 表示「无凭据降级」未能持久化，下次冷启动会重演降级（不会锁死，但提示失真） |
@@ -547,6 +552,7 @@ Task 0（改动前基线，只读 + 一次性装依赖）
 
 | 时间 | 变更 |
 |---|---|
+| 2026-10-16 | **加固批次（P1/P2，无接口/路由/文案变更）**：① `Privacy.apply` 改为「目标值 + 单飞 + 补写」并加 1s 写入超时（原 Promise 串联在写入永不 settle 时会永久堵死后续切换 → 防截屏静默失效且监控无痕，见 §3.2）；② R7 复位机制改为「父组件递增 revision 强制重建开关行」（原「Toggle 随模型回滚自动复位」在键值不变时框架不重建列表项，故取消验证/写盘失败/退后台三条路径都不成立）；③ 日志事件 `unlock` → `verify_result`（outcome + code），无凭据降级由 error 降为 warn；④ `Security` 移除公开 setter（曾是绕开落盘校验的通道）、`verify()` 结果回调改清理本次实例、同步异常路径补 `lastFinishedAt`；⑤ `AppLock` 无凭据降级抽 `degradeNoCredential`（原两处逐字重复）、`getStringSync` 抽 `buildWidgetParam`；⑥ 关闭应用锁补写盘失败提示；⑦ `load()` 读值加类型守卫（`as boolean` → `typeof` 判定）；⑧ 新增日志 `set_timeout`、页面级 `context_undefined` 告警。 |
 | 2026-10-11 | **复审修订（R2 轮）**：① `VerifyOutcome` 回调增加 `code` 通道，使 §3.3/§3.5 承诺的 `LOCKED`/`PIN_EXPIRED` 定向文案真正可达（新增文案 `lock_page_pin_expired`，15 → 16 条）；② 防锁死降级的提示改为 **Toast**（`unlock()` 后遮罩即卸载，内联提示不可见）并检查落盘返回值；③ `shouldDebounceVerify` 参数名统一为 `finishedAt` 并同步「时钟回拨 → 放行」分支（与执行计划实现一致）；④ §3.1 字段表补 `lastFinishedAt`；⑤ `AppLock.isLocked()` → `locked` getter（回滚指引原本引用不存在的 API）；⑥ §1 修正「唯一 `@Entry`」与 `Detail.ets` 锚点、§2 修正 `Login.ets` 锚点、§3.2 修正「全部在 Ability 层」措辞；⑦ §6 增加 `disable_persist_failed` 指标 |
 | 2026-10-11 | **初审修订（R1 轮）**：① 修正 §2「锁屏与登录页关系」的理由（原文与实现相反：遮罩与底层登录流程**并存**，非"登录后才置锁"）；② `getEnrolledState` 补 try/catch（该 API 在未录入时自抛 12500010）并禁止以空 `authType` 调用 `getUserAuthInstance`；③ `widgetParam.title` 明确必须传 `string`（SDK 无 `resourceToString`）；④ C1 错误码收敛为该 API 文档化的 201/1300002；⑤ §3.6 增加「来源标注」表；⑥ 文案 14 → 15 条；⑦ 冒烟 13 → 14 项 |
 | 2026-10-11 | 方案定稿（v3）：范围锁定华为 MFA 元服务；契约由外部镜像改为**本机 SDK API 26 d.ts 源码级核实**（C1–C17）；采纳 `skipLockedBiometricAuth`；锁定「手机端 `uiContext` 不可用、不能作为兜底」；认证实例单次使用 + in-flight + 3 秒防抖 + 退后台主动 `cancel()` 纳入设计；新增 `utils/LockPolicy.ets` 纯函数与本地单测；`InfoCard` 改为**不改**、新增 `components/SettingCard.ets`；文案 16 条；新增 2 个权限 |

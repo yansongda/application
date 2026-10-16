@@ -63,6 +63,8 @@ export default class EntryAbility extends UIAbility {
 
       security.load(context);
       Privacy.attach(windowStage);
+      // 冷启动立即断言一次：不等 onForeground，把「窗口已可见但隐私模式尚未生效」的竞态窗口压到零；
+      // onForeground 会再断言一次（代价是一次冗余系统调用，换取生命周期顺序异常时防截屏仍生效）
       Privacy.apply(security.screenProtect, 'cold_start');
       AppLock.shared().reset(security.appLock);
     });

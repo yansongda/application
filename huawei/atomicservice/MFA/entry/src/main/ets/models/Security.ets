@@ -10,7 +10,7 @@ import { userAuth } from '@kit.UserAuthenticationKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LogDomain } from '../App';
-import { LOCK_TIMEOUT_MS, VERIFY_DEBOUNCE_MS, shouldRelock, shouldDebounceVerify } from '../utils/LockPolicy';
+import { shouldRelock, shouldDebounceVerify } from '../utils/LockPolicy';
 
 const PREFERENCES_NAME: string = 'mfa_security';
 const KEY_SCREEN_PROTECT: string = 'screen_protect';
@@ -33,6 +33,8 @@ interface ProbeResult {
 
 @ObservedV2
 export class Security {
+  // 只读字段：设置项**只能**经 setScreenProtect / setAppLock 写入（两者失败时回滚内存值），
+  // 开放 setter 等于给页面留一条绕开落盘校验的通道，会出现「显示已开、实际未开」
   @Trace
   private _screenProtect: boolean = true;
 
@@ -40,19 +42,11 @@ export class Security {
     return this._screenProtect;
   }
 
-  public set screenProtect(value: boolean) {
-    this._screenProtect = value;
-  }
-
   @Trace
   private _appLock: boolean = false;
 
   public get appLock(): boolean {
     return this._appLock;
-  }
-
-  public set appLock(value: boolean) {
-    this._appLock = value;
   }
 
   static shared(): Security {
@@ -81,8 +75,12 @@ export class Security {
         return;
       }
 
-      this._screenProtect = prefs.getSync(KEY_SCREEN_PROTECT, true) as boolean;
-      this._appLock = prefs.getSync(KEY_APP_LOCK, false) as boolean;
+      const screenProtect: preferences.ValueType = prefs.getSync(KEY_SCREEN_PROTECT, true);
+      const appLock: preferences.ValueType = prefs.getSync(KEY_APP_LOCK, false);
+
+      // 类型不符（历史脏数据 / 未来类型变更）时回落默认值，避免非布尔真值进入运行态
+      this._screenProtect = 'boolean' === typeof screenProtect ? screenProtect : true;
+      this._appLock = 'boolean' === typeof appLock ? appLock : false;
       hilog.info(LogDomain.MODELS, 'models/security', 'load: screenProtect=%{public}s, appLock=%{public}s',
         this._screenProtect.toString(), this._appLock.toString());
     } catch (e) {
@@ -95,25 +93,31 @@ export class Security {
   setScreenProtect(context: Context, on: boolean): boolean {
     const previous: boolean = this._screenProtect;
 
-    this._screenProtect = on;
-    if (Security.write(context, KEY_SCREEN_PROTECT, on)) {
-      return true;
-    }
-    this._screenProtect = previous;
-    hilog.error(LogDomain.MODELS, 'models/security', 'set_failed: key=%{public}s', KEY_SCREEN_PROTECT);
-
-    return false;
+    return this.setFlag(context, KEY_SCREEN_PROTECT, on, previous, (value: boolean): void => {
+      this._screenProtect = value;
+    });
   }
 
   setAppLock(context: Context, on: boolean): boolean {
     const previous: boolean = this._appLock;
 
-    this._appLock = on;
-    if (Security.write(context, KEY_APP_LOCK, on)) {
+    return this.setFlag(context, KEY_APP_LOCK, on, previous, (value: boolean): void => {
+      this._appLock = value;
+    });
+  }
+
+  // 通用布尔设置项写入：内存值经 assign 闭包更新（@Trace 字段无法按字符串键动态赋值），
+  // 写盘失败回滚到 previous 并记日志，返回 false 由调用方提示用户
+  private setFlag(context: Context, key: string, on: boolean, previous: boolean,
+    assign: (value: boolean) => void): boolean {
+    assign(on);
+
+    if (Security.write(context, key, on)) {
       return true;
     }
-    this._appLock = previous;
-    hilog.error(LogDomain.MODELS, 'models/security', 'set_failed: key=%{public}s', KEY_APP_LOCK);
+
+    assign(previous);
+    hilog.error(LogDomain.MODELS, 'models/security', 'set_failed: key=%{public}s', key);
 
     return false;
   }
@@ -227,12 +231,7 @@ export class AppLock {
 
       if (confirmed) {
         // 设备确无凭据：自动解锁 + 自动关闭应用锁（唯一可接受的防锁死路径，见技术设计 §3.5）
-        if (!Security.shared().setAppLock(context, false)) {
-          // 落盘失败时内存已回滚为 true，仅记日志（下次冷启动会重演降级，但不会锁死用户）
-          hilog.error(LogDomain.MODELS, 'models/security', 'disable_persist_failed: %{public}s', 'no_credential');
-        }
-        this.unlock();
-        hilog.error(LogDomain.MODELS, 'models/security', 'disable: reason=%{public}s', 'no_credential');
+        this.degradeNoCredential(context);
         this.report(VerifyOutcome.NO_CREDENTIAL, onOutcome);
         return;
       }
@@ -264,16 +263,7 @@ export class AppLock {
       skipLockedBiometricAuth: true,
     };
     // 不设置结果复用参数（reuseUnlockResult）——会让「设备已解锁但手机被他人拿走」失效
-    // title 类型为 string（不接受 Resource）；本机 SDK 无 resourceToString 全局函数
-    let title: string = '';
-
-    try {
-      title = context.resourceManager.getStringSync($r('app.string.lock_page_verify_title').id);
-    } catch (e) {
-      // 文案读取失败属资源异常路径：记 error 后用空标题继续发起认证（防锁死优先，R2：不得让用户失去解锁路径）
-      hilog.error(LogDomain.MODELS, 'models/security', 'title_get_failed: %{public}s', JSON.stringify(e));
-    }
-    const widgetParam: userAuth.WidgetParam = { title: title };
+    const widgetParam: userAuth.WidgetParam = AppLock.buildWidgetParam(context);
     // 不设置导航按钮文本、不设置 2in1 弹窗上下文（见技术设计 §3.3 参数表）
 
     // f. 发起认证：每次验证新建实例（每个 UserAuthInstance 只能用于一次认证，官方原文）
@@ -307,12 +297,7 @@ export class AppLock {
               const reprobe: ProbeResult = this.probe();
 
               if (0 === reprobe.available.length) {
-                if (!Security.shared().setAppLock(context, false)) {
-                  hilog.error(LogDomain.MODELS, 'models/security', 'disable_persist_failed: %{public}s',
-                    'no_credential');
-                }
-                this.unlock();
-                hilog.error(LogDomain.MODELS, 'models/security', 'disable: reason=%{public}s', 'no_credential');
+                this.degradeNoCredential(context);
                 outcome = VerifyOutcome.NO_CREDENTIAL;
               }
               break;
@@ -331,8 +316,13 @@ export class AppLock {
 
           this._verifying = false;
           this._lastFinishedAt = Date.now();
-          this._instance?.off('result');
-          this._instance = undefined;
+          instance.off('result');
+
+          // 只清理本次实例：退后台重入时 _instance 可能已指向新实例
+          if (this._instance === instance) {
+            this._instance = undefined;
+          }
+
           this.report(outcome, onOutcome, result.result); // 透传原始错误码
         },
       });
@@ -341,10 +331,36 @@ export class AppLock {
     } catch (e) {
       // h. 同步异常统一兜底（getUserAuthInstance / on / start）
       this._verifying = false;
+      this._lastFinishedAt = Date.now(); // 同步失败同样计入防抖窗口，避免连续拉起系统认证控件
       this._instance = undefined;
       hilog.error(LogDomain.MODELS, 'models/security', 'verify_failed: %{public}s', JSON.stringify(e));
       this.report(VerifyOutcome.FAILED, onOutcome, (e as BusinessError).code);
     }
+  }
+
+  // 防锁死降级：设备确无凭据时自动解锁 + 自动关闭应用锁（技术设计 §3.5 唯一可接受的降级路径）。
+  // 落盘失败时 setAppLock 已把内存回滚为 true，这里仅记日志（下次冷启动会重演降级，但不会锁死用户）
+  private degradeNoCredential(context: Context): void {
+    if (!Security.shared().setAppLock(context, false)) {
+      hilog.error(LogDomain.MODELS, 'models/security', 'disable_persist_failed: %{public}s', 'no_credential');
+    }
+
+    this.unlock();
+    hilog.warn(LogDomain.MODELS, 'models/security', 'disable: reason=%{public}s', 'no_credential');
+  }
+
+  // 认证控件标题：SDK 要求 string（不接受 Resource），且本机 SDK 无 resourceToString 全局函数
+  private static buildWidgetParam(context: Context): userAuth.WidgetParam {
+    let title: string = '';
+
+    try {
+      title = context.resourceManager.getStringSync($r('app.string.lock_page_verify_title').id);
+    } catch (e) {
+      // 文案读取失败属资源异常路径：记 error 后用空标题继续发起认证（防锁死优先，R2：不得让用户失去解锁路径）
+      hilog.error(LogDomain.MODELS, 'models/security', 'title_get_failed: %{public}s', JSON.stringify(e));
+    }
+
+    return { title: title };
   }
 
   // 依次探测 PIN / FACE / FINGERPRINT（ATL3）：不抛错即认为可用；
@@ -379,7 +395,7 @@ export class AppLock {
 
   private report(outcome: VerifyOutcome, onOutcome?: (o: VerifyOutcome, code?: number) => void,
     code?: number): void {
-    hilog.info(LogDomain.MODELS, 'models/security', 'unlock: outcome=%{public}s, code=%{public}d',
+    hilog.info(LogDomain.MODELS, 'models/security', 'verify_result: outcome=%{public}s, code=%{public}d',
       outcome.toString(), 'undefined' === typeof code ? -1 : code);
     if ('function' === typeof onOutcome) {
       onOutcome(outcome, code);

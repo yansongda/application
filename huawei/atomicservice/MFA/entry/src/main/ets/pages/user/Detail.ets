@@ -27,6 +27,9 @@ struct Detail {
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
   @Local
   private security: Security = Security.shared();
+  // 开关行的强制重建计数器：Toggle 自带内部状态，模型真值不变时不会回滚视觉（技术设计 R7）
+  @Local
+  private toggleRevision: number = 0;
 
   build() {
     NavDestination() {
@@ -88,6 +91,7 @@ struct Detail {
 
         SettingCard({
           title: $r('app.string.user_detail_page_security'),
+          revision: this.toggleRevision,
           items: [
             {
               title: $r('app.string.user_detail_page_screen_protect'),
@@ -244,9 +248,15 @@ struct Detail {
 
   // 防截屏开关：先写盘（失败则内存已回滚、开关复位），再经 Privacy.apply 应用隐私模式
   private toggleScreenProtect(next: boolean): void {
+    // 先递增 revision 强制重建开关行：开关已随手指拨到新位置，而写盘失败 / 拿不到 context 时
+    // 模型真值不变，只能靠重建把视觉拨回原位（技术设计 R7）
+    this.toggleRevision++;
+
     const context = this.getUIContext().getHostContext();
 
     if ('undefined' === typeof context) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.USER_DETAIL, 'toggle_screen_protect: context_undefined');
+
       return;
     }
     if (!this.security.setScreenProtect(context, next)) {
@@ -259,9 +269,14 @@ struct Detail {
 
   // 应用锁开关：开启前必须通过系统认证，认证成功才写盘；关闭直接写盘
   private toggleAppLock(next: boolean): void {
+    // 同 toggleScreenProtect：无论成功、取消、验证失败还是退后台打断，都强制重建开关行（R7）
+    this.toggleRevision++;
+
     const context = this.getUIContext().getHostContext();
 
     if ('undefined' === typeof context) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.USER_DETAIL, 'toggle_app_lock: context_undefined');
+
       return;
     }
     if (next) {
@@ -277,13 +292,15 @@ struct Detail {
           Toast.show({ message: $r('app.string.user_detail_page_app_lock_no_credential'), duration: 3000 });
           return;
         }
-        if (VerifyOutcome.SKIPPED === outcome) {
-          return;
+        if (VerifyOutcome.SKIPPED !== outcome) {
+          Toast.show({ message: $r('app.string.user_detail_page_app_lock_enable_failed'), duration: 3000 });
         }
-        Toast.show({ message: $r('app.string.user_detail_page_app_lock_enable_failed'), duration: 3000 });
       });
       return;
     }
-    this.security.setAppLock(context, false);
+    // 写盘失败时 setAppLock 会回滚内存值（开关随重建弹回原位），提示原因避免用户以为点了没反应
+    if (!this.security.setAppLock(context, false)) {
+      Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
+    }
   }
 }
