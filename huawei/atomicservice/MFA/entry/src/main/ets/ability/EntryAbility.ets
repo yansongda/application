@@ -7,8 +7,9 @@ import { User } from '../models/User';
 import { ItemsRuntime } from '../models/totp/ItemsRuntime';
 import { FormIntent } from '../models/form/FormIntent';
 import { MainTheme } from '../themes/Main';
-import { Security, AppLock } from '../models/Security';
-import { Privacy } from '../utils/Privacy';
+import { Security } from '../models/Security';
+import { AppLock } from '../models/AppLock';
+import { PrivacyWindow } from '../utils/PrivacyWindow';
 
 export default class EntryAbility extends UIAbility {
   // 冷启动：卡片点击拉起时 want 可能携带快捷意图，写入共享状态供 Index 页消费
@@ -62,10 +63,10 @@ export default class EntryAbility extends UIAbility {
       const security = Security.shared();
 
       security.load(context);
-      Privacy.attach(windowStage);
+      PrivacyWindow.attach(windowStage);
       // 冷启动立即断言一次：不等 onForeground，把「窗口已可见但隐私模式尚未生效」的竞态窗口压到零；
       // onForeground 会再断言一次（代价是一次冗余系统调用，换取生命周期顺序异常时防截屏仍生效）
-      Privacy.apply(security.screenProtect, 'cold_start');
+      PrivacyWindow.apply(security.screenProtect, 'cold_start');
       AppLock.shared().reset(security.appLock);
     });
   }
@@ -79,7 +80,7 @@ export default class EntryAbility extends UIAbility {
 
     const security = Security.shared();
 
-    Privacy.apply(security.screenProtect, 'foreground');
+    PrivacyWindow.apply(security.screenProtect, 'foreground');
     AppLock.shared().onForeground();
   }
 
@@ -92,7 +93,7 @@ export default class EntryAbility extends UIAbility {
     AppLock.shared().onBackground();
 
     if (security.appLock) {
-      Privacy.apply(true, 'background');
+      PrivacyWindow.apply(true, 'background');
     }
   }
 }

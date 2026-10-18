@@ -103,14 +103,15 @@ huawei/atomicservice/MFA/
 | 类 | 位置 | 存储 | 字段 | 语义 |
 |---|---|---|---|---|
 | `Security` | `models/Security.ets` | `preferences` 库 `mfa_security`（同步读写） | `screenProtect: boolean`（默认 `true`）<br>`appLock: boolean`（默认 `false`） | 用户设置，跨启动持久；`@ObservedV2` + `@Trace` 供 UI 观测 |
-| `AppLock` | 同文件 | `AppStorageV2.connect`（进程内） | `locked: boolean`（`@Trace`，驱动遮罩）<br>`backgroundAt: number \| undefined`<br>`verifying: boolean`<br>`generation: number`（世代号）<br>`lastFinishedAt: number \| undefined`（上次验证结束时间戳，供防抖判定） | 运行态；进程结束即归零，`locked` 默认 `false` |
+| `AppLock` | `models/AppLock.ets` | `AppStorageV2.connect`（进程内） | `locked: boolean`（`@Trace`，驱动遮罩）<br>`backgroundAt: number \| undefined`<br>`verifying: boolean`<br>`generation: number`（世代号）<br>`lastFinishedAt: number \| undefined`（上次验证结束时间戳，供防抖判定） | 运行态；进程结束即归零，`locked` 默认 `false` |
 
-**存储内容**（库名 `mfa_security`）：
+**存储内容**（库名 `mfa_security`，单 key `security`；JSON 字符串 + schema 版本）：
 
 ```json
 {
-  "screen_protect": true,
-  "app_lock": false
+  "v": 1,
+  "screenProtect": true,
+  "appLock": false
 }
 ```
 
@@ -552,6 +553,7 @@ Task 0（改动前基线，只读 + 一次性装依赖）
 
 | 时间 | 变更 |
 |---|---|
+| 2026-10-19 | **未发布期架构收口（除 ⑥ 为硬化外无行为变更）**：① 设置持久化由双 key（`screen_protect` / `app_lock`）合并为单 key `security` + 带 schema 版本 `v` 的 JSON（功能未发布，无历史数据迁移，旧 key 直接忽略），写入+回滚收敛到 `setField` 单方法；② `utils/LockPolicy.ets` → `utils/AppLockPolicy.ets`，阈值常量同时供单测表达边界；③ `utils/Privacy.ets` → `utils/PrivacyWindow.ets`（对齐 `Window.setWindowPrivacyMode` 术语），内部 5 个 static 字段收敛为 `_state`；④ `models/Security.ets` 拆分为 `models/Security.ets`（仅设置）+ `models/AppLock.ets`（`AppLock` + `VerifyOutcome` + `ProbeResult`）；⑤ `verify()` 抽出 `createChallenge` / `buildAuthParam`，过期回调先 `off('result')` 再按世代号丢弃；⑥ `AppLock.onForeground` 无条件清空 `_backgroundAt`，避免陈旧时间戳二次加锁。日志 tag 保持 `models/security` / `utils/privacy` 不变，§6 的监控查询无需调整。 |
 | 2026-10-16 | **加固批次（P1/P2，无接口/路由/文案变更）**：① `Privacy.apply` 改为「目标值 + 单飞 + 补写」并加 1s 写入超时（原 Promise 串联在写入永不 settle 时会永久堵死后续切换 → 防截屏静默失效且监控无痕，见 §3.2）；② R7 复位机制改为「父组件递增 revision 强制重建开关行」（原「Toggle 随模型回滚自动复位」在键值不变时框架不重建列表项，故取消验证/写盘失败/退后台三条路径都不成立）；③ 日志事件 `unlock` → `verify_result`（outcome + code），无凭据降级由 error 降为 warn；④ `Security` 移除公开 setter（曾是绕开落盘校验的通道）、`verify()` 结果回调改清理本次实例、同步异常路径补 `lastFinishedAt`；⑤ `AppLock` 无凭据降级抽 `degradeNoCredential`（原两处逐字重复）、`getStringSync` 抽 `buildWidgetParam`；⑥ 关闭应用锁补写盘失败提示；⑦ `load()` 读值加类型守卫（`as boolean` → `typeof` 判定）；⑧ 新增日志 `set_timeout`、页面级 `context_undefined` 告警。 |
 | 2026-10-11 | **复审修订（R2 轮）**：① `VerifyOutcome` 回调增加 `code` 通道，使 §3.3/§3.5 承诺的 `LOCKED`/`PIN_EXPIRED` 定向文案真正可达（新增文案 `lock_page_pin_expired`，15 → 16 条）；② 防锁死降级的提示改为 **Toast**（`unlock()` 后遮罩即卸载，内联提示不可见）并检查落盘返回值；③ `shouldDebounceVerify` 参数名统一为 `finishedAt` 并同步「时钟回拨 → 放行」分支（与执行计划实现一致）；④ §3.1 字段表补 `lastFinishedAt`；⑤ `AppLock.isLocked()` → `locked` getter（回滚指引原本引用不存在的 API）；⑥ §1 修正「唯一 `@Entry`」与 `Detail.ets` 锚点、§2 修正 `Login.ets` 锚点、§3.2 修正「全部在 Ability 层」措辞；⑦ §6 增加 `disable_persist_failed` 指标 |
 | 2026-10-11 | **初审修订（R1 轮）**：① 修正 §2「锁屏与登录页关系」的理由（原文与实现相反：遮罩与底层登录流程**并存**，非"登录后才置锁"）；② `getEnrolledState` 补 try/catch（该 API 在未录入时自抛 12500010）并禁止以空 `authType` 调用 `getUserAuthInstance`；③ `widgetParam.title` 明确必须传 `string`（SDK 无 `resourceToString`）；④ C1 错误码收敛为该 API 文档化的 201/1300002；⑤ §3.6 增加「来源标注」表；⑥ 文案 14 → 15 条；⑦ 冒烟 13 → 14 项 |

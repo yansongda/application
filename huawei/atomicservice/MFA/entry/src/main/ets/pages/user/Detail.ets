@@ -4,11 +4,12 @@ import { InfoCard, InfoCardItem } from '../../components/InfoCard';
 import { SettingCard } from '../../components/SettingCard';
 import { User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
-import { Security, AppLock, VerifyOutcome } from '../../models/Security';
+import { Security } from '../../models/Security';
+import { AppLock, VerifyOutcome } from '../../models/AppLock';
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Dialog, Toast } from '../../utils/PromptAction';
-import { Privacy } from '../../utils/Privacy';
+import { PrivacyWindow } from '../../utils/PrivacyWindow';
 import { User as UserApi } from '../../api/User';
 import { App, AppPagesName, LogDomain } from '../../App';
 import { displayOr } from '../../utils/Display';
@@ -246,7 +247,7 @@ struct Detail {
     }
   }
 
-  // 防截屏开关：先写盘（失败则内存已回滚、开关复位），再经 Privacy.apply 应用隐私模式
+  // 防截屏开关：先写盘（失败则内存已回滚、开关复位），再经 PrivacyWindow.apply 应用隐私窗口
   private toggleScreenProtect(next: boolean): void {
     // 先递增 revision 强制重建开关行：开关已随手指拨到新位置，而写盘失败 / 拿不到 context 时
     // 模型真值不变，只能靠重建把视觉拨回原位（技术设计 R7）
@@ -264,7 +265,7 @@ struct Detail {
       Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
       return;
     }
-    Privacy.apply(next, 'setting');
+    PrivacyWindow.apply(next, 'setting');
   }
 
   // 应用锁开关：开启前必须通过系统认证，认证成功才写盘；关闭直接写盘

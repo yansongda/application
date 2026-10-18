@@ -3,7 +3,7 @@
 import { userAuth } from '@kit.UserAuthenticationKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../App';
-import { AppLock, VerifyOutcome } from '../models/Security';
+import { AppLock, VerifyOutcome } from '../models/AppLock';
 import { Toast } from '../utils/PromptAction';
 
 @ComponentV2

@@ -1,7 +1,7 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppStorageV2, PersistenceV2 } from '@kit.ArkUI';
 import { Authorization, State } from '../models/Auth';
-import { AppLock } from '../models/Security';
+import { AppLock } from '../models/AppLock';
 import { AppPagesName, LogDomain } from '../App';
 import { LockScreen } from '../components/LockScreen';
 import { redirectLoginPage } from '../utils/Nav';
