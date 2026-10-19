@@ -7,9 +7,8 @@ import { User } from '../models/User';
 import { ItemsRuntime } from '../models/totp/ItemsRuntime';
 import { FormIntent } from '../models/form/FormIntent';
 import { MainTheme } from '../themes/Main';
-import { Security } from '../models/Security';
-import { AppLock } from '../models/AppLock';
-import { PrivacyWindow } from '../utils/PrivacyWindow';
+import { AppLock } from '../models/security/AppLock';
+import { PrivacyWindow } from '../models/security/PrivacyWindow';
 
 export default class EntryAbility extends UIAbility {
   // 冷启动：卡片点击拉起时 want 可能携带快捷意图，写入共享状态供 Index 页消费
@@ -38,6 +37,13 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
+    // 安全设置在这里**同步**读入（早于 onForeground，也早于页面加载）：onForeground 可能早于 loadContent
+    // 的回调执行，若此时读到默认值（防截屏 = true）就会覆盖用户「已关闭」的设置，而 load 之后不再重断言
+    const context = this.context;
+
+    PrivacyWindow.instance().load(context);
+    AppLock.instance().load(context);
+
     windowStage.loadContent('pages/Home', (err) => {
       if (err.code) {
         // 加载失败属异常路径，理论上不会出现
@@ -59,15 +65,11 @@ export default class EntryAbility extends UIAbility {
 
       ThemeControl.setDefaultTheme(MainTheme.create());
 
-      const context = this.context;
-      const security = Security.shared();
-
-      security.load(context);
       PrivacyWindow.attach(windowStage);
       // 冷启动立即断言一次：不等 onForeground，把「窗口已可见但隐私模式尚未生效」的竞态窗口压到零；
       // onForeground 会再断言一次（代价是一次冗余系统调用，换取生命周期顺序异常时防截屏仍生效）
-      PrivacyWindow.apply(security.screenProtect, 'cold_start');
-      AppLock.shared().reset(security.appLock);
+      PrivacyWindow.instance().apply('cold_start');
+      AppLock.instance().reset();
     });
   }
 
@@ -78,22 +80,20 @@ export default class EntryAbility extends UIAbility {
     // 恢复退后台时暂停的验证码刷新定时器（端内算码为主，secret 缺失/算码失败时回退服务端；列表数据由页面刷新统一拉取）
     AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!.resumeAll();
 
-    const security = Security.shared();
-
-    PrivacyWindow.apply(security.screenProtect, 'foreground');
-    AppLock.shared().onForeground();
+    // 先恢复用户设置（同时清掉退后台的临时遮挡），再按 60s 阈值判定是否重锁
+    PrivacyWindow.instance().occlude(false, 'foreground');
+    AppLock.instance().onForeground();
   }
 
   onBackground(): void {
     // 退后台暂停所有验证码刷新定时器，避免后台空转与无效网络请求
     AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!.stopAll();
 
-    const security = Security.shared();
+    AppLock.instance().onBackground();
 
-    AppLock.shared().onBackground();
-
-    if (security.appLock) {
-      PrivacyWindow.apply(true, 'background');
+    // 应用锁开启时临时遮挡多任务卡片快照（此刻屏上是 TOTP 明文码）；防截屏已开启时该值本就为 true
+    if (AppLock.instance().enabled) {
+      PrivacyWindow.instance().occlude(true, 'background');
     }
   }
 }

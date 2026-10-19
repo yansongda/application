@@ -1,16 +1,17 @@
-// 应用锁运行态状态机（locked / 验证编排 / 防锁死降级）。
+// 应用锁：① 用户设置 enabled（持久化，经 models/security/Store.ets）
+// ② 运行态状态机（locked / 验证编排 / 防锁死降级）。
 // 运行态**绝不落盘**——locked 一旦落盘，冷启动会读到上次的未锁定态，是安全 bug（技术设计 §3.1）；
 // 因此只走 AppStorageV2.connect（进程内），进程结束即归零，locked 默认 false。
-// 持久化设置（screenProtect / appLock）见 models/Security.ets；判定阈值见 utils/AppLockPolicy.ets。
+// 防截屏的窗口遮挡见 models/security/PrivacyWindow.ets；判定阈值见 utils/AppLockPolicy.ets。
 import { Context } from '@kit.AbilityKit';
 import { AppStorageV2 } from '@kit.ArkUI';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { userAuth } from '@kit.UserAuthenticationKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { LogDomain } from '../App';
-import { Security } from './Security';
-import { shouldRelock, shouldDebounceVerify } from '../utils/AppLockPolicy';
+import { LogDomain } from '../../App';
+import { shouldRelock, shouldDebounceVerify } from '../../utils/AppLockPolicy';
+import { SecurityPatch, Store } from './Store';
 
 export enum VerifyOutcome {
   SUCCESS,
@@ -35,8 +36,17 @@ interface ChallengeResult {
 
 @ObservedV2
 export class AppLock {
+  // 用户设置（持久化）：默认关。开启后「重新打开或离开 1 分钟后」需验证身份
+  @Trace
+  private _enabled: boolean = false;
+
+  // 运行态（不持久化）：驱动 Home 的遮罩渲染与返回键消费
   @Trace
   private _locked: boolean = false;
+
+  public get enabled(): boolean {
+    return this._enabled;
+  }
 
   public get locked(): boolean {
     return this._locked;
@@ -48,14 +58,45 @@ export class AppLock {
   private _lastFinishedAt: number | undefined; // 最近一次验证结束时间戳，供 shouldDebounceVerify 使用
   private _instance: userAuth.UserAuthInstance | undefined;
 
-  static shared(): AppLock {
+  static instance(): AppLock {
     return AppStorageV2.connect(AppLock, () => new AppLock())!;
   }
 
-  // 冷启动：locked = 持久化设置（AppLock 自身不落盘，由 Security.appLock 决定初始值）
-  reset(appLock: boolean): void {
-    this._locked = appLock;
-    if (appLock) {
+  // 冷启动读设置（由 EntryAbility.onCreate 调用一次，必须早于 onForeground）
+  load(context: Context): void {
+    this._enabled = Store.load(context).appLock;
+    hilog.info(LogDomain.MODELS, 'models/security', 'app_lock_load: appLock=%{public}s', this._enabled.toString());
+  }
+
+  // 开关写入：**先落盘、成功才改内存**——失败返回 false 且内存不变（调用方提示用户）。
+  // 防锁死降级（设备确无凭据）也走这里，落盘失败时内存仍为 true，仅日志留痕，不阻塞解锁
+  setEnabled(context: Context, on: boolean): boolean {
+    const patch: SecurityPatch = { appLock: on };
+
+    if (!Store.patch(context, patch)) {
+      hilog.error(LogDomain.MODELS, 'models/security', 'app_lock_save_failed: appLock=%{public}s', on.toString());
+
+      return false;
+    }
+
+    this._enabled = on;
+    hilog.info(LogDomain.MODELS, 'models/security', 'app_lock_set: appLock=%{public}s', on.toString());
+
+    return true;
+  }
+
+  // 冷启动：locked = 持久化设置（AppLock 自身不落盘，由 enabled 决定初始值）。
+  // 同时清空运行态残留：onWindowStageCreate 若被二次调用（stage 重建），残留的 _verifying = true 会让
+  // verify() 直接 SKIPPED、onForeground 跳过重锁 —— 表现为「遮罩在但点解锁没反应」
+  reset(): void {
+    this._locked = this._enabled;
+    this._backgroundAt = undefined;
+    this._verifying = false;
+    this._generation++;
+    this._lastFinishedAt = undefined;
+    this._instance = undefined;
+
+    if (this._locked) {
       hilog.info(LogDomain.MODELS, 'models/security', 'lock: reason=%{public}s', 'cold_start');
     }
   }
@@ -68,7 +109,7 @@ export class AppLock {
 
     this._backgroundAt = undefined;
 
-    if (!shouldRelock(Security.shared().appLock, backgroundAt, now) || this._verifying) {
+    if (!shouldRelock(this._enabled, backgroundAt, now) || this._verifying) {
       return;
     }
 
@@ -94,6 +135,13 @@ export class AppLock {
   }
 
   // 发起身份认证。code = 原始 userAuth.UserAuthResultCode，供 UI 映射定向文案（LOCKED / PIN_EXPIRED）
+  //
+  // 四段主线（行内注释 a–h 是细分步骤，按需跳转）：
+  //   ① 闸门 : a 已在验证中 / b 3 秒防抖 → SKIPPED（不改 hint、**不**刷新防抖窗口）
+  //   ② 探测 : c 三类型探测 + getEnrolledState 二次确认 → 降级 NO_CREDENTIAL / 上报 FAILED（**不**发起认证）
+  //   ③ 发起 : d challenge / e 认证参数 / f 新建实例 + start
+  //   ④ 结果 : g 结果码映射（含 NOT_ENROLLED 复探） / h 同步异常兜底
+  // 状态不变式见 AGENTS.md「应用锁状态不变式」：任一出口漏复位 _verifying = 用户点解锁永远 SKIPPED = 锁死。
   verify(context: Context, onOutcome?: (outcome: VerifyOutcome, code?: number) => void): void {
     // a. 已在验证中（并发保护，官方"避免同时发起多个认证请求"）
     if (this._verifying) {
@@ -255,9 +303,9 @@ export class AppLock {
   }
 
   // 防锁死降级：设备确无凭据时自动解锁 + 自动关闭应用锁（技术设计 §3.5 唯一可接受的降级路径）。
-  // 落盘失败时 setAppLock 已把内存回滚为 true，这里仅记日志（下次冷启动会重演降级，但不会锁死用户）
+  // setEnabled 已保证「落盘失败不改内存」，这里仅记日志（下次冷启动会重演降级，但不会锁死用户）
   private degradeNoCredential(context: Context): void {
-    if (!Security.shared().setAppLock(context, false)) {
+    if (!this.setEnabled(context, false)) {
       hilog.error(LogDomain.MODELS, 'models/security', 'disable_persist_failed: %{public}s', 'no_credential');
     }
 

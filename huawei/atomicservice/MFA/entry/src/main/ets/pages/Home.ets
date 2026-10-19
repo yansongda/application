@@ -1,7 +1,7 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppStorageV2, PersistenceV2 } from '@kit.ArkUI';
 import { Authorization, State } from '../models/Auth';
-import { AppLock } from '../models/AppLock';
+import { AppLock } from '../models/security/AppLock';
 import { AppPagesName, LogDomain } from '../App';
 import { LockScreen } from '../components/LockScreen';
 import { redirectLoginPage } from '../utils/Nav';
@@ -13,7 +13,7 @@ struct Home {
   private authorization: Authorization =
     PersistenceV2.globalConnect({ type: Authorization, defaultCreator: () => new Authorization() })!;
   @Local
-  private appLock: AppLock = AppLock.shared();
+  private appLock: AppLock = AppLock.instance();
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
 
   onPageShow(): void {

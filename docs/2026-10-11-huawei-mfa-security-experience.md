@@ -38,11 +38,14 @@
 **核心思路**：**在 `EntryAbility` 的窗口与生命周期节点集中接管两件事 —— ① 把主窗口设为隐私窗口（防截屏/防录屏/防多任务快照）；② 用系统统一用户认证控件在窗口顶层盖一层"锁定态"。** 两者由一个持久化的安全设置模型驱动；页面只负责「显示开关」与「显示锁屏」，不直接调用窗口 API 与认证 API。
 
 ```
-                        ┌──────────────────────────────────────────┐
-   preferences          │            models/Security.ets           │
-   (库 mfa_security) ◀──┤  Security {screenProtect, appLock}   持久化│
-                        │  AppLock  {locked, backgroundAt}    进程内 │
-                        └────┬──────────────┬───────────────┬──────┘
+                        ┌──────────────────────────────────────────────┐
+   preferences          │  models/security/Store.ets（单 key JSON）     │
+   (库 security /  ◀────┤    {v, privacyWindow, appLock}        持久化  │
+    key settings)       │  models/security/PrivacyWindow.ets           │
+                        │    {enabled(持久化), occluded(进程内)}        │
+                        │  models/security/AppLock.ets                 │
+                        │    {enabled(持久化), locked, backgroundAt}    │
+                        └────┬──────────────┬───────────────┬──────────┘
                    ① 读设置 │    ② 订阅状态 │   ③ 变更状态   │
                             ▼              ▼               ▼
               pages/user/Detail.ets   components/       ability/EntryAbility.ets
@@ -53,8 +56,8 @@
               └──────┬───────┘        └─────┬──────┘     └──────┬───────────────┘
                      │ 开启前先验证          │ userAuth              │
                      ▼                     ▼                       ▼
-              models/Security        @kit.UserAuthenticationKit  utils/Privacy.ets
-              (验证通过才落盘)        统一认证控件(人脸/指纹/PIN)   setWindowPrivacyMode
+              models/security/AppLock @kit.UserAuthenticationKit  utils/PrivacyWindow.ets
+              (验证通过才落盘)         统一认证控件(人脸/指纹/PIN)   setWindowPrivacyMode
                                                                    ▲
                                               window.WindowStage.getMainWindowSync()
 ```
@@ -70,15 +73,17 @@ huawei/atomicservice/MFA/
 │       ├── resources/base/element/string.json               [改] 新增 §3.7 共 16 条文案（93 → 109 条）
 │       └── ets/
 │           ├── ability/EntryAbility.ets                     [改] 3 个生命周期钩子接线（各 1-4 行）
-│           ├── models/Security.ets                          [新] Security（设置·持久化）+ AppLock（运行态）
-│           ├── utils/Privacy.ets                            [新] 隐私窗口唯一写入口（缓存 WindowStage）
-│           ├── utils/LockPolicy.ets                         [新] 锁定/防抖判定纯函数（零 import、可单测）
+│           ├── models/security/Store.ets                    [新] 安全设置唯一持久化出口（单 key JSON + schema v）
+│           ├── models/security/PrivacyWindow.ets            [新] 防截屏：enabled + 遮挡判定 + attach/apply
+│           ├── models/security/AppLock.ets                  [新] 应用锁：enabled + locked + 验证编排 + 降级
+│           ├── utils/PrivacyWindow.ets                      [新] 窗口隐私模式唯一写入口（缓存 WindowStage + 单飞队列）
+│           ├── utils/AppLockPolicy.ets                      [新] 锁定/防抖判定纯函数（零 import、可单测）
 │           ├── components/LockScreen.ets                    [新] 锁定遮罩（全屏、自动拉起验证）
 │           ├── components/SettingCard.ets                   [新] 设置型卡片（标题 + 说明 + 开关）
 │           ├── components/InfoCard.ets                      [不动] 被 index/Detail 共用，零回归风险
 │           ├── pages/Home.ets                               [改] Stack 包裹 + 遮罩 + 返回键消费
 │           └── pages/user/Detail.ets                        [改] 新增「安全」分组（2 行开关）
-├── entry/src/test/LockPolicy.test.ets                       [新] 本地单测（无需设备）
+├── entry/src/test/AppLockPolicy.test.ets                    [新] 本地单测（无需设备）
 ├── entry/src/test/List.test.ets                             [改] 追加注册
 ├── entry/src/main/resources/base/profile/routes.json        [不动] 不新增任何页面
 ├── build-profile.json5                                      [不动] 含本机签名材料，禁止触碰
@@ -93,7 +98,7 @@ huawei/atomicservice/MFA/
 | 锁屏与登录页的关系 | **正交**：`locked` 只由安全设置与前后台计时决定，与 `Authorization` 无关 | 若改成"登录成功才置锁"，则 token 过期/未登录期间应用锁形同失效，是绕过口；因此锁定态**不因登录状态而改变**。**代价（已接受）**：冷启动未登录且应用锁开启时，遮罩会与底层已自动发起登录流程的登录页（`Login.ets:57-71` 的 `onReady → auth`，含 `LoadingDialogV2` 弹窗）**并存**——解锁优先于登录，不存在安全泄露（未登录时列表为空），并存表现列入真机冒烟第 14 项 |
 | 应用锁验证时机 | **冷启动必验 + 退后台 ≥ 60s 必验**（常量，v1 不做配置 UI） | 覆盖全部真实泄露场景；60s 能容忍"切短信/浏览器取码再回来"；不做 UI 可省 1 个选择器页面与 3 个分支 |
 | 是否复用设备解锁结果 | **不使用** `reuseUnlockResult`（`ReuseMode` + ≤5 分钟复用） | 复用会让"设备已解锁但手机被他人拿走"这一主要威胁场景失效；官方能力已评估后放弃（见附录） |
-| 隐私模式写入口 | **全局单一入口** `Privacy.apply()`，禁止页面级调用 | 官方 FAQ 记载「全局 + 页面级混用会互相破坏」（同一主窗口实例，页面 `onHide` 会把全局设置一并关掉）；单一入口从设计上排除该竞态 |
+| 隐私模式写入口 | **全局单一入口** `PrivacyWindow.apply()`（页面/组件只经 `models/security/PrivacyWindow`），禁止页面级直调 `setWindowPrivacyMode` | 官方 FAQ 记载「全局 + 页面级混用会互相破坏」（同一主窗口实例，页面 `onHide` 会把全局设置一并关掉）；单一入口从设计上排除该竞态 |
 | 设置型卡片 | **新增 `SettingCard.ets`**，不改 `InfoCard.ets` | `InfoCard` 被 `pages/index/Detail.ets` 与 `pages/user/Detail.ets` 共用，改动有回归风险；仓库已有 `InfoCard`/`InputCard` 分文件维护的先例 |
 
 ## 3. 详细设计
@@ -102,18 +107,21 @@ huawei/atomicservice/MFA/
 
 | 类 | 位置 | 存储 | 字段 | 语义 |
 |---|---|---|---|---|
-| `Security` | `models/Security.ets` | `preferences` 库 `mfa_security`（同步读写） | `screenProtect: boolean`（默认 `true`）<br>`appLock: boolean`（默认 `false`） | 用户设置，跨启动持久；`@ObservedV2` + `@Trace` 供 UI 观测 |
-| `AppLock` | `models/AppLock.ets` | `AppStorageV2.connect`（进程内） | `locked: boolean`（`@Trace`，驱动遮罩）<br>`backgroundAt: number \| undefined`<br>`verifying: boolean`<br>`generation: number`（世代号）<br>`lastFinishedAt: number \| undefined`（上次验证结束时间戳，供防抖判定） | 运行态；进程结束即归零，`locked` 默认 `false` |
+| `Store` | `models/security/Store.ets` | `preferences` 库 `security` / 单 key `settings`（同步读写） | `SecuritySettings { v, privacyWindow, appLock }` | **唯一持久化出口**，两个功能共用；静态方法、无单例。这份 JSON 同时是将来同步到后端的 DTO |
+| `PrivacyWindow` | `models/security/PrivacyWindow.ets` | `AppStorageV2.connect`（进程内） | `enabled: boolean`（`@Trace`，用户设置，默认 `true`）<br>`occluded: boolean`（私有，退后台临时遮挡） | 防截屏的功能入口：`enabled` 持久化、`occluded` 不持久化；`apply()` 时取 `enabled \|\| occluded` |
+| `AppLock` | `models/security/AppLock.ets` | `AppStorageV2.connect`（进程内） | `enabled: boolean`（`@Trace`，用户设置，默认 `false`）<br>`locked: boolean`（`@Trace`，驱动遮罩）<br>`backgroundAt: number \| undefined`<br>`verifying: boolean`<br>`generation: number`（世代号）<br>`lastFinishedAt: number \| undefined`（上次验证结束时间戳，供防抖判定） | 应用锁的功能入口：`enabled` 持久化，其余为运行态，进程结束即归零 |
 
-**存储内容**（库名 `mfa_security`，单 key `security`；JSON 字符串 + schema 版本）：
+**存储内容**（库名 `security`，单 key `settings`；JSON 字符串 + schema 版本）：
 
 ```json
 {
   "v": 1,
-  "screenProtect": true,
+  "privacyWindow": true,
   "appLock": false
 }
 ```
+
+这份 JSON 同时是**将来同步到后端的 DTO**：字段名与 `models/security` 下的职责一一对应，落到服务端不需要再加一层映射；新增设置项时递增 `v` 并在 `Store.decode` 内做版本分支。
 
 **为什么用 `preferences` 而不是 `PersistenceV2`**：`PersistenceV2` 只能持久化 `@Trace` 字段，无法把运行态排除在外——`locked` 一旦落盘，冷启动会读到上次的"未锁定"态，是**安全 bug**；且它异步落盘、失败不可观测。`preferences` 的 `putSync + flushSync` 语义明确、异常可记日志，与既有 `utils/Form.ets` 模式一致。
 
@@ -121,21 +129,25 @@ huawei/atomicservice/MFA/
 
 | 场景 | 行为 |
 |---|---|
-| key 不存在（首次启动/从未设置） | 用默认值（`screenProtect=true`、`appLock=false`），**不写盘** |
+| key 不存在（首次启动/从未设置） | 用默认值（`privacyWindow=true`、`appLock=false`），**不写盘** |
 | 读异常 | 用默认值 + `hilog.error`；**fail-open**（应用锁失效）——见 §3.5 |
-| 写异常 | `hilog.error` + 立即回滚内存值 → UI 开关弹回原位（不允许"显示已开、实际未开"） |
+| 写异常 | `hilog.error` + 返回 `false`，**内存值不变**（模型一律「先落盘、成功才改内存」）→ UI 开关弹回原位（不允许"显示已开、实际未开"） |
+| 写入前读取失败 | `Store.patch` **不写**：整份写入会把另一个字段静默重置为默认值（应用锁被悄悄关掉 = fail-open），故直接返回 `false` |
 
 ### 3.2 防截屏（隐私窗口）
 
-**唯一入口** `utils/Privacy.ets`：
+**两层单一入口**：功能入口 `models/security/PrivacyWindow.ets`（持有 `enabled` 并回答「此刻该不该挡」），系统写入口 `utils/PrivacyWindow.ets`（单飞队列，只允许功能入口调用）：
 
 ```
-Privacy.attach(stage: window.WindowStage)   // onWindowStageCreate 内缓存；规避 getLastWindow 的异步延迟竞态
-Privacy.apply(on: boolean, cause: string)   // 唯一写入口；内部「目标值 + 单飞 + 补写」，保证后调用者最终生效
+PrivacyWindow.instance().load(context)        // onWindowStageCreate 顶部同步读设置（早于 onForeground）
+PrivacyWindow.attach(stage)                   // 缓存 WindowStage（规避 getLastWindow 异步延迟竞态）
+PrivacyWindow.instance().apply(cause)         // 按 enabled || occluded 写窗口
+PrivacyWindow.instance().occlude(on, cause)   // 退后台临时遮挡 / 回前台恢复用户设置
+PrivacyWindowWriter.apply(on, cause)          // utils 层内部：目标值 + 单飞 + 补写
 ```
 
 ```
-apply(on, cause):
+apply(on, cause)  // utils/PrivacyWindow.ets 的内部写入口
   attach 未调用 → 记 warn 并返回
   记录目标值并置脏位；若已有写入在途则直接返回（结束后自动补写最新目标值）
   → stage.getMainWindowSync().setWindowPrivacyMode(on)（单次写入 1s 超时兑底）
@@ -146,14 +158,14 @@ apply(on, cause):
 
 **不变量**：① 每次 `apply` 至少写入一次（生命周期节点需重断言，不能被「值没变」吞掉）；② 写入在途期间再 `apply` 只改目标值，当前写入结束后补写一次——快速连续切换最多 2 次系统调用，不再出现排队堆积；③ 单次写入超时兑底：写入 Promise 永不 settle 时不会把后续所有切换永久堵死（防截屏静默失效且监控看不到）。
 
-**调用点（4 处：1-3 在 Ability 层，4 在设置页——但 4 仍经 `Privacy.apply` 这一唯一入口，不构成页面级直调）**：
+**调用点（4 处：1-3 在 Ability 层，4 在模型内部——页面只调 `setEnabled`，不构成页面级直调）**：
 
 | # | 时机 | 值 | 目的 |
 |---|---|---|---|
-| 1 | `onWindowStageCreate` → `loadContent` 回调内 | `security.screenProtect` | 冷启动立即生效 |
-| 2 | `onForeground` | `security.screenProtect` | 从后台返回时恢复用户设置 |
-| 3 | `onBackground`（仅 `appLock=true`） | `true` | 临时遮挡**多任务卡片快照**（此刻屏幕上是 TOTP 明文码） |
-| 4 | 设置页开关变更后 | 新值 | 用户即时可见 |
+| 1 | `onWindowStageCreate` → `loadContent` 回调内 | `PrivacyWindow.instance().apply('cold_start')` | 冷启动立即生效 |
+| 2 | `onForeground` | `occlude(false, 'foreground')` → `enabled \|\| occluded` | 清掉退后台的临时遮挡，恢复用户设置 |
+| 3 | `onBackground`（仅 `AppLock.enabled`） | `occlude(true, 'background')` | 临时遮挡**多任务卡片快照**（此刻屏幕上是 TOTP 明文码；防截屏已开时该值本就为 `true`） |
+| 4 | 设置页开关变更 | `setEnabled()` 内部 `apply('setting')` | 用户即时可见 |
 
 **权限**：`module.json5` 新增 `ohos.permission.PRIVACY_WINDOW`（normal / system_grant / 起始版本 9；API 11 起为 normal）。
 
@@ -172,7 +184,7 @@ apply(on, cause):
 | `widgetParam.navigationButtonText` | **不传** | 传了会走"自定义认证"分支并返回 12500011；不传则由**系统自己**提供「切换到口令认证」按钮，正好实现"生物识别失败回退锁屏密码" |
 | `widgetParam.uiContext` | **不传** | 仅 2in1 设备可用（API 18+）；手机恒走系统模态弹窗，传了无意义 |
 
-**锁定判定（`utils/LockPolicy.ets` 纯函数 + `AppLock` 编排）**：
+**锁定判定（`utils/AppLockPolicy.ets` 纯函数 + `AppLock` 编排）**：
 
 ```
 shouldRelock(appLock, backgroundAt, now, timeout = 60_000)
@@ -184,7 +196,7 @@ shouldDebounceVerify(finishedAt, now, debounce = 3_000)
   # 否则首次验证会被自身防抖挡住 → 应用锁把用户永久锁死
 
 locked 由三处驱动，规则单向（只变 true，除 unlock / 降级外）：
-  冷启动        : locked = security.appLock          （AppLock.reset）
+  冷启动        : locked = AppLock.enabled           （AppLock.reset()，同时清空运行态残留）
   onForeground  : shouldRelock(...) === true && !verifying → locked = true（只加锁，绝不解锁）
   unlock(成功)  : locked = false
 ```
@@ -297,8 +309,8 @@ onBackPress(): boolean { return this.appLock.locked; }        // 锁定期间消
 
 | 环节 | 失败场景 | 行为 | 是否可接受 |
 |---|---|---|---|
-| 读设置 | `getPreferencesSync` 抛错 | 默认值（`screenProtect=true`、`appLock=false`）+ `hilog.error` | ✅ **刻意 fail-open**：无法区分"从未设置"与"读失败"，fail-closed 会让首次启动用户被关在门外 |
-| 写设置 | `putSync/flushSync` 抛错 | 回滚内存值 + 开关弹回 + `hilog.error` | ✅ 用户看到真实状态 |
+| 读设置 | `getPreferencesSync` 抛错 | 默认值（`privacyWindow=true`、`appLock=false`）+ `hilog.error` | ✅ **刻意 fail-open**：无法区分"从未设置"与"读失败"，fail-closed 会让首次启动用户被关在门外 |
+| 写设置 | `putSync/flushSync` 抛错，或写入前读取失败 | 返回 `false` + 内存值不变 + 开关弹回 + `hilog.error`（`settings_save_failed` / `settings_save_skipped`） | ✅ 用户看到真实状态 |
 | 隐私模式 | `setWindowPrivacyMode` 抛错（201/1300002，或未文档化的通用异常） | 记错误日志；功能不生效但不影响其他功能 | ✅ 不弹窗骚扰；由 R1 真机 PoC 决定是否上线该功能 |
 | 能力探测 | 三种认证方式全不可用 | **自动解锁 + 自动关闭应用锁** + 提示 | ✅ 防锁死的唯一可行解（R2） |
 | 认证执行 | `FAIL` | 保持锁定 + 「验证失败，请重试」 | ✅ |
@@ -384,15 +396,16 @@ onBackPress(): boolean { return this.appLock.locked; }        // 锁定期间消
 冷启动 ────────────────────────────────────────────────────────────────────
  UIAbility.onCreate
  UIAbility.onWindowStageCreate
-   └─ loadContent('pages/Home') → 回调内（既有 try/catch 之后新增）
-        ├─ Security.shared().load(context)      读 mfa_security → screenProtect / appLock
-        ├─ Privacy.attach(windowStage)          缓存主窗口
-        ├─ Privacy.apply(screenProtect, 'cold_start')   ① 防截屏立即生效
-        └─ AppLock.shared().reset(appLock)      locked = appLock
+   ├─ PrivacyWindow.instance().load(context)  读 security/settings → privacyWindow
+   ├─ AppLock.instance().load(context)        读 security/settings → appLock
+   └─ loadContent('pages/Home') → 回调内（既有 try/catch 之后）
+        ├─ PrivacyWindow.attach(windowStage)              缓存主窗口
+        ├─ PrivacyWindow.instance().apply('cold_start')   ① 防截屏立即生效（enabled || occluded）
+        └─ AppLock.instance().reset()                     locked = enabled + 清运行态
  UIAbility.onForeground                        （冷启动时 backgroundAt 为空）
    ├─ ItemsRuntime.resumeAll()                                       既有
-   ├─ Privacy.apply(screenProtect, 'foreground')                     ② 恢复用户设置
-   └─ AppLock.shared().onForeground()          shouldRelock → false → 不改锁态
+   ├─ PrivacyWindow.instance().occlude(false, 'foreground')          ② 清临时遮挡、恢复用户设置
+   └─ AppLock.instance().onForeground()        shouldRelock → false → 不改锁态
  Home.onPageShow → redirectLoginPage()（未登录时）                     既有
  LockScreen.aboutToAppear
    ├─ probe()：getAvailableStatus(PIN | FACE | FINGERPRINT, ATL3)
@@ -404,27 +417,27 @@ onBackPress(): boolean { return this.appLock.locked; }        // 锁定期间消
 退后台 / 回前台 ────────────────────────────────────────────────────────────
  UIAbility.onBackground
    ├─ ItemsRuntime.stopAll()                                         既有
-   ├─ AppLock.shared().onBackground()
+   ├─ AppLock.instance().onBackground()
    │    ├─ backgroundAt = Date.now()
    │    ├─ instance?.cancel() + verifying = false + generation++
    │    └─ （不改变 locked：未锁的保持未锁，已锁的保持已锁）
-   └─ appLock=true → Privacy.apply(true, 'background')               ③ 遮挡多任务卡片
+   └─ AppLock.enabled → PrivacyWindow.instance().occlude(true, 'background')    ③ 遮挡多任务卡片
  UIAbility.onForeground
    ├─ ItemsRuntime.resumeAll()                                       既有
-   ├─ Privacy.apply(screenProtect, 'foreground')                     ② 恢复用户设置
-   └─ AppLock.shared().onForeground()
-        └─ shouldRelock(appLock, backgroundAt, now) && !verifying
+   ├─ PrivacyWindow.instance().occlude(false, 'foreground')          ② 清临时遮挡、恢复用户设置
+   └─ AppLock.instance().onForeground()
+        └─ shouldRelock(AppLock.enabled, backgroundAt, now) && !verifying
              → locked = true（遮罩出现并自动拉起验证）；清空 backgroundAt
 ```
 
-> 顺序安全性说明：`Security.shared()` / `AppLock.shared()` 在未 `load` 时给出默认值（`appLock=false`，即不锁），`Privacy.apply` 在 `attach` 前调用会记 `warn` 并返回——即使 `onForeground` 早于 `onWindowStageCreate` 触发也不会产生错误状态；`onWindowStageCreate` 的回调内会再显式应用一次。
+> 顺序安全性说明：`AppLock.instance()` 在未 `load` 时给出默认值（`enabled=false`，即不锁）；`load` 已上移到 `onWindowStageCreate` 顶部**同步**执行，而 `onForeground` 恒晚于 `onWindowStageCreate`——这修掉了旧实现「`onForeground` 可能早于 `loadContent` 回调、用默认的 `enabled=true` 覆盖用户已关闭的防截屏」的时序缺陷。
 
 ### 3.10 可测性（本地单测，无需设备）
 
-`AppStorageV2` / `@kit.ArkUI` 在本地单测环境不可用，因此把最易写错的阈值/防抖判定抽为零依赖纯函数（**`utils/LockPolicy.ets` 无任何 import**）：
+`AppStorageV2` / `@kit.ArkUI` 在本地单测环境不可用，因此把最易写错的阈值/防抖判定抽为零依赖纯函数（**`utils/AppLockPolicy.ets` 无任何 import**）：
 
 ```
-// utils/LockPolicy.ets
+// utils/AppLockPolicy.ets
 export const LOCK_TIMEOUT_MS: number = 60000;
 export const VERIFY_DEBOUNCE_MS: number = 3000;
 export function shouldRelock(appLock: boolean, backgroundAt: number | undefined, now: number,
@@ -433,7 +446,7 @@ export function shouldDebounceVerify(finishedAt: number | undefined, now: number
                                      debounce: number = VERIFY_DEBOUNCE_MS): boolean;
 ```
 
-`entry/src/test/LockPolicy.test.ets`（`@ohos/hypium`，工程级 `devDependencies` 已含 1.0.21）用例：
+`entry/src/test/AppLockPolicy.test.ets`（`@ohos/hypium`，工程级 `devDependencies` 已含 1.0.21）用例：
 
 | 用例 | 期望 |
 |---|---|
@@ -459,13 +472,13 @@ Task 0（改动前基线，只读 + 一次性装依赖）
   └─ 实测本地单测的 CLI 任务名（保底路径：DevEco 内 Run entry/src/test/LocalUnit.test.ets）
 
 阶段 1（防截屏）
-  ├─ 任务：module.json5 权限 + utils/Privacy.ets + Security 持久化 + EntryAbility 接线 + 设置页开关 + 文案
+  ├─ 任务：module.json5 权限 + utils/PrivacyWindow.ets + models/security/{Store,PrivacyWindow}.ets + EntryAbility 接线 + 设置页开关 + 文案
   ├─ 验证：本机 assembleHap 通过；真机截屏/录屏/多任务卡片/开关关闭四场景
   └─ 发布：v1.6.0；若真机确认元服务不生效 → 隐藏开关（代码保留）后发布
 
 阶段 2（应用锁）
-  ├─ 任务：LockPolicy + 单测 + AppLock 运行态 + LockScreen + Home 遮罩 + 前后台钩子 + 返回键消费 + 设置项
-  ├─ 验证：本机 assembleHap + LockPolicy 单测通过；真机 14 项冒烟（§4.1）
+  ├─ 任务：utils/AppLockPolicy.ets + 单测 + models/security/AppLock.ets + LockScreen + Home 遮罩 + 前后台钩子 + 返回键消费 + 设置项
+  ├─ 验证：本机 assembleHap + AppLockPolicy 单测通过；真机 14 项冒烟（§4.1）
   └─ 发布：v1.7.0
 ```
 
@@ -475,9 +488,9 @@ Task 0（改动前基线，只读 + 一次性装依赖）
 
 | 类型 | 操作 | 生效时间 |
 |---|---|---|
-| 正常回滚（防截屏） | `Security` 的 `screenProtect` 默认值改 `false`，并隐藏设置页该行 | 下次发版 |
-| 正常回滚（应用锁） | `AppLock` 的 `locked` getter 首行 `return false`（或 `Security.appLock` 读取处强制 `false`）——注意 `AppLock` 只有 `locked` getter，**没有** `isLocked()` 方法 | 下次发版 |
-| 紧急回滚 | 元服务**不支持版本回退**，只能发新版把上述开关归零；用户端无残留数据（`mfa_security` 两个布尔值不影响运行） | 下一版审核通过后 |
+| 正常回滚（防截屏） | `models/security/PrivacyWindow` 的 `enabled` 默认值改 `false`（或在 `apply()` 首行强制 `false`），并隐藏设置页该行 | 下次发版 |
+| 正常回滚（应用锁） | `AppLock` 的 `locked` getter 首行 `return false`（或 `AppLock.enabled` 读取处强制 `false`）——注意 `AppLock` 只有 `locked` getter，**没有** `isLocked()` 方法 | 下次发版 |
+| 紧急回滚 | 元服务**不支持版本回退**，只能发新版把上述开关归零；用户端无残留数据（`security` 库的单个 JSON 值不影响运行） | 下一版审核通过后 |
 | 环境回滚 | feature 分支 revert（无后端、无迁移，revert 即彻底回滚） | 立即 |
 
 ### 4.1 真机冒烟清单（14 项，由人工执行 —— 本机无设备）
@@ -508,10 +521,10 @@ Task 0（改动前基线，只读 + 一次性装依赖）
 | R3 | 设置读取失败 → 应用锁静默失效（fail-open） | 中 | **刻意接受**：无法区分"从未设置"与"读失败"，fail-closed 会导致首次启动被关在门外；以 `hilog.error` 留痕 + 真机回归覆盖 |
 | R4 | 系统弹窗/自定义弹窗浮在遮罩之上（`openCustomDialog` 属 `UIContext` 级） | 中 | 锁定期不产生新的网络刷新动作；弹窗文案不含验证码 → 泄露面为零；不为此增加拦截层 |
 | R5 | 系统认证控件与遮罩叠加表现未知：手机端**恒为系统模态弹窗**（`uiContext` 仅 2in1 可用，**不能作为手机兜底**），官方未承诺是否全屏；官方亦未给出「退后台是否自动取消认证」依据 | 中 | 真机验证（冒烟 6/7/12）；退后台由**主动 `cancel()`** 兜底；若控件被遮挡或表现异常 → 回退为 `bindContentCover`（`ModalTransition.NONE`）遮罩 + 认证前收起业务弹层（**不改认证参数**） |
-| R6 | 生命周期时序导致误锁/漏锁（`onForeground` 冷启动时也会触发） | 中 | 规则单向：`onForeground` **只加锁、绝不解锁**；冷启动锁态只由 `AppLock.reset(appLock)` 决定；`backgroundAt` 判定后清空 |
+| R6 | 生命周期时序导致误锁/漏锁（`onForeground` 冷启动时也会触发） | 中 | 规则单向：`onForeground` **只加锁、绝不解锁**；冷启动锁态只由 `AppLock.reset()`（`locked = enabled`）决定；`backgroundAt` 判定后清空；`load` 上移到 `onWindowStageCreate` 顶部，消除「读到默认值」的竞态 |
 | R7 | 用户取消系统验证 / 写盘失败 / 验证中退后台 → 开关视觉未复位（`Toggle.isOn` 与模型不一致） | 低 | `isOn` 由模型真值驱动（不做乐观更新）；父组件每次开关尝试后递增 `revision`，`SettingCard` 的 `ForEach` 键值含 `revision`，强制重建该行覆盖三条不回滚路径（`Toggle` 自带内部状态，键值不变时框架不会重建它，仅靠模型回滚不复位）；真机回归（冒烟 13）；若仍不复位 → 备选实现：整行 `onClick` 触发流程 + `Toggle` 置 `.enabled(false)` 只读呈现 |
 | R8 | AGC 审核/客服排查时截屏黑屏，被误判为崩溃 | 低 | 提交说明中注明"隐私窗口特性"；必要时审核期用关闭防截屏的测试包 |
-| R9 | 未来有人在页面级再写 `setWindowPrivacyMode` → 复现官方 FAQ 的"全局防截屏失效"故障 | 中 | ① `utils/Privacy.ets` 文件头注释（执行计划 Task 2）；② `huawei/atomicservice/MFA/AGENTS.md` 的「开发约束」节新增一句硬约束（执行计划 Task 1）。隐私模式**只允许**经 `Privacy.apply` 修改 |
+| R9 | 未来有人在页面级再写 `setWindowPrivacyMode` → 复现官方 FAQ 的"全局防截屏失效"故障 | 中 | ① `utils/PrivacyWindow.ets` 文件头注释；② `huawei/atomicservice/MFA/AGENTS.md` 的「开发约束」节的硬约束。隐私模式**只允许**经 `utils/PrivacyWindow.ets` 修改（功能层统一经 `models/security/PrivacyWindow`） |
 | R10 | `onBackPress` 在 `@Entry @ComponentV2` 页面行为不符预期 | 低 | 真机验证（冒烟 12）；即使失效也不影响安全性（仅体验），可退化为不消费返回键 |
 | R11 | `@Trace locked` 未按预期驱动 `Home` 重渲染（V2 观测边界） | 中 | 遮罩依赖 `Home` 内 `@Local appLock` 读取 `locked`；真机验证；兜底改为 `bindContentCover` |
 | R12 | 应用锁开启后每次冷启动都弹系统认证，被用户视为骚扰 | 中 | 默认关闭、用户主动开启；设置项副标题明确触发规则；不做后台自动重锁（仅 60s 阈值） |
@@ -526,7 +539,11 @@ Task 0（改动前基线，只读 + 一次性装依赖）
 复用现有 `hilog`（`LogDomain` 已含 `ABILITY=0`、`UTILS=1`、`MODELS=2`），不新增上报通道：
 
 ```jsonc
-{"domain":2,"tag":"models/security","event":"load","screenProtect":true,"appLock":true}
+{"domain":2,"tag":"models/security","event":"settings_load","privacyWindow":true,"appLock":true,"v":1}
+{"domain":2,"tag":"models/security","event":"settings_save_failed","error":"..."}
+{"domain":2,"tag":"models/security","event":"settings_save_skipped","reason":"read_failed"}
+{"domain":2,"tag":"models/security","event":"screen_protect_set","enabled":false}
+{"domain":2,"tag":"models/security","event":"app_lock_set","appLock":true}
 {"domain":1,"tag":"utils/privacy","event":"set","privacyMode":true,"cause":"background"}
 {"domain":1,"tag":"utils/privacy","event":"set_failed","code":201}
 {"domain":1,"tag":"utils/privacy","event":"set_timeout","privacyMode":true,"cause":"foreground"}
@@ -553,6 +570,7 @@ Task 0（改动前基线，只读 + 一次性装依赖）
 
 | 时间 | 变更 |
 |---|---|
+| 2026-10-19 | **设置模型按功能拆分（实现重构，无行为变更）**：① `models/Security.ets` 删除，拆为 `models/security/Store.ets`（唯一持久化出口，静态 `load`/`patch`/`defaults`）+ `models/security/PrivacyWindow.ets`（防截屏功能入口）+ `models/security/AppLock.ets`（应用锁功能入口，吸收 `enabled`）；② 两个功能统一契约：`instance()` 单例 / `load(ctx)` / `get enabled` / `setEnabled(ctx,on): boolean`，且一律**先落盘、成功才改内存**（取消原 `assign/previous` 回滚闭包）；③ 退后台遮挡的意图收进 `PrivacyWindow.occlude()`，`apply()` 以 `enabled \|\| occluded` 为唯一真相源，`EntryAbility` 只保留跨功能策略；④ 存储库名 `mfa_security` → `security`、单 key `security` → `settings`、字段 `screenProtect` → `privacyWindow`（`v` 仍为 1，功能未发布、旧库不读不删）；⑤ `load` 上移到 `onWindowStageCreate` 顶部，修掉「`onForeground` 先于 `loadContent` 回调」时用默认值覆盖用户设置的竞态；⑥ `AppLock.reset()` 补清运行态残留（`verifying/generation/instance/backgroundAt/lastFinishedAt`）。日志 tag 保持 `models/security`，事件名新增 `settings_*` / `screen_protect_*` / `app_lock_*`。 |
 | 2026-10-19 | **未发布期架构收口（除 ⑥ 为硬化外无行为变更）**：① 设置持久化由双 key（`screen_protect` / `app_lock`）合并为单 key `security` + 带 schema 版本 `v` 的 JSON（功能未发布，无历史数据迁移，旧 key 直接忽略），写入+回滚收敛到 `setField` 单方法；② `utils/LockPolicy.ets` → `utils/AppLockPolicy.ets`，阈值常量同时供单测表达边界；③ `utils/Privacy.ets` → `utils/PrivacyWindow.ets`（对齐 `Window.setWindowPrivacyMode` 术语），内部 5 个 static 字段收敛为 `_state`；④ `models/Security.ets` 拆分为 `models/Security.ets`（仅设置）+ `models/AppLock.ets`（`AppLock` + `VerifyOutcome` + `ProbeResult`）；⑤ `verify()` 抽出 `createChallenge` / `buildAuthParam`，过期回调先 `off('result')` 再按世代号丢弃；⑥ `AppLock.onForeground` 无条件清空 `_backgroundAt`，避免陈旧时间戳二次加锁。日志 tag 保持 `models/security` / `utils/privacy` 不变，§6 的监控查询无需调整。 |
 | 2026-10-16 | **加固批次（P1/P2，无接口/路由/文案变更）**：① `Privacy.apply` 改为「目标值 + 单飞 + 补写」并加 1s 写入超时（原 Promise 串联在写入永不 settle 时会永久堵死后续切换 → 防截屏静默失效且监控无痕，见 §3.2）；② R7 复位机制改为「父组件递增 revision 强制重建开关行」（原「Toggle 随模型回滚自动复位」在键值不变时框架不重建列表项，故取消验证/写盘失败/退后台三条路径都不成立）；③ 日志事件 `unlock` → `verify_result`（outcome + code），无凭据降级由 error 降为 warn；④ `Security` 移除公开 setter（曾是绕开落盘校验的通道）、`verify()` 结果回调改清理本次实例、同步异常路径补 `lastFinishedAt`；⑤ `AppLock` 无凭据降级抽 `degradeNoCredential`（原两处逐字重复）、`getStringSync` 抽 `buildWidgetParam`；⑥ 关闭应用锁补写盘失败提示；⑦ `load()` 读值加类型守卫（`as boolean` → `typeof` 判定）；⑧ 新增日志 `set_timeout`、页面级 `context_undefined` 告警。 |
 | 2026-10-11 | **复审修订（R2 轮）**：① `VerifyOutcome` 回调增加 `code` 通道，使 §3.3/§3.5 承诺的 `LOCKED`/`PIN_EXPIRED` 定向文案真正可达（新增文案 `lock_page_pin_expired`，15 → 16 条）；② 防锁死降级的提示改为 **Toast**（`unlock()` 后遮罩即卸载，内联提示不可见）并检查落盘返回值；③ `shouldDebounceVerify` 参数名统一为 `finishedAt` 并同步「时钟回拨 → 放行」分支（与执行计划实现一致）；④ §3.1 字段表补 `lastFinishedAt`；⑤ `AppLock.isLocked()` → `locked` getter（回滚指引原本引用不存在的 API）；⑥ §1 修正「唯一 `@Entry`」与 `Detail.ets` 锚点、§2 修正 `Login.ets` 锚点、§3.2 修正「全部在 Ability 层」措辞；⑦ §6 增加 `disable_persist_failed` 指标 |

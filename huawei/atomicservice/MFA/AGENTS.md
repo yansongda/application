@@ -27,7 +27,7 @@ MFA/
 - `pages/`：页面；`pages/form/` 为服务卡片页面（由 `resources/base/profile/form_config.json` 的 `src` 声明，**不注册**到 `routes.json`）
 - `components/`：公共组件；页面级组件按 feature 分子目录（如 `components/index/`）
 - `api/`：接口调用
-- `models/`：模型；按 feature 分子目录（`models/form/` 服务卡片相关、`models/totp/` TOTP 运行时）
+- `models/`：模型；按 feature 分子目录（`models/form/` 服务卡片相关、`models/totp/` TOTP 运行时、`models/security/` 安全设置与应用锁）
 - `utils/`：工具函数
 - `themes/`：主题定义
 - `types/`：类型定义
@@ -69,8 +69,18 @@ MFA/
 - 与后端 API 联动时，接口字段、鉴权语义、错误处理需与后端保持一致
 - 弹窗/对话框统一用组件内的成员 `@Builder` 方法：**不要在 `Dialog.open/execute`、`Toast.execute` 等自定义函数的闭包里调用全局 `@Builder` 函数**（编译器不会给全局 builder 注入组件上下文，运行时报 `Cannot read property observeComponentCreation2 of undefined`）；因此加载/失败/重试弹窗各页保留自己的成员实现，不做跨页抽取
 - 未确认工程已有命令前，不凭空引入新的构建或测试流程，优先遵循工程内现有配置文件
-- 窗口隐私模式（防截屏）**只允许**经 `utils/PrivacyWindow.ets` 的 `PrivacyWindow.apply(on, cause)` 修改；**禁止**在页面/组件里直接调用 `window.setWindowPrivacyMode`（同一主窗口实例上混用全局与页面级开关会互相破坏，官方 FAQ 有记载）。
-- 安全设置（防截屏 / 应用锁）持久化：`preferences` 库 `mfa_security` 的**单 key** `security`，值为带 schema 版本 `v` 的 JSON（`{"v":1,"screenProtect":true,"appLock":false}`）；运行态锁定（`AppLock.locked`）**绝不落盘**。新增设置项时递增 `v`，并在 `Security.decode` 内做版本分支。
+- 窗口隐私模式（防截屏）**只允许**经 `utils/PrivacyWindow.ets` 的 `apply(on, cause)` 修改；功能层统一走 `models/security/PrivacyWindow.ets`（`apply()` / `occlude()`），**禁止**在页面/组件里直接调用 `window.setWindowPrivacyMode`（同一主窗口实例上混用全局与页面级开关会互相破坏，官方 FAQ 有记载）。
+- 安全设置（防截屏 / 应用锁）持久化：`preferences` 库 `security` 的**单 key** `settings`，值为带 schema 版本 `v` 的 JSON（`{"v":1,"privacyWindow":true,"appLock":false}`），读写统一经 `models/security/Store.ets`（`load` / `patch`；写失败返回 `false` 且**不改内存**）；运行态（`AppLock.locked`、`PrivacyWindow` 的临时遮挡）**绝不落盘**。新增设置项时递增 `v`，并在 `Store.decode` 内做版本分支。这份 JSON 即将来同步到后端的 DTO，字段名不要随意改。
+- `models/security/` 下的模型统一契约：`instance()` 单例 + `load(context)` + `get enabled` + `setEnabled(context, on): boolean`；页面只读 `enabled` / `locked`，写入一律走 `setEnabled`（**先落盘、成功才改内存**）。
+- **应用锁状态不变式**（`models/security/AppLock.ets`，安全关键）：`_verifying` 只在发起前置 `true`（**1 处**），复位必须恰为 **4 处**（`reset` / `onBackground` / 结果回调 / 同步异常兜底）；`_instance` 复位同为 4 处（结果回调内仅当 `=== instance`）；`_lastFinishedAt` 只在结果回调与同步异常里更新（**发起阶段不写**，否则失败分支会被自身 3 秒防抖挡住）；`_generation` 在发起时递增，另有三处作废点（`reset` / `onBackground` / 同步异常）。任一出口漏复位 `_verifying` = 「遮罩在、点解锁永远 `SKIPPED`」= 用户被锁死，属阻断级缺陷。改 `verify()` 后用下列数字复核（变了就要能解释原因）：
+
+  ```bash
+  F=entry/src/main/ets/models/security/AppLock.ets
+  grep -c "this._verifying = true" $F   # 1
+  grep -c "_verifying = false"     $F   # 4
+  grep -c "_instance = undefined"  $F   # 4
+  grep -c "_lastFinishedAt = "     $F   # 3
+  ```
 
 ## 服务卡片（`pages/form/`）
 

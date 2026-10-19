@@ -3,12 +3,12 @@
 import { userAuth } from '@kit.UserAuthenticationKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../App';
-import { AppLock, VerifyOutcome } from '../models/AppLock';
+import { AppLock, VerifyOutcome } from '../models/security/AppLock';
 import { Toast } from '../utils/PromptAction';
 
 @ComponentV2
 export struct LockScreen {
-  private appLock: AppLock = AppLock.shared();
+  private appLock: AppLock = AppLock.instance();
   @Local
   private hint?: Resource = undefined;
 

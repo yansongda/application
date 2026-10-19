@@ -4,12 +4,11 @@ import { InfoCard, InfoCardItem } from '../../components/InfoCard';
 import { SettingCard } from '../../components/SettingCard';
 import { User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
-import { Security } from '../../models/Security';
-import { AppLock, VerifyOutcome } from '../../models/AppLock';
+import { PrivacyWindow } from '../../models/security/PrivacyWindow';
+import { AppLock, VerifyOutcome } from '../../models/security/AppLock';
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Dialog, Toast } from '../../utils/PromptAction';
-import { PrivacyWindow } from '../../utils/PrivacyWindow';
 import { User as UserApi } from '../../api/User';
 import { App, AppPagesName, LogDomain } from '../../App';
 import { displayOr } from '../../utils/Display';
@@ -27,7 +26,9 @@ struct Detail {
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
   @Local
-  private security: Security = Security.shared();
+  private privacyWindow: PrivacyWindow = PrivacyWindow.instance();
+  @Local
+  private appLock: AppLock = AppLock.instance();
   // 开关行的强制重建计数器：Toggle 自带内部状态，模型真值不变时不会回滚视觉（技术设计 R7）
   @Local
   private toggleRevision: number = 0;
@@ -98,7 +99,7 @@ struct Detail {
               title: $r('app.string.user_detail_page_screen_protect'),
               description: $r('app.string.user_detail_page_screen_protect_desc'),
               toggle: {
-                isOn: this.security.screenProtect,
+                isOn: this.privacyWindow.enabled,
                 action: (next: boolean): void => {
                   this.toggleScreenProtect(next);
                 },
@@ -108,7 +109,7 @@ struct Detail {
               title: $r('app.string.user_detail_page_app_lock'),
               description: $r('app.string.user_detail_page_app_lock_desc'),
               toggle: {
-                isOn: this.security.appLock,
+                isOn: this.appLock.enabled,
                 action: (next: boolean): void => {
                   this.toggleAppLock(next);
                 },
@@ -247,7 +248,7 @@ struct Detail {
     }
   }
 
-  // 防截屏开关：先写盘（失败则内存已回滚、开关复位），再经 PrivacyWindow.apply 应用隐私窗口
+  // 防截屏开关：模型内部先落盘、成功才改内存并立即落地到窗口（失败返回 false，开关随重建复位）
   private toggleScreenProtect(next: boolean): void {
     // 先递增 revision 强制重建开关行：开关已随手指拨到新位置，而写盘失败 / 拿不到 context 时
     // 模型真值不变，只能靠重建把视觉拨回原位（技术设计 R7）
@@ -260,12 +261,10 @@ struct Detail {
 
       return;
     }
-    if (!this.security.setScreenProtect(context, next)) {
-      // 写盘失败：setScreenProtect 内已回滚内存值，这里提示「设置保存失败」并保持开关原位
+    if (!this.privacyWindow.setEnabled(context, next)) {
+      // 写盘失败：模型内存值未变，这里提示「设置保存失败」并保持开关原位
       Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
-      return;
     }
-    PrivacyWindow.apply(next, 'setting');
   }
 
   // 应用锁开关：开启前必须通过系统认证，认证成功才写盘；关闭直接写盘
@@ -281,10 +280,10 @@ struct Detail {
       return;
     }
     if (next) {
-      AppLock.shared().verify(context, (outcome: VerifyOutcome): void => {
+      this.appLock.verify(context, (outcome: VerifyOutcome): void => {
         if (VerifyOutcome.SUCCESS === outcome) {
           // 成功不弹「已开启」提示（开关本身就是反馈）；但写盘失败必须提示，否则开关静默弹回、用户不知原因
-          if (!this.security.setAppLock(context, true)) {
+          if (!this.appLock.setEnabled(context, true)) {
             Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
           }
           return;
@@ -299,8 +298,8 @@ struct Detail {
       });
       return;
     }
-    // 写盘失败时 setAppLock 会回滚内存值（开关随重建弹回原位），提示原因避免用户以为点了没反应
-    if (!this.security.setAppLock(context, false)) {
+    // 写盘失败时内存值不变（开关随重建弹回原位），提示原因避免用户以为点了没反应
+    if (!this.appLock.setEnabled(context, false)) {
       Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
     }
   }
