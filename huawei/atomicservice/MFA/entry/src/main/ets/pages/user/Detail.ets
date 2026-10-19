@@ -1,11 +1,14 @@
 import { authentication } from '@kit.AccountKit';
 import { AdvancedDialogV2Button, AlertDialogV2, AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
 import { InfoCard, InfoCardItem } from '../../components/InfoCard';
+import { SettingCard } from '../../components/SettingCard';
 import { User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
+import { PrivacyWindow } from '../../models/security/PrivacyWindow';
+import { AppLock, VerifyOutcome } from '../../models/security/AppLock';
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { Dialog } from '../../utils/PromptAction';
+import { Dialog, Toast } from '../../utils/PromptAction';
 import { User as UserApi } from '../../api/User';
 import { App, AppPagesName, LogDomain } from '../../App';
 import { displayOr } from '../../utils/Display';
@@ -22,6 +25,13 @@ struct Detail {
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
+  @Local
+  private privacyWindow: PrivacyWindow = PrivacyWindow.instance();
+  @Local
+  private appLock: AppLock = AppLock.instance();
+  // 开关行的强制重建计数器：Toggle 自带内部状态，模型真值不变时不会回滚视觉（技术设计 R7）
+  @Local
+  private toggleRevision: number = 0;
 
   build() {
     NavDestination() {
@@ -78,6 +88,33 @@ struct Detail {
               title: $r('app.string.user_detail_page_phone'),
               value: $r('app.string.user_detail_page_coming_soon'),
             }),
+          ]
+        })
+
+        SettingCard({
+          title: $r('app.string.user_detail_page_security'),
+          revision: this.toggleRevision,
+          items: [
+            {
+              title: $r('app.string.user_detail_page_screen_protect'),
+              description: $r('app.string.user_detail_page_screen_protect_desc'),
+              toggle: {
+                isOn: this.privacyWindow.enabled,
+                action: (next: boolean): void => {
+                  this.toggleScreenProtect(next);
+                },
+              },
+            },
+            {
+              title: $r('app.string.user_detail_page_app_lock'),
+              description: $r('app.string.user_detail_page_app_lock_desc'),
+              toggle: {
+                isOn: this.appLock.enabled,
+                action: (next: boolean): void => {
+                  this.toggleAppLock(next);
+                },
+              },
+            },
           ]
         })
 
@@ -208,6 +245,62 @@ struct Detail {
     } catch (e) {
       // 用户取消重试，返回 undefined 保持原有昵称显示
       return undefined;
+    }
+  }
+
+  // 防截屏开关：模型内部先落盘、成功才改内存并立即落地到窗口（失败返回 false，开关随重建复位）
+  private toggleScreenProtect(next: boolean): void {
+    // 先递增 revision 强制重建开关行：开关已随手指拨到新位置，而写盘失败 / 拿不到 context 时
+    // 模型真值不变，只能靠重建把视觉拨回原位（技术设计 R7）
+    this.toggleRevision++;
+
+    const context = this.getUIContext().getHostContext();
+
+    if ('undefined' === typeof context) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.USER_DETAIL, 'toggle_screen_protect: context_undefined');
+
+      return;
+    }
+    if (!this.privacyWindow.setEnabled(context, next)) {
+      // 写盘失败：模型内存值未变，这里提示「设置保存失败」并保持开关原位
+      Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
+    }
+  }
+
+  // 应用锁开关：开启前必须通过系统认证，认证成功才写盘；关闭直接写盘
+  private toggleAppLock(next: boolean): void {
+    // 同 toggleScreenProtect：无论成功、取消、验证失败还是退后台打断，都强制重建开关行（R7）
+    this.toggleRevision++;
+
+    const context = this.getUIContext().getHostContext();
+
+    if ('undefined' === typeof context) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.USER_DETAIL, 'toggle_app_lock: context_undefined');
+
+      return;
+    }
+    if (next) {
+      this.appLock.verify(context, (outcome: VerifyOutcome): void => {
+        if (VerifyOutcome.SUCCESS === outcome) {
+          // 成功不弹「已开启」提示（开关本身就是反馈）；但写盘失败必须提示，否则开关静默弹回、用户不知原因
+          if (!this.appLock.setEnabled(context, true)) {
+            Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
+          }
+          return;
+        }
+        if (VerifyOutcome.NO_CREDENTIAL === outcome) {
+          Toast.show({ message: $r('app.string.user_detail_page_app_lock_no_credential'), duration: 3000 });
+          return;
+        }
+        if (VerifyOutcome.SKIPPED !== outcome) {
+          Toast.show({ message: $r('app.string.user_detail_page_app_lock_enable_failed'), duration: 3000 });
+        }
+      });
+      return;
+    }
+    // 写盘失败时内存值不变（开关随重建弹回原位），提示原因避免用户以为点了没反应
+    if (!this.appLock.setEnabled(context, false)) {
+      Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
     }
   }
 }

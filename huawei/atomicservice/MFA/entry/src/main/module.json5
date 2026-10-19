@@ -62,6 +62,12 @@
           ],
           "when": "always"
         }
+      },
+      {
+        "name": "ohos.permission.PRIVACY_WINDOW"
+      },
+      {
+        "name": "ohos.permission.ACCESS_BIOMETRIC"
       }
     ],
     "metadata": [
@@ -74,10 +80,10 @@
         "value": "6917576589568238756"
       },
       // todo: 正式上线需确认 env 环境已删除
-//      {
-//        "name": "env",
-//        "value": "test"
-//      }
+      {
+        "name": "env",
+        "value": "test"
+      }
     ]
   }
 }

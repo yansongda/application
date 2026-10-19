@@ -371,6 +371,70 @@
     {
       "name": "user_help_page_security_swipe_delete",
       "value": "在列表项上左滑可删除该账号"
+    },
+    {
+      "name": "user_detail_page_security",
+      "value": "安全"
+    },
+    {
+      "name": "user_detail_page_screen_protect",
+      "value": "防截屏"
+    },
+    {
+      "name": "user_detail_page_screen_protect_desc",
+      "value": "截屏与录屏时，应用内容将被系统遮挡"
+    },
+    {
+      "name": "user_detail_page_app_lock",
+      "value": "应用锁"
+    },
+    {
+      "name": "user_detail_page_app_lock_desc",
+      "value": "重新打开或离开 1 分钟后需验证身份"
+    },
+    {
+      "name": "user_detail_page_app_lock_enable_failed",
+      "value": "验证未通过，应用锁未开启"
+    },
+    {
+      "name": "user_detail_page_app_lock_no_credential",
+      "value": "请先在系统设置中设置锁屏密码"
+    },
+    {
+      "name": "lock_page_locked",
+      "value": "已锁定"
+    },
+    {
+      "name": "lock_page_hint",
+      "value": "验证身份后可查看验证码"
+    },
+    {
+      "name": "lock_page_unlock",
+      "value": "解锁"
+    },
+    {
+      "name": "lock_page_verify_title",
+      "value": "验证身份以解锁"
+    },
+    {
+      "name": "lock_page_failed",
+      "value": "验证失败，请重试"
+    },
+    {
+      "name": "lock_page_locked_out",
+      "value": "验证次数过多，请稍后再试"
+    },
+    {
+      "name": "lock_page_no_credential",
+      "value": "设备未设置锁屏密码，应用锁已自动关闭"
+    },
+    {
+      "name": "user_detail_page_setting_failed",
+      "value": "设置保存失败，请重试"
+    },
+    {
+      "name": "lock_page_pin_expired",
+      "value": "锁屏密码已过期，请先更新"
     }
   ]
 }
