@@ -12,7 +12,7 @@ publish = false
 [workspace.dependencies]
 chrono = { version = "0.4.45", features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = { version = "1.0.151" }
+serde_json = { version = "1.0.154" }
 
 tracing = { version = "0.1.44" }
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry"] }

@@ -1,8 +1,7 @@
 use crate::request::Validator;
-use application_database::tool::totp::{Totp, TotpConfig};
+use application_database::tool::totp::Totp;
 use application_kernel::result::ErrorCode;
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DetailRequest {
@@ -32,12 +31,22 @@ pub struct DetailResponse {
 pub struct DetailResponseConfig {
     pub secret: String,
     pub period: u64,
+    pub digits: u8,
+    pub algorithm: String,
 }
 
 impl TryFrom<Totp> for DetailResponse {
     type Error = application_kernel::result::ErrorCode;
 
     fn try_from(totp: Totp) -> application_kernel::result::Result<Self> {
+        // digits/algorithm 使用净化后的值，确保下发给前端的参数与后端算码一致
+        let config = DetailResponseConfig {
+            secret: totp.config.secret.clone(),
+            period: totp.config.period,
+            digits: totp.digits(),
+            algorithm: totp.algorithm().as_str().to_string(),
+        };
+
         Ok(Self {
             id: totp.id.to_string(),
             issuer: totp
@@ -45,18 +54,9 @@ impl TryFrom<Totp> for DetailResponse {
                 .clone()
                 .unwrap_or_else(|| "未知发行方".to_string()),
             username: totp.username.clone(),
-            config: totp.config.deref().clone().into(),
+            config,
             code: totp.generate_code()?,
         })
-    }
-}
-
-impl From<TotpConfig> for DetailResponseConfig {
-    fn from(config: TotpConfig) -> Self {
-        Self {
-            secret: config.secret.clone(),
-            period: config.period,
-        }
     }
 }
 
