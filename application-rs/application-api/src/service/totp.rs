@@ -78,6 +78,7 @@ pub async fn create(
             period: totp.step(),
             secret: totp.secret().to_base32(),
             digits: totp.digits(),
+            algorithm: totp.algorithm().as_str().to_string(),
         },
     })
     .await?
