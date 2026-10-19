@@ -28,8 +28,10 @@
         }
       }
     ],
+    // 约定：products 之间只允许 signingConfig 不同（bundleName 由 app.json5 统一提供，且必须与证书 Profile 一致）
     "products": [
       {
+        // 正式包：release 证书。hvigor 要求必须存在 name 为 default 的 product
         "name": "default",
         "signingConfig": "default",
         "targetSdkVersion": "6.1.0(23)",
@@ -43,6 +45,7 @@
         }
       },
       {
+        // 本地调试包：debug 证书（含设备 UDID 白名单），与 default 仅签名不同
         "name": "debug",
         "signingConfig": "debug",
         "targetSdkVersion": "6.1.0(23)",
@@ -56,12 +59,40 @@
         }
       }
     ],
+    // 环境地址由构建模式在编译期注入（见 entry/src/main/ets/App.ets 的 App.env）
+    // 优先级：模块 target > 模块 buildOptionSet > 模块 buildOption > product > buildModeSet
+    // 注意：新增自定义 buildMode 时必须同时配置 ENV，否则生成的 BuildProfile 里没有 ENV，编译会失败
     "buildModeSet": [
       {
         "name": "debug",
+        "buildOption": {
+          "arkOptions": {
+            "buildProfileFields": {
+              "ENV": "test"
+            }
+          }
+        }
       },
       {
-        "name": "release"
+        "name": "release",
+        "buildOption": {
+          "arkOptions": {
+            "buildProfileFields": {
+              "ENV": "prod"
+            }
+          }
+        }
+      },
+      {
+        // ohosTest 测试套运行时会自动使用 test 构建模式，缺失该条目会导致 ENV 未定义
+        "name": "test",
+        "buildOption": {
+          "arkOptions": {
+            "buildProfileFields": {
+              "ENV": "test"
+            }
+          }
+        }
       }
     ]
   },
