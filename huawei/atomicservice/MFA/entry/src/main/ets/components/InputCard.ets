@@ -36,10 +36,13 @@ export struct InputCard {
 
         // 提供 selectOptions 时渲染下拉单选（如摘要算法），否则维持文本输入
         if ('undefined' !== typeof item.selectOptions) {
+          // Select 不设 width 时宽度自适应内容（文字 + 箭头），配合 Blank 贴右，
+          // 让选中值紧邻箭头右对齐（Select 本身不支持 textAlign）
+          Blank()
+
           Select(item.selectOptions)
             .selected(item.selectedIndex ?? 0)
             .value(item.value ?? '')
-            .width($r('app.string.components_card_input_item_content_width'))
             .backgroundColor($r('sys.color.background_primary'))
             .onSelect((index: number, value: string) => {
               item.selectedIndex = index;
@@ -63,6 +66,7 @@ export struct InputCard {
             })
         }
       }
+      .width('100%')
     }
   }
 }

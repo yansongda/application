@@ -185,7 +185,7 @@ listFormIds(context): string[]          // 供主动刷新遍历
 
 > **契约警示**：注入 key 必须与卡片 `@Local` 变量名逐字一致。写错/改名**不会编译报错，只会静默不刷新**，改一侧必须同步改另一侧。
 
-**主动刷新链路**：主应用 `FormBridge.push()` 遍历 `Snapshot.listFormIds(context)` → `formProvider.updateForm(formId, data)`；失败仅记日志，不打断主流程。formId 在 `EntryFormAbility.onAddForm` 写入、`onRemoveForm` 清除。
+**主动刷新链路**：主应用 `FormBridge.push()` 遍历 `Snapshot.listFormIds(context)` → `formProvider.updateForm(formId, data)`；失败仅记日志（`16501001` 表示系统侧卡片已不存在，会清理本地 formId 自愈），不打断主流程。formId 在 `EntryFormAbility.onAddForm` 写入、`onRemoveForm` 清除。
 
 **点击链路**：
 
@@ -294,6 +294,7 @@ listFormIds(context): string[]          // 供主动刷新遍历
 | 2026-10-05 | **卡片排版改为「成组居中」**：数字与单位说明贴成一组、整组在标题与入口之间居中（去掉原「数字贴顶、说明贴底」写法与数字区顶部内边距）；数字 38fp→**40fp**；入口胶囊内边距 4vp→3vp 让出高度；`Filled()` 与 `Empty()` 形态统一（同为 `layoutWeight(1)` + `justifyContent(Center)`） |
 | 2026-10-05 | **命名对齐：服务卡片族残留的 `card_*` 全部收敛为 `form_*`**。① `form_config.json`：卡片名 `mfa_card` → `mfa_form`、`src` → `pages/form/Form2x2.ets`；② `string.json` 10 条：`card_ability_label`/`card_ability_desc`/`card_display_name`/`card_description`/`card_title`/`card_protected_label`/`card_empty_title`/`card_empty_hint`/`card_action_scan`/`card_action_input` → `form_*`（文案值不变）；③ `float.json` 3 条：`card_number_font_size`/`card_label_font_size`/`card_action_font_size` → `form_*`；④ 卡片页 `pages/form/FormCard2x2.ets` → `Form2x2.ets`（struct 同名）；⑤ `utils/Form.ets`：preferences 库名 `mfa_card` → `mfa_form`、key `card_snapshot` → `form_snapshot`、`card_form_ids` → `form_ids`。**注意**：卡片名与 preferences 库名变更后，设备上已添加的卡片需**重新添加**（旧 formId 与新库名均不再生效）；应用内通用卡片命名（`card_radius`/`card_height` 等 integer、InfoCard/InputCard/TotpCard 及其文案）**刻意不动**，避免与服务卡片语义混淆 |
 | 2026-10-05 | **卡片入口收敛为单枚「扫码添加」**：去掉次入口「输入添加」（手动输入在 App 内仍可走 FAB 菜单 / 空态按钮），入口宽度 ≈70→**146vp**、字号 11fp→**13fp**、上下内边距 3vp→5vp（高 ≈20→**27vp**）；为它腾高度：单位说明 11fp→**10fp**、数字块内间距 2vp→0（**数字 40fp 不变**），内容自然高度 ≈142→145vp；删除已无引用的 `form_action_input` 文案；同步记录实测卡片盒 ≈166×166vp 与 `Form2x2.ets` 文件头约束 |
+| 2026-10-19 | **陈旧 formId 自愈**：日志出现 `卡片推送失败 ... err={"code":16501001}`。官方卡片错误码 `16501001 = The ID of the form to be operated does not exist.`，即 preferences 中残留了系统侧已不存在的 formId（卡片被移除但 `onRemoveForm` 未回调、调试替换安装、卡片名/配置变更后旧卡失效等）。修复：`FormBridge.push()` 捕获 `16501001` 时 `Snapshot.removeFormId()` 清理并降级为 warn，避免每次启动/刷新重复失败；其他错误保持 error 日志 |
 
 ## 8. 附录：本次不做、候选清单
 
