@@ -1,5 +1,6 @@
 import { bundleManager } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import BuildProfile from 'entry/BuildProfile';
 
 export enum LogDomain {
   ABILITY = 0,
@@ -60,34 +61,19 @@ export class App {
     return clientId;
   }
 
-  private static _version: string | undefined;
-
+  // 版本号来自编译期生成的 BuildProfile（构建时取 app.json5 / product 配置），无需运行时同步绑定
   static get version(): string {
-    if ('undefined' !== typeof App._version) {
-      return App._version;
-    }
-
-    const bundleInfo = App.getBundleInfo();
-
-    App._version = bundleInfo.versionName;
-
-    return App._version;
+    return BuildProfile.VERSION_NAME;
   }
 
-  private static _env: AppEnv | undefined;
-
+  // 环境地址由构建模式在编译期注入：debug/test -> test，release -> prod
+  // 见工程级 build-profile.json5 的 buildModeSet[].buildOption.arkOptions.buildProfileFields.ENV
   static get env(): AppEnv {
-    if ('undefined' !== typeof App._env) {
-      return App._env;
-    }
+    // BuildProfile.ENV 是编译期字面量类型（如 'prod'），必须先赋给 string 再比较；
+    // 否则 release 构建会报：This comparison appears to be unintentional because the types '"prod"' and 'AppEnv.TEST' have no overlap
+    const env: string = BuildProfile.ENV;
 
-    App._env = AppEnv.PROD;
-
-    if (App.getBundleInfo().versionName.length === 0 || App.getMetadata('env') === 'test') {
-      App._env = AppEnv.TEST;
-    }
-
-    return App._env;
+    return env === AppEnv.TEST ? AppEnv.TEST : AppEnv.PROD;
   }
 
   static getMetadata(name: string, module?: string): string | undefined {
@@ -106,15 +92,5 @@ export class App {
     return bundleInfo.appInfo.metadataArray
       .find(item => item.moduleName === module)?.metadata
       .find(metadata => metadata.name === name)?.value;
-  }
-
-  static getBundleInfo(): bundleManager.BundleInfo {
-    const bundleInfo: bundleManager.BundleInfo = bundleManager.getBundleInfoForSelfSync(
-      bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT
-    );
-
-    hilog.info(LogDomain.UTILS, 'utils/app', 'BundleInfo 获取信息: %{public}s', JSON.stringify(bundleInfo));
-
-    return bundleInfo;
   }
 }

@@ -47,6 +47,42 @@ MFA/
 
 依赖声明层级约定：**新增依赖声明在「使用它的模块」的 `oh-package.json5`**（`@yansongda/otp` 声明在 `entry/oh-package.json5`，ohpm 会生成模块级 `entry/oh-package-lock.json5`）。工程级 `oh-package.json5` 的既有依赖（`@ohos/axios`、`@developers/dateformat`）保持不变，不迁移。官方依据见「字节码 HAR」节。
 
+## 环境与构建模式（ENV / BuildProfile）
+
+- **环境地址不再由 `module.json5` 的 metadata 控制**：`entry/src/main/module.json5` 中的 `env` metadata 已移除，禁止再加回运行时手工切换的开关。
+- 环境由**构建模式**在编译期注入，配置位置为工程级 `build-profile.json5` 的 `buildModeSet[].buildOption.arkOptions.buildProfileFields.ENV`：
+
+  | 构建模式 | ENV | 说明 |
+  |---|---|---|
+  | `debug` | `test` | 本地 Run/调试；`<Default>` 下构建 HAP 也走这条 |
+  | `release` | `prod` | 上架包；`<Default>` 下构建 APP 走这条 |
+  | `test` | `test` | `ohosTest` 测试套自动使用该模式，缺条目会导致 ENV 未定义、编译失败 |
+
+- 代码读取方式：`import BuildProfile from 'entry/BuildProfile'`（生成物位于 `entry/build/<product>/generated/profile/<target>/BuildProfile.ets`，**不入库**，由 `.gitignore` 的 `**/build` 覆盖）。
+- **比较前必须转宽**：`BuildProfile.ENV` 是编译期字面量类型，先 `const env: string = BuildProfile.ENV;` 再比较；直接写 `BuildProfile.ENV === AppEnv.TEST` 在 release 构建会报 `This comparison appears to be unintentional because the types '"prod"' and 'AppEnv.TEST' have no overlap`。
+- **新增自定义 buildMode 必须同时配置 `ENV`**，否则生成的 BuildProfile 里没有 ENV，引用处编译失败（fail-fast，优于静默连错环境）。
+- 归属优先级：模块 target > 模块 buildOptionSet > 模块 buildOption > product > buildModeSet。**不要在 `products` 里写 `ENV`**，否则会压死构建模式差异。
+- `products` 约定：`default`（release 证书）与 `debug`（debug 证书）**只允许 `signingConfig` 不同**。`signingConfig` 只能挂在 product 上，官方无「按构建模式自动切签名」能力，故两套 product 是必要的；debug 证书 Profile 的 `bundle-name` 与正式相同，因此两者 bundleName 必须一致，不能靠改 bundleName 做共存。
+- 命令行构建/验证（`DEVECO` 按本机安装位置调整；与 DevEco Studio 界面构建等价）：
+
+  ```bash
+  export DEVECO=/Applications/DevEco-Studio.app
+  export DEVECO_SDK_HOME="$DEVECO/Contents/sdk"
+
+  # 本地调试包（debug 证书 + 测试环境）
+  "$DEVECO/Contents/tools/hvigor/bin/hvigorw" \
+    --mode module -p product=debug -p module=entry@default -p buildMode=debug assembleHap --no-daemon
+
+  # 上架包（release 证书 + 正式环境）
+  "$DEVECO/Contents/tools/hvigor/bin/hvigorw" \
+    --mode module -p product=default -p module=entry@default -p buildMode=release assembleHap --no-daemon
+
+  # 期望输出 0：包内不应再有 env metadata
+  unzip -p entry/build/debug/outputs/default/entry-default-signed.hap module.json | grep -c '"env"'
+  ```
+
+- `entry/build-profile.json5` 当前不配置 `buildOptionSet`：原 `release` 条目仅重复默认值 `obfuscation.enable=false`，属空配置，已清理。若后续要启用 release 混淆，需重新加入 `buildOptionSet` 并做真机回归（工程大量使用 `PersistenceV2` 与 JSON 序列化，混淆需配套 keep 规则）。
+
 ## 字节码 HAR 与 useNormalizedOHMUrl（硬约束）
 
 - 工程级 `build-profile.json5` 的 `strictMode.useNormalizedOHMUrl` **必须为 `true`**：一旦改回 `false`，依赖字节码 HAR（`@yansongda/otp`）会立刻构建失败，报 `00306046 Specification Limit Violation / Bytecode HAR [@yansongda/otp] not supported when useNormalizedOHMUrl is not true.`
