@@ -18,7 +18,7 @@ Page({
     id: "0",
     issuer: "",
     username: "",
-    config: { period: 30 },
+    config: { period: 30, digits: 6, algorithm: "SHA1" },
   },
   // gotoEdit 仅依赖 issuer/username 传参，故 response 只需这两个字段。
   response: { issuer: "", username: "" },
@@ -77,7 +77,11 @@ Page({
       id: item.id,
       issuer: substr(item.issuer),
       username: substr(item.username),
-      config: { period: item.period },
+      config: {
+        period: item.period,
+        digits: item.digits ?? 6,
+        algorithm: item.algorithm ?? "SHA1",
+      },
     });
   },
   showLoadError() {

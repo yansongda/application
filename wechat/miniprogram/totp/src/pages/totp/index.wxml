@@ -50,6 +50,8 @@
           <app-totp-item
             itemId="{{ item.id }}"
             period="{{ item.period }}"
+            digits="{{ item.digits }}"
+            algorithm="{{ item.algorithm }}"
             issuer="{{ item.issuer }}"
             username="{{ item.username }}"
             secret="{{ item.secret }}"
@@ -67,6 +69,8 @@
         wx:for-item="item"
         itemId="{{ item.id }}"
         period="{{ item.period }}"
+        digits="{{ item.digits }}"
+        algorithm="{{ item.algorithm }}"
         issuer="{{ item.issuer }}"
         username="{{ item.username }}"
         secret="{{ item.secret }}"

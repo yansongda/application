@@ -122,6 +122,9 @@ const syncFromRemote = async (): Promise<TotpCache> => {
     username: item.username,
     secret: item.config.secret,
     period: item.config.period,
+    // 旧后端（PR #176 之前）不返回这两个字段：留空，算码时按 6 / SHA1 兜底
+    digits: item.config.digits,
+    algorithm: item.config.algorithm,
   }));
 
   const cache: TotpCache = {

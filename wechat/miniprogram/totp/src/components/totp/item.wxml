@@ -5,7 +5,7 @@
         <view class="item-body-info-issuer">{{ issuer }}</view>
         <view class="item-body-info-username">{{ username }}</view>
       </view>
-      <view class="item-body-code">{{ code }}</view>
+      <view class="item-body-code {{ digits >= 8 ? 'code-8' : digits === 7 ? 'code-7' : '' }}">{{ code }}</view>
     </view>
     <view slot="right" class="item-btn">
       <view class="btn btn-detail" bind:tap="detail">

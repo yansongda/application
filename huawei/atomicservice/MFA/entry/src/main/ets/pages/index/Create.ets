@@ -16,6 +16,10 @@ struct Index {
   @Local
   private period: string = '30';
   @Local
+  private digits: string = '6';
+  @Local
+  private algorithm: string = 'SHA1';
+  @Local
   private issuer?: string = undefined;
   @Local
   private username?: string = undefined;
@@ -70,6 +74,28 @@ struct Index {
                 }
               }
             }),
+            new InputCardItem({
+              title: $r('app.string.index_page_config_digits'),
+              value: this.digits,
+              placeholder: $r('app.string.please_input'),
+              options: { type: InputType.Number, maxLength: 1 },
+              callback: {
+                onChange: (value) => {
+                  this.digits = value;
+                }
+              }
+            }),
+            new InputCardItem({
+              title: $r('app.string.index_page_config_algorithm'),
+              value: this.algorithm,
+              placeholder: $r('app.string.index_create_page_algorithm_placeholder'),
+              options: { maxLength: 6 },
+              callback: {
+                onChange: (value) => {
+                  this.algorithm = value;
+                }
+              }
+            }),
           ]
         })
 
@@ -119,10 +145,26 @@ struct Index {
                 return;
               }
 
+              const digits = Number(this.digits);
+
+              if (!Number.isInteger(digits) || digits < 6 || digits > 8) {
+                Toast.show({ message: $r('app.string.index_create_page_digits_error') });
+
+                return;
+              }
+
+              const algorithm = this.algorithm.trim().toUpperCase();
+
+              if (algorithm !== 'SHA1' && algorithm !== 'SHA256' && algorithm !== 'SHA512') {
+                Toast.show({ message: $r('app.string.index_create_page_algorithm_error') });
+
+                return;
+              }
+
               const label = `${encodeURIComponent(this.issuer)}:${encodeURIComponent(this.username)}`;
               const uri =
                 `otpauth://totp/${label}?secret=${this.secret}&issuer=${encodeURIComponent(
-                  this.issuer)}&period=${period}`;
+                  this.issuer)}&period=${period}&digits=${digits}&algorithm=${algorithm}`;
 
               hilog.info(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建: %{private}s', uri);
 

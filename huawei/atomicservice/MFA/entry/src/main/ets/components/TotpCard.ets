@@ -42,8 +42,14 @@ export struct TotpCard {
         .layoutWeight(4)
 
         Column() {
+          // 7/8 位码比 6 位宽，宽度受限时自动收窄字号，避免被裁切
           Text(this.runtime.code ?? '')
             .fontSize($r('app.float.code_font_size'))
+            .width('100%')
+            .textAlign(TextAlign.Center)
+            .maxLines(1)
+            .maxFontSize($r('app.float.code_font_size'))
+            .minFontSize($r('app.float.code_font_size_min'))
         }
         .layoutWeight(6)
         // 数字即复制入口：点击右侧区域直接复制，不单列复制图标（列表中视觉突兀）
