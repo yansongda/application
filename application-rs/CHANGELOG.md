@@ -1,3 +1,19 @@
+## [1.22.0] - 2026-10-19
+
+### Added
+
+- feat(api): TOTP 详情接口响应 `config` 新增 `digits`（6~8）与 `algorithm`（SHA1/SHA256/SHA512）字段，确保下发前端的参数与后端算码一致 (#176) ([1863419](https://github.com/yansongda/application/commit/1863419))
+- feat(totp): TOTP 算码改为按数据行 `config` 动态读取 `digits` 与 `algorithm`，存量缺省数据回退 6 位 / SHA1 (#176) ([1863419](https://github.com/yansongda/application/commit/1863419))
+
+### Changed
+
+- refactor(application-http): 合并 `http.rs` 到 `lib.rs`，模块路径调整、对外行为不变 (#166) ([bf8b332](https://github.com/yansongda/application/commit/bf8b332))
+- build(application-rs): 依赖升级 salvo 1.0.1、tokio 1.53.3、reqwest 0.13.5、serde_json 1.0.154、config 0.15.27、bytes 1.12.1、base62 2.2.6 (#176) ([1863419](https://github.com/yansongda/application/commit/1863419))
+
+### Fixed
+
+- fix(totp): 创建 TOTP 时校验 `digits`（仅 6~8）与 `period`（非 0），非法返回 `ParamsTotpUriFormatInvalid`，避免 totp-rs 算码时 panic (#176) ([1863419](https://github.com/yansongda/application/commit/1863419))
+
 ## [1.21.0] - 2026-09-07
 
 ### Added
