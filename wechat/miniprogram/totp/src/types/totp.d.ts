@@ -9,9 +9,15 @@ export interface Item {
   config: ItemConfig;
 }
 
+export type TotpAlgorithm = "SHA1" | "SHA256" | "SHA512";
+
 export interface ItemConfig {
   secret: string;
   period: number;
+  // 后端净化后的验证码位数（6~8）与摘要算法（SHA1/SHA256/SHA512）；
+  // 可选以兼容 PR #176 之前的旧后端响应，读取方按 6 / SHA1 兜底
+  digits?: number;
+  algorithm?: string;
 }
 
 export interface DetailRequest extends RequestData {
@@ -54,6 +60,9 @@ export interface CacheItem {
   username: string;
   secret: string;
   period: number;
+  // 旧版本缓存（PR #176 之前）没有这两个字段：缺省 6 / SHA1 与当时后端强制值一致，无需清缓存
+  digits?: number;
+  algorithm?: string;
 }
 
 export interface TotpCache {

@@ -25,6 +25,10 @@
       "value": "50fp"
     },
     {
+      "name": "code_font_size_min",
+      "value": "24fp"
+    },
+    {
       "name": "icon_font_size",
       "value": "24fp"
     },

@@ -6,6 +6,13 @@ import { Toast } from '../../utils/PromptAction';
 import { Totp } from '../../api/Totp';
 import { Header } from '../../components/Header';
 
+// 摘要算法下拉选项：与后端 Totp::algorithm() 可接受值一致
+const ALGORITHM_OPTIONS: SelectOption[] = [
+  { value: 'SHA1' },
+  { value: 'SHA256' },
+  { value: 'SHA512' }
+];
+
 @Builder
 export function builder() {
   Index()
@@ -15,6 +22,10 @@ export function builder() {
 struct Index {
   @Local
   private period: string = '30';
+  @Local
+  private digits: string = '6';
+  @Local
+  private algorithm: string = 'SHA1';
   @Local
   private issuer?: string = undefined;
   @Local
@@ -70,6 +81,27 @@ struct Index {
                 }
               }
             }),
+            new InputCardItem({
+              title: $r('app.string.index_page_config_digits'),
+              value: this.digits,
+              placeholder: $r('app.string.please_input'),
+              options: { type: InputType.Number, maxLength: 1 },
+              callback: {
+                onChange: (value) => {
+                  this.digits = value;
+                }
+              }
+            }),
+            new InputCardItem({
+              title: $r('app.string.index_page_config_algorithm'),
+              value: this.algorithm,
+              selectOptions: ALGORITHM_OPTIONS,
+              callback: {
+                onChange: (value) => {
+                  this.algorithm = value;
+                }
+              }
+            }),
           ]
         })
 
@@ -119,10 +151,20 @@ struct Index {
                 return;
               }
 
+              const digits = Number(this.digits);
+
+              if (!Number.isInteger(digits) || digits < 6 || digits > 8) {
+                Toast.show({ message: $r('app.string.index_create_page_digits_error') });
+
+                return;
+              }
+
+              const algorithm = this.algorithm;
+
               const label = `${encodeURIComponent(this.issuer)}:${encodeURIComponent(this.username)}`;
               const uri =
                 `otpauth://totp/${label}?secret=${this.secret}&issuer=${encodeURIComponent(
-                  this.issuer)}&period=${period}`;
+                  this.issuer)}&period=${period}&digits=${digits}&algorithm=${algorithm}`;
 
               hilog.info(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建: %{private}s', uri);
 

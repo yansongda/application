@@ -4,11 +4,30 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../../App';
 import { Toast } from '../../utils/PromptAction';
 import { Totp } from '../../api/Totp';
-import { TOTP } from '@yansongda/otp';
+import { OtpAlgorithm, TOTP } from '@yansongda/otp';
 
 // TOTP 条目运行时（端内算码 + 周期倒计时）。
 // 服务端未返回周期/进度时的兜底值（秒）
 export const DEFAULT_PERIOD: number = 30;
+
+// 与后端 Totp::digits()/algorithm() 的兜底一致：仅在 6~8 位 / SHA1|SHA256|SHA512 时采用下发值
+const DEFAULT_DIGITS: number = 6;
+const DEFAULT_ALGORITHM: OtpAlgorithm = OtpAlgorithm.SHA1;
+
+function normalizeDigits(digits: number | undefined): number {
+  return digits === 7 || digits === 8 ? digits : DEFAULT_DIGITS;
+}
+
+function normalizeAlgorithm(algorithm: string | undefined): OtpAlgorithm {
+  switch (algorithm) {
+    case 'SHA256':
+      return OtpAlgorithm.SHA256;
+    case 'SHA512':
+      return OtpAlgorithm.SHA512;
+    default:
+      return DEFAULT_ALGORITHM;
+  }
+}
 
 @ObservedV2
 export class ItemRuntime {
@@ -192,7 +211,12 @@ export class ItemRuntime {
 
     if ('undefined' !== typeof secret && secret.length > 0) {
       try {
-        const code: string = new TOTP({ secret: secret, period: this._config.period }).generate();
+        const code: string = new TOTP({
+          secret: secret,
+          period: this._config.period,
+          digits: normalizeDigits(this._config.digits),
+          algorithm: normalizeAlgorithm(this._config.algorithm)
+        }).generate();
 
         if (seq === this._computeSeq) {
           this._code = code;

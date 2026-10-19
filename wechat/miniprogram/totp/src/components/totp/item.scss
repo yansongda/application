@@ -36,6 +36,15 @@
       flex: 3;
       font-size: 50px;
       text-align: center;
+
+      // 7/8 位验证码按位数收窄字号，避免窄屏被裁切（6 位维持原字号）
+      &.code-7 {
+        font-size: 42px;
+      }
+
+      &.code-8 {
+        font-size: 36px;
+      }
     }
   }
 

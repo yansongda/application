@@ -3,6 +3,8 @@
 > **时间**：2026-10-05
 > **作者**：DeepSeek V4.1 Flash + yansongda
 > **状态**：经过人工审核确认
+>
+> **现状更新（2026-10-19）**：后端 PR #176 起 TOTP `config` 已支持并下发 `digits`（6~8）与 `algorithm`（SHA1/SHA256/SHA512）；元服务端内算码改为按后端净化后的参数透传给 `@yansongda/otp`（旧响应缺字段时回退 6/SHA1）。下文「强制 SHA1 + 6 位、忽略 URI 中 algorithm/digits」的描述仅代表当时的实现状态。
 
 ## 1. 背景与问题
 

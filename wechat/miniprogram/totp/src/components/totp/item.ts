@@ -11,6 +11,14 @@ Component({
       type: Number,
       value: 30,
     },
+    digits: {
+      type: Number,
+      value: 6,
+    },
+    algorithm: {
+      type: String,
+      value: "SHA1",
+    },
   },
 
   data: {
@@ -53,7 +61,13 @@ Component({
 
       try {
         this.setData({
-          code: computeCode(secret, this.data.period, Date.now()),
+          code: computeCode(
+            secret,
+            this.data.period,
+            this.data.digits,
+            this.data.algorithm,
+            Date.now(),
+          ),
         });
       } catch (_e: unknown) {
         this.setData({ code: "------" });

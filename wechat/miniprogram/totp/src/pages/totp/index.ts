@@ -147,6 +147,8 @@ Page({
           username: item.username,
           secret: item.config.secret,
           period: item.config.period,
+          digits: item.config.digits,
+          algorithm: item.config.algorithm,
         });
       })
       .catch((e: HttpError) =>

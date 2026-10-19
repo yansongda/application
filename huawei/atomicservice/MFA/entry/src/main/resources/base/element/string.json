@@ -81,6 +81,14 @@
       "value": "更新周期"
     },
     {
+      "name": "index_page_config_digits",
+      "value": "验证码位数"
+    },
+    {
+      "name": "index_page_config_algorithm",
+      "value": "摘要算法"
+    },
+    {
       "name": "index_page_edit_issuer_placeholder",
       "value": "请输入发行方"
     },
@@ -123,6 +131,10 @@
     {
       "name": "index_create_page_period_error",
       "value": "请输入正确的更新周期（正整数秒）"
+    },
+    {
+      "name": "index_create_page_digits_error",
+      "value": "验证码位数仅支持 6、7、8 位"
     },
     {
       "name": "index_index_page_add_by_scan",

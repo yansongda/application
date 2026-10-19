@@ -5,10 +5,14 @@
 // 故下面常量必须与那侧变量名逐字一致；写错不会编译报错，只会静默不刷新。
 // 空态不单独注入标记字段，卡片侧以 count == '0' 推导。
 import { Context } from '@kit.AbilityKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { formBindingData, formProvider } from '@kit.FormKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Snapshot, SnapshotData } from '../../utils/Form';
 import { LogDomain } from '../../App';
+
+// formProvider.updateForm 错误码：要操作的卡片 ID 不存在（本地残留了已失效的 formId）
+const ERR_FORM_ID_NOT_EXIST: number = 16501001;
 
 // 注入字段名（= 卡片侧 @Local 变量名）
 export const FORM_FIELD_COUNT: string = 'count';
@@ -35,7 +39,8 @@ export class FormBridge {
     FormBridge.push(context);
   }
 
-  // 主动推送最新快照；formIds 缺省时推送所有已添加卡片；失败仅记日志，不打断主流程
+  // 主动推送最新快照；formIds 缺省时推送所有已添加卡片；失败仅记日志，不打断主流程。
+  // 系统侧已不存在该卡片（16501001）时清理本地 formId，避免每次启动/刷新重复失败。
   static push(context: Context, formIds?: string[]): void {
     const formTargets: string[] = formIds ?? Snapshot.listFormIds(context);
 
@@ -52,7 +57,17 @@ export class FormBridge {
     formTargets.forEach((formId: string): void => {
       formProvider.updateForm(formId, data).then(() => {
         hilog.info(LogDomain.MODELS, 'models/form/FormBridge', '卡片推送成功: formId=%{public}s', formId);
-      }).catch((e: Error) => {
+      }).catch((e: BusinessError) => {
+        // 16501001 = 要操作的卡片 ID 不存在：常见于卡片被移除但 onRemoveForm 未回调、
+        // 调试替换安装或卡片名变更后旧 formId 失效；属陈旧数据，清理后不再重试
+        if (e.code === ERR_FORM_ID_NOT_EXIST) {
+          Snapshot.removeFormId(context, formId);
+          hilog.warn(LogDomain.MODELS, 'models/form/FormBridge',
+            '卡片已不存在，已清理 formId: formId=%{public}s', formId);
+
+          return;
+        }
+
         hilog.error(LogDomain.MODELS, 'models/form/FormBridge', '卡片推送失败: formId=%{public}s, err=%{public}s',
           formId, JSON.stringify(e));
       });

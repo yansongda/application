@@ -31,6 +31,10 @@ struct Detail {
             Text(this.runtime?.code ?? $r('app.string.index_detail_page_value_unknown'))
               .textAlign(TextAlign.Center)
               .fontSize(70)
+              .width('100%')
+              .maxLines(1)
+              .maxFontSize(70)
+              .minFontSize(40)
               .margin({ top: 20 })
 
             Button($r('app.string.index_detail_page_copy'))
@@ -74,6 +78,14 @@ struct Detail {
               new InfoCardItem({
                 title: $r('app.string.index_page_config_period'),
                 value: (this.runtime?.config.period ?? '30').toString() + 's',
+              }),
+              new InfoCardItem({
+                title: $r('app.string.index_page_config_digits'),
+                value: (this.runtime?.config.digits ?? 6).toString() + ' 位',
+              }),
+              new InfoCardItem({
+                title: $r('app.string.index_page_config_algorithm'),
+                value: this.runtime?.config.algorithm ?? 'SHA1',
               }),
             ]
           })

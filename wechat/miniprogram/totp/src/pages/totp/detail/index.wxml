@@ -22,6 +22,8 @@
     <view class="section-title">配置信息</view>
     <t-cell-group theme="card">
       <t-cell title="更新周期" note="{{config.period}}s" hover></t-cell>
+      <t-cell title="验证码位数" note="{{config.digits}} 位" hover></t-cell>
+      <t-cell title="摘要算法" note="{{config.algorithm}}" hover></t-cell>
     </t-cell-group>
   </view>
 </view>
