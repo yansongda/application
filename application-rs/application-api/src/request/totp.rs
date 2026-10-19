@@ -32,6 +32,7 @@ pub struct DetailResponse {
 pub struct DetailResponseConfig {
     pub secret: String,
     pub period: u64,
+    pub digits: u8,
 }
 
 impl TryFrom<Totp> for DetailResponse {
@@ -56,6 +57,7 @@ impl From<TotpConfig> for DetailResponseConfig {
         Self {
             secret: config.secret.clone(),
             period: config.period,
+            digits: config.digits,
         }
     }
 }

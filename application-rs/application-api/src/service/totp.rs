@@ -57,6 +57,18 @@ pub async fn create(
         ErrorCode::ParamsTotpParseFailed
     })?;
 
+    // totp-rs 仅在生成时对 digits/step 做隐式处理：digits 越界会 panic，step 为 0 会除零 panic，
+    // 故必须在入库前拦截（from_url_unchecked 不做校验）。
+    if !totp::is_supported_digits(totp.digits()) || totp.step() == 0 {
+        error!(
+            "TOTP 链接参数非法: digits = {}, period = {}",
+            totp.digits(),
+            totp.step()
+        );
+
+        return Err(ErrorCode::ParamsTotpUriFormatInvalid);
+    }
+
     totp::insert(totp::CreatedTotp {
         user_id: access_token.user_id,
         sort: None,
@@ -65,6 +77,7 @@ pub async fn create(
         config: totp::TotpConfig {
             period: totp.step(),
             secret: totp.secret().to_base32(),
+            digits: totp.digits(),
         },
     })
     .await?
