@@ -6,6 +6,13 @@ import { Toast } from '../../utils/PromptAction';
 import { Totp } from '../../api/Totp';
 import { Header } from '../../components/Header';
 
+// 摘要算法下拉选项：与后端 Totp::algorithm() 可接受值一致
+const ALGORITHM_OPTIONS: SelectOption[] = [
+  { value: 'SHA1' },
+  { value: 'SHA256' },
+  { value: 'SHA512' }
+];
+
 @Builder
 export function builder() {
   Index()
@@ -88,8 +95,7 @@ struct Index {
             new InputCardItem({
               title: $r('app.string.index_page_config_algorithm'),
               value: this.algorithm,
-              placeholder: $r('app.string.index_create_page_algorithm_placeholder'),
-              options: { maxLength: 6 },
+              selectOptions: ALGORITHM_OPTIONS,
               callback: {
                 onChange: (value) => {
                   this.algorithm = value;
@@ -153,13 +159,7 @@ struct Index {
                 return;
               }
 
-              const algorithm = this.algorithm.trim().toUpperCase();
-
-              if (algorithm !== 'SHA1' && algorithm !== 'SHA256' && algorithm !== 'SHA512') {
-                Toast.show({ message: $r('app.string.index_create_page_algorithm_error') });
-
-                return;
-              }
+              const algorithm = this.algorithm;
 
               const label = `${encodeURIComponent(this.issuer)}:${encodeURIComponent(this.username)}`;
               const uri =

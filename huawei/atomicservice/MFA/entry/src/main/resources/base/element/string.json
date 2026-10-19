@@ -137,14 +137,6 @@
       "value": "验证码位数仅支持 6、7、8 位"
     },
     {
-      "name": "index_create_page_algorithm_error",
-      "value": "摘要算法仅支持 SHA1、SHA256、SHA512"
-    },
-    {
-      "name": "index_create_page_algorithm_placeholder",
-      "value": "SHA1 / SHA256 / SHA512"
-    },
-    {
       "name": "index_index_page_add_by_scan",
       "value": "扫码添加"
     },
