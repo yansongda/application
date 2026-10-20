@@ -218,6 +218,7 @@ export struct TotpListView {
     }
     .width('100%')
     .layoutWeight(1)
+    .contentEndOffset(80)
     .sticky(this.isGrouped ? StickyStyle.Header : StickyStyle.None)
   }
 
