@@ -28,7 +28,7 @@ MFA/
 - `components/`：公共组件；页面级组件按 feature 分子目录（如 `components/index/`）
 - `api/`：接口调用
 - `models/`：模型；按 feature 分子目录（`models/form/` 服务卡片相关、`models/totp/` TOTP 运行时、`models/security/` 安全设置与应用锁）
-- `utils/`：工具函数
+- `utils/`：工具函数（`utils/Prefs.ets` 为 **preferences 唯一入口**，见「本地存储」节）
 - `themes/`：主题定义
 - `types/`：类型定义
 
@@ -106,7 +106,7 @@ MFA/
 - 弹窗/对话框统一用组件内的成员 `@Builder` 方法：**不要在 `Dialog.open/execute`、`Toast.execute` 等自定义函数的闭包里调用全局 `@Builder` 函数**（编译器不会给全局 builder 注入组件上下文，运行时报 `Cannot read property observeComponentCreation2 of undefined`）；因此加载/失败/重试弹窗各页保留自己的成员实现，不做跨页抽取
 - 未确认工程已有命令前，不凭空引入新的构建或测试流程，优先遵循工程内现有配置文件
 - 窗口隐私模式（防截屏）**只允许**经 `utils/PrivacyWindow.ets` 的 `apply(on, cause)` 修改；功能层统一走 `models/security/PrivacyWindow.ets`（`apply()` / `occlude()`），**禁止**在页面/组件里直接调用 `window.setWindowPrivacyMode`（同一主窗口实例上混用全局与页面级开关会互相破坏，官方 FAQ 有记载）。
-- 安全设置（防截屏 / 应用锁）持久化：`preferences` 库 `security` 的**单 key** `settings`，值为带 schema 版本 `v` 的 JSON（`{"v":1,"privacyWindow":true,"appLock":false}`），读写统一经 `models/security/Store.ets`（`load` / `patch`；写失败返回 `false` 且**不改内存**）；运行态（`AppLock.locked`、`PrivacyWindow` 的临时遮挡）**绝不落盘**。新增设置项时递增 `v`，并在 `Store.decode` 内做版本分支。这份 JSON 即将来同步到后端的 DTO，字段名不要随意改。
+- 安全设置（防截屏 / 应用锁）持久化：单库 `mfa` 下的**逐字段 key** `security.privacyWindow` / `security.appLock`（boolean），**每项设置只在自己的模型里读写**（`models/security/PrivacyWindow.ets` / `AppLock.ets` 的 `load` / `setEnabled`，均经 `utils/Prefs.ets`），不设中间 Store 层；写失败返回 `false` 且**不改内存**（先落盘、成功才改内存）；运行态（`AppLock.locked`、`PrivacyWindow` 的临时遮挡）**绝不落盘**。逐字段写入不需要 schema 版本号：缺省即默认值，**新增设置项 = 在 `utils/Prefs.ets` 登记一个 key + 在对应模型的 `load`/`setEnabled` 里各加一处读写 + 加一个默认值常量**。**一次只写一个 key**（逐 key 写无跨字段原子性）。将来若需把设置同步到后端，再引入聚合层（读两个 key 组 DTO），不在模型里预埋。
 - `models/security/` 下的模型统一契约：`instance()` 单例 + `load(context)` + `get enabled` + `setEnabled(context, on): boolean`；页面只读 `enabled` / `locked`，写入一律走 `setEnabled`（**先落盘、成功才改内存**）。
 - **应用锁状态不变式**（`models/security/AppLock.ets`，安全关键）：`_verifying` 只在发起前置 `true`（**1 处**），复位必须恰为 **4 处**（`reset` / `onBackground` / 结果回调 / 同步异常兜底）；`_instance` 复位同为 4 处（结果回调内仅当 `=== instance`）；`_lastFinishedAt` 只在结果回调与同步异常里更新（**发起阶段不写**，否则失败分支会被自身 3 秒防抖挡住）；`_generation` 在发起时递增，另有三处作废点（`reset` / `onBackground` / 同步异常）。任一出口漏复位 `_verifying` = 「遮罩在、点解锁永远 `SKIPPED`」= 用户被锁死，属阻断级缺陷。改 `verify()` 后用下列数字复核（变了就要能解释原因）：
 
@@ -124,7 +124,8 @@ MFA/
 - **注入契约**：卡片侧 `@Local` 变量名必须与 `models/form/FormBridge.ets` 的 `FORM_FIELD_*` 常量逐字一致。写错/改名**不会编译报错，只会静默不刷新**，改一侧必须同步改另一侧。
 - 卡片状态管理 V2 自 **API 23（HarmonyOS 6.1.0）**起支持，因此 `build-profile.json5` 的 `compatibleSdkVersion` 不得低于 `6.1.0(23)`。
 - 卡片内「能用哪些组件/属性」**编译期不校验**（SDK `ets-loader/form_components/*.json` 白名单不强制，如 `SymbolGlyph` 不在白名单也能编过），新增组件或属性一律以**真机验证**为准；优先复用已在卡片中跑通的能力（`Text` / `Row` / `Column` / `Blank` / `Divider` / `Image` / `Progress` / 通用属性）。
-- **跨进程 preferences 必须清缓存后再读**：主应用与卡片提供方（`FormExtensionAbility`）是两个进程，`preferences` 实例按进程缓存在内存，某进程首次 `getPreferences` 后不再读持久化文件 → 看不到另一个进程刚写入的值。`utils/Form.ets`（`Snapshot`）已统一走 `prefs()`（内部 `removePreferencesFromCacheSync` 后再 `getPreferencesSync`）；**任何新增的跨进程 preferences 读写都必须复用该路径**，否则会出现「卡片添加后主应用读不到 formId → 不推送 → 卡片数据永远停在添加卡片那一刻」这类静默故障。
+- **本地存储唯一入口是 `utils/Prefs.ets`（单库 + GSKV）**：全应用只有一个 preferences 库 `mfa`，`storageType` 首选 **GSKV**——主应用与卡片提供方（`FormExtensionAbility`）是两个进程，官方文档明确 XML 模式「不支持在多进程场景下使用」（文件损坏 + 数据丢失），GSKV「支持多进程并发读写」且逐 key 实时落盘。GSKV 不可用时（预览器 / 跨平台构建）`Prefs` 回落 XML（单进程），此时 `crossProcess: true` 会先 `removePreferencesFromCacheSync` 再读，保留旧的跨进程可见性语义。**任何新增 preferences 读写都必须经 `Prefs`**，禁止新增第二个库名，禁止在卡片内直接读 `preferences`。库名的存储类型创建后**不可切换**（XML 文件与 `.db` 互斥），故不要给已存在的库改名复用、也不要手工指定与既有文件不同的 `storageType`。
+- **库 `mfa` 的 key 布局（唯一真相源 `utils/Prefs.ets`）**：`security.privacyWindow` / `security.appLock`（安全设置，主应用独写）、`form.snapshot`（卡片快照 object，主应用独写 / 卡片进程只读）、`form.id.<formId>`（**逐 formId 一个 key**，加卡删卡都是单 key 写删，避免两进程读改写同一数组丢更新）。新增数据一律先在此登记 key 常量，避免跨域撞名。
 - 卡片渲染在系统进程、与提供方隔离，**不得**在卡内直接读 `preferences`、算码或放密钥；跨进程数据只能以字符串经 `formBindingData` 传递。
 - 卡内交互**只用 `postCardAction` 的 `router` 事件**（不用 `message` / `call`）；入口用 `Text` + 通用属性（背景色 / 圆角 / `onClick`）充当按钮，组件与属性支持一律以真机为准。整卡 `onClick` 与子元素 `onClick` 并存时依赖「子组件优先消费」，真机需确认无冒泡重复触发。
 - **卡片意图消费门禁**：卡片意图（`FormIntent`）统一由 `Index.consumeFormIntent()` 消费；未登录、应用锁锁定、页面未激活时必须保留 pending，不得执行扫码/跳转。`AppLock.unlockVersion` 仅用于解锁后重试（`locked` 是 getter，`@Monitor` 监听不到）；新增解锁入口必须让 `unlock()` 自增该版本。pending 意图超过 5 分钟 TTL 直接丢弃，避免取消解锁/登录后很久又突然触发。

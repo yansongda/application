@@ -9,13 +9,16 @@ import { AppStorageV2, window } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
 import { PrivacyWindow as PrivacyWindowWriter } from '../../utils/PrivacyWindow';
-import { SecurityPatch, SecuritySettings, Store } from './Store';
+import { KEY_SECURITY_PRIVACY_WINDOW, Prefs } from '../../utils/Prefs';
+
+// 用户设置默认开 = fail-closed（用户在不知情时被截屏的风险 > 自己被挡的风险）
+const DEFAULT_PRIVACY_WINDOW: boolean = true;
 
 @ObservedV2
 export class PrivacyWindow {
-  // 用户设置（持久化）：默认开 = fail-closed（用户在不知情时被截屏的风险 > 自己被挡的风险）
+  // 用户设置（持久化：单库 `mfa` 的 key `security.privacyWindow`，经 utils/Prefs.ets 读写）
   @Trace
-  private _enabled: boolean = true;
+  private _enabled: boolean = DEFAULT_PRIVACY_WINDOW;
 
   // 退后台的临时遮挡（**不持久化**）：由应用锁驱动，遮住多任务卡片快照里的验证码明文
   private _occluded: boolean = false;
@@ -35,9 +38,7 @@ export class PrivacyWindow {
 
   // 冷启动读设置（由 EntryAbility.onCreate 调用一次）
   load(context: Context): void {
-    const settings: SecuritySettings = Store.load(context);
-
-    this._enabled = settings.privacyWindow;
+    this._enabled = Prefs.getBoolean(Prefs.open(context), KEY_SECURITY_PRIVACY_WINDOW, DEFAULT_PRIVACY_WINDOW);
     hilog.info(LogDomain.MODELS, 'models/security', 'screen_protect_load: enabled=%{public}s',
       this._enabled.toString());
   }
@@ -45,9 +46,7 @@ export class PrivacyWindow {
   // 设置该项：**先落盘、成功才改内存**——失败直接 false 且内存不变（调用方提示用户），
   // 因此不需要「先乐观改内存再回滚」那套闭包。成功后立即落地到窗口，页面无需再手工 apply。
   setEnabled(context: Context, on: boolean): boolean {
-    const patch: SecurityPatch = { privacyWindow: on };
-
-    if (!Store.patch(context, patch)) {
+    if (!Prefs.putBoolean(Prefs.open(context), KEY_SECURITY_PRIVACY_WINDOW, on)) {
       hilog.error(LogDomain.MODELS, 'models/security', 'screen_protect_save_failed: enabled=%{public}s',
         on.toString());
 
