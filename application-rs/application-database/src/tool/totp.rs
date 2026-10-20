@@ -120,6 +120,12 @@ pub struct TotpConfig {
     /// 摘要算法名称，缺省（存量数据）为 SHA1；仅 SHA1/SHA256/SHA512 有效
     #[serde(default = "default_algorithm")]
     pub algorithm: String,
+    /// 列表分组标签：存量数据缺省为空；当前仅允许 1 个，数组结构为后续多标签预留
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// 是否置顶：存量数据缺省为 false
+    #[serde(default)]
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -190,6 +196,18 @@ pub async fn update_username(id: u64, username: &str) -> Result<()> {
     let pool_ref = Pool::mysql("tool")?;
 
     let _ = update!(pool_ref, sql, username, id);
+
+    Ok(())
+}
+
+/// 更新整份 `config`：标签/置顶与算码参数共处一列，采用读-改-写。
+/// 单用户 MFA 场景下标签/置顶并发编辑概率极低，接受 last-write-wins。
+pub async fn update_config(id: u64, config: &TotpConfig) -> Result<()> {
+    let sql = "update tool.totp set config = ? where id = ?";
+    let pool_ref = Pool::mysql("tool")?;
+    let config = Json(config);
+
+    let _ = update!(pool_ref, sql, &config, id);
 
     Ok(())
 }
@@ -290,6 +308,8 @@ mod tests {
                 period: 30,
                 digits,
                 algorithm: algorithm.to_string(),
+                tags: Vec::new(),
+                pinned: false,
             }),
             created_at: Local::now(),
             updated_at: Local::now(),
@@ -312,6 +332,38 @@ mod tests {
         let config: TotpConfig = serde_json::from_str(&json).unwrap();
 
         assert_eq!(config.digits, 8);
+    }
+
+    /// 测试场景：存量行 config 无 tags/pinned → 验证 serde 默认值 → 预期空数组 / false
+    #[test]
+    fn totp_config_legacy_row_defaults_tags_and_pinned() {
+        let json = format!(r#"{{"secret":"{SECRET}","period":30}}"#);
+        let config: TotpConfig = serde_json::from_str(&json).unwrap();
+
+        assert!(config.tags.is_empty());
+        assert!(!config.pinned);
+    }
+
+    /// 测试场景：config 显式写入 tags/pinned → 验证按存储值反序列化 → 预期保留
+    #[test]
+    fn totp_config_deserializes_tags_and_pinned() {
+        let json = format!(r#"{{"secret":"{SECRET}","period":30,"tags":["工作"],"pinned":true}}"#);
+        let config: TotpConfig = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(config.tags, vec!["工作".to_string()]);
+        assert!(config.pinned);
+    }
+
+    /// 测试场景：config 含未知字段（旧版本/其他客户端写入）→ 验证忽略 → 预期仍可反序列化
+    #[test]
+    fn totp_config_ignores_unknown_fields() {
+        let json = format!(
+            r#"{{"secret":"{SECRET}","period":30,"tags":["工作"],"pinned":true,"future":1}}"#
+        );
+        let config: TotpConfig = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(config.tags, vec!["工作".to_string()]);
+        assert!(config.pinned);
     }
 
     /// 测试场景：存量行 config 无 algorithm → 验证 serde 默认值 → 预期 SHA1

@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Added
+
+- feat(api): TOTP 列表/详情/创建响应新增 `tags` / `pinned`，新增 `POST /api/v1/totp/edit/tags` 与 `POST /api/v1/totp/edit/pinned`；标签与置顶存储在 `config` JSON 中，无需数据库迁移
+
 ## [1.22.0] - 2026-10-19
 
 ### Added
