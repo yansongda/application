@@ -23,8 +23,8 @@ yansongda-application/
 ├── wechat/miniprogram/
 │   ├── yansongda/                  # 主微信小程序（Bun）
 │   └── totp/                       # TOTP 独立微信小程序（Bun）
-└── huawei/atomicservice/MFA/       # 华为元服务（ohpm / Hvigor）
-    └── entry/src/main/ets/         # ArkTS 业务代码
+├── huawei/atomicservice/MFA/       # 华为元服务（ohpm / Hvigor）
+│   └── entry/src/main/ets/         # ArkTS 业务代码
 ```
 
 ## WHERE TO LOOK
