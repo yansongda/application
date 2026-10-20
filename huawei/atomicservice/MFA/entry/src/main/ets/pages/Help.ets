@@ -18,7 +18,11 @@ struct Help {
           this.section(
             $r('sys.symbol.rectangle_on_rectangle'),
             $r('app.string.user_help_page_card_title'),
-            [$r('app.string.user_help_page_card_tip'), $r('app.string.user_help_page_card_copy')]
+            [
+              $r('app.string.user_help_page_card_tip'),
+              $r('app.string.user_help_page_card_negative_tip'),
+              $r('app.string.user_help_page_card_copy')
+            ]
           )
           this.section(
             $r('sys.symbol.arrow_2_circlepath'),
