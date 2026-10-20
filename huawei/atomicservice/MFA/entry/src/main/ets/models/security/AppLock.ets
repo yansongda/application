@@ -1,4 +1,4 @@
-// 应用锁：① 用户设置 enabled（持久化，经 models/security/Store.ets）
+// 应用锁：① 用户设置 enabled（持久化：单库 `mfa` 的 key `security.appLock`，经 utils/Prefs.ets 读写）
 // ② 运行态状态机（locked / 验证编排 / 防锁死降级）。
 // 运行态**绝不落盘**——locked 一旦落盘，冷启动会读到上次的未锁定态，是安全 bug（技术设计 §3.1）；
 // 因此只走 AppStorageV2.connect（进程内），进程结束即归零，locked 默认 false。
@@ -11,7 +11,10 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LogDomain } from '../../App';
 import { shouldRelock, shouldDebounceVerify } from '../../utils/AppLockPolicy';
-import { SecurityPatch, Store } from './Store';
+import { KEY_SECURITY_APP_LOCK, Prefs } from '../../utils/Prefs';
+
+// 用户设置默认关：开启后「重新打开或离开 1 分钟后」需验证身份
+const DEFAULT_APP_LOCK: boolean = false;
 
 export enum VerifyOutcome {
   SUCCESS,
@@ -38,7 +41,7 @@ interface ChallengeResult {
 export class AppLock {
   // 用户设置（持久化）：默认关。开启后「重新打开或离开 1 分钟后」需验证身份
   @Trace
-  private _enabled: boolean = false;
+  private _enabled: boolean = DEFAULT_APP_LOCK;
 
   // 运行态（不持久化）：驱动 Home 的遮罩渲染与返回键消费
   @Trace
@@ -69,16 +72,14 @@ export class AppLock {
 
   // 冷启动读设置（由 EntryAbility.onCreate 调用一次，必须早于 onForeground）
   load(context: Context): void {
-    this._enabled = Store.load(context).appLock;
+    this._enabled = Prefs.getBoolean(Prefs.open(context), KEY_SECURITY_APP_LOCK, DEFAULT_APP_LOCK);
     hilog.info(LogDomain.MODELS, 'models/security', 'app_lock_load: appLock=%{public}s', this._enabled.toString());
   }
 
   // 开关写入：**先落盘、成功才改内存**——失败返回 false 且内存不变（调用方提示用户）。
   // 防锁死降级（设备确无凭据）也走这里，落盘失败时内存仍为 true，仅日志留痕，不阻塞解锁
   setEnabled(context: Context, on: boolean): boolean {
-    const patch: SecurityPatch = { appLock: on };
-
-    if (!Store.patch(context, patch)) {
+    if (!Prefs.putBoolean(Prefs.open(context), KEY_SECURITY_APP_LOCK, on)) {
       hilog.error(LogDomain.MODELS, 'models/security', 'app_lock_save_failed: appLock=%{public}s', on.toString());
 
       return false;

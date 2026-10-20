@@ -6,7 +6,7 @@
 
 ### Changed
 
-- 本地存储收敛为单一 preferences 库 `mfa`（GSKV 模式，支持主应用与卡片提供方多进程并发读写）：安全设置改为逐字段 key（不再有 schema 版本号与整份 JSON）、卡片 formId 改为逐 key 存储，读写统一经 `utils/Prefs.ets`，用户可见行为无变化
+- 本地存储收敛为单一 preferences 库 `mfa`（GSKV 模式，支持主应用与卡片提供方多进程并发读写）：安全设置改为逐字段 key（不再有 schema 版本号与整份 JSON，读写下沉到各自模型、去掉 `Store` 中间层）、卡片 formId 改为逐 key 存储，读写统一经 `utils/Prefs.ets`，用户可见行为无变化
 - 环境地址改为由构建模式（debug/release）在编译期注入，移除 `module.json5` 中需手工解除注释的 `env` metadata，正式包不再有误连测试环境的可能
 - 端内验证码计算改用 `@yansongda/otp` 库实现，替换自研 TOTP 算法；算法与输出不变（SHA1 + 6 位，仍与后端一致），用户可见行为无变化 (#173)
 
