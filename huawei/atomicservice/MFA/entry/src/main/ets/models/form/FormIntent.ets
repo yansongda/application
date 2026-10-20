@@ -9,6 +9,9 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
 import { FORM_ROUTE_PARAM, FormRoute, parseFormRoute } from './FormRoute';
 
+// 待处理卡片意图的保质期：解锁/登录等待超过该时长后不再消费，避免陈旧意图突然触发
+export const FORM_INTENT_TTL_MS: number = 5 * 60 * 1000;
+
 @ObservedV2
 export class FormIntent {
   // 卡片意图路由；缺省（普通点卡）视为仅打开应用
@@ -23,6 +26,35 @@ export class FormIntent {
   // 避免用户取消解锁/登录后很久又突然触发
   @Trace
   createdAt: number = 0;
+
+  // 返回仍可消费的路由：无意图 / 已过期 → undefined；过期时顺手清空。
+  // 不判断登录、应用锁、页面激活态，这些由调用方决定。
+  pendingRoute(now: number = Date.now()): FormRoute | undefined {
+    const route: FormRoute | undefined = this.route;
+
+    if ('undefined' === typeof route || !(this.version > 0)) {
+      return undefined;
+    }
+
+    if (now - this.createdAt > FORM_INTENT_TTL_MS) {
+      this.route = undefined;
+      hilog.info(LogDomain.MODELS, 'models/form/FormIntent', '卡片意图已过期: route=%{public}s', route);
+
+      return undefined;
+    }
+
+    return route;
+  }
+
+  // 消费成功（或主动放弃）后清空；version 保留，不影响 @Monitor 语义
+  clear(): void {
+    this.route = undefined;
+  }
+
+  // 纯策略：页面激活 + 未锁定 + 已登录；模型不反向依赖 Auth/AppLock
+  static canConsume(active: boolean, locked: boolean, authorized: boolean): boolean {
+    return active && !locked && authorized;
+  }
 
   // 按官方契约解析 want：params 被整体包装为 want.parameters.params（JSON 字符串）。
   // params 不存在 → 返回 undefined（普通点卡，无快捷意图）；未知路由 / JSON.parse 失败视为无意图，打点后忽略。

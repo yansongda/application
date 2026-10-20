@@ -23,9 +23,6 @@ import { FormRoute } from '../../models/form/FormRoute';
 import { Authorization, State } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
 
-// 待处理卡片意图的保质期：解锁/登录等待超过该时长后不再消费，避免陈旧意图突然触发
-const INTENT_TTL_MS: number = 5 * 60 * 1000;
-
 @Builder
 export function builder() {
   Index()
@@ -397,21 +394,15 @@ export struct Index {
 
   // 消费卡片意图：FormRoute.SCAN 直达扫码添加、FormRoute.INPUT 直达手动输入添加；消费一次即清空，避免重复触发
   private consumeFormIntent(): void {
-    const route: FormRoute | undefined = this.formIntent.route;
+    const route: FormRoute | undefined = this.formIntent.pendingRoute();
 
-    if ('undefined' === typeof route || !(this.formIntent.version > 0)) {
-      return;
-    }
-
-    if (Date.now() - this.formIntent.createdAt > INTENT_TTL_MS) {
-      this.formIntent.route = undefined;
-      hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '卡片意图已过期: route=%{public}s', route);
-
+    if ('undefined' === typeof route) {
       return;
     }
 
     // 门禁未满足时保留 route，等解锁（unlockVersion）或登录后回到页面再重试
-    if (!this.isActive || this.appLock.locked || State.NORMAL !== this.authorization.state()) {
+    if (!FormIntent.canConsume(this.isActive, this.appLock.locked,
+      State.NORMAL === this.authorization.state())) {
       hilog.info(LogDomain.PAGES, AppPagesName.INDEX,
         '卡片意图暂缓: route=%{public}s, active=%{public}s, locked=%{public}s, auth=%{public}d',
         route, this.isActive.toString(), this.appLock.locked.toString(), this.authorization.state());
@@ -419,7 +410,7 @@ export struct Index {
       return;
     }
 
-    this.formIntent.route = undefined;
+    this.formIntent.clear();
 
     if (FormRoute.SCAN === route) {
       this.addByScan().catch(() => {
