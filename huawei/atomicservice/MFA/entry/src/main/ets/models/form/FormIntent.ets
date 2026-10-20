@@ -7,6 +7,7 @@
 import { Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
+import { State } from '../Auth';
 import { FORM_ROUTE_PARAM, FormRoute, parseFormRoute } from './FormRoute';
 
 // 待处理卡片意图的保质期：解锁/登录等待超过该时长后不再消费，避免陈旧意图突然触发
@@ -51,9 +52,9 @@ export class FormIntent {
     this.route = undefined;
   }
 
-  // 纯策略：页面激活 + 未锁定 + 已登录；模型不反向依赖 Auth/AppLock
-  static canConsume(active: boolean, locked: boolean, authorized: boolean): boolean {
-    return active && !locked && authorized;
+  // 纯策略：页面激活 + 未锁定 + 已登录；状态判断收敛在模型内
+  static canConsume(active: boolean, locked: boolean, state: State): boolean {
+    return active && !locked && State.NORMAL === state;
   }
 
   // 按官方契约解析 want：params 被整体包装为 want.parameters.params（JSON 字符串）。

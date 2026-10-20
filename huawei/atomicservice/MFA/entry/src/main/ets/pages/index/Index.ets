@@ -20,7 +20,7 @@ import { TotpListView } from '../../components/index/TotpListView';
 import { FormBridge } from '../../models/form/FormBridge';
 import { FormIntent } from '../../models/form/FormIntent';
 import { FormRoute } from '../../models/form/FormRoute';
-import { Authorization, State } from '../../models/Auth';
+import { Authorization } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
 
 @Builder
@@ -401,8 +401,7 @@ export struct Index {
     }
 
     // 门禁未满足时保留 route，等解锁（unlockVersion）或登录后回到页面再重试
-    if (!FormIntent.canConsume(this.isActive, this.appLock.locked,
-      State.NORMAL === this.authorization.state())) {
+    if (!FormIntent.canConsume(this.isActive, this.appLock.locked, this.authorization.state())) {
       hilog.info(LogDomain.PAGES, AppPagesName.INDEX,
         '卡片意图暂缓: route=%{public}s, active=%{public}s, locked=%{public}s, auth=%{public}d',
         route, this.isActive.toString(), this.appLock.locked.toString(), this.authorization.state());
