@@ -31,6 +31,7 @@ export default class EntryAbility extends UIAbility {
     const shared: FormIntent = AppStorageV2.connect(FormIntent, () => new FormIntent())!;
 
     shared.route = route;
+    shared.createdAt = Date.now();
     shared.version++;
 
     hilog.info(LogDomain.ABILITY, 'ability/EntryAbility', '卡片意图到达: route=%{public}s', route);

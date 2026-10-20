@@ -1,6 +1,7 @@
 // 卡片意图（主应用侧）：EntryAbility 解析 postCardAction(router) 的 want 参数后写入，
 // Index 页通过 @Monitor('formIntent.version') 感知并消费。
 // 当前路由：'scan' = 直达扫码添加；'input' = 直达手动输入添加页。
+// 未登录 / 应用锁锁定 / 页面未激活时由 Index 暂缓消费，超过 TTL 后丢弃。
 // 注意：postCardAction 的 params 被整体包装为 want.parameters.params（JSON 字符串），不逐键平铺；
 // 日志不得出现 token / 密钥 / 验证码。
 import { Want } from '@kit.AbilityKit';
@@ -16,6 +17,11 @@ export class FormIntent {
   // 每次写入自增，供页面 @Monitor 感知
   @Trace
   version: number = 0;
+
+  // 意图产生时间（毫秒）：超过 TTL 的 pending 意图不再消费，
+  // 避免用户取消解锁/登录后很久又突然触发
+  @Trace
+  createdAt: number = 0;
 
   // 按官方契约解析 want：params 被整体包装为 want.parameters.params（JSON 字符串）。
   // params 不存在 → 返回 undefined（普通点卡，无快捷意图）；JSON.parse 失败视为实现 bug，打点后忽略。
