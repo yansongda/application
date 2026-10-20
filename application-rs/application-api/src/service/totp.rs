@@ -1,5 +1,6 @@
 use crate::request::totp::{
-    DetailResponse, EditIssuerRequestParams, EditUsernameRequestParams, SortItemParams,
+    DetailResponse, EditIssuerRequestParams, EditPinnedRequestParams, EditTagsRequestParams,
+    EditUsernameRequestParams, SortItemParams,
 };
 use application_database::account::access_token;
 use application_database::tool::totp;
@@ -79,6 +80,8 @@ pub async fn create(
             secret: totp.secret().to_base32(),
             digits: totp.digits(),
             algorithm: totp.algorithm().as_str().to_string(),
+            tags: Vec::new(),
+            pinned: false,
         },
     })
     .await?
@@ -109,6 +112,34 @@ pub async fn edit_username(
     totp::update_username(totp.id, params.username.as_str()).await?;
 
     Ok(())
+}
+
+pub async fn edit_tags(
+    access_token: &access_token::AccessToken,
+    params: EditTagsRequestParams,
+) -> Result<()> {
+    let totp = totp::fetch(params.id).await?;
+
+    totp.ensure_permission(access_token.user_id)?;
+
+    let mut config = totp.config.0;
+    config.tags = params.tags;
+
+    totp::update_config(totp.id, &config).await
+}
+
+pub async fn edit_pinned(
+    access_token: &access_token::AccessToken,
+    params: EditPinnedRequestParams,
+) -> Result<()> {
+    let totp = totp::fetch(params.id).await?;
+
+    totp.ensure_permission(access_token.user_id)?;
+
+    let mut config = totp.config.0;
+    config.pinned = params.pinned;
+
+    totp::update_config(totp.id, &config).await
 }
 
 pub async fn delete(access_token: &access_token::AccessToken, id: u64) -> Result<()> {

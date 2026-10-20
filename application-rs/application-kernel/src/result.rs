@@ -39,6 +39,7 @@ pub enum ErrorCode {
     ParamsThirdConfigNotFound = 2019,
     ParamsLoginPlatformThirdIdFormatInvalid = 2020,
     ParamsRefreshTokenNotFound = 2021,
+    ParamsTotpTagsInvalid = 2022,
 
     // 9800 系列：第三方服务错误
     ThirdHttpRequest = 9800,
@@ -102,6 +103,7 @@ impl ErrorCode {
                 "参数错误: 您访问的平台暂不支持,请重试或联系管理员"
             }
             Self::ParamsRefreshTokenNotFound => "参数错误: Refresh Token 未找到",
+            Self::ParamsTotpTagsInvalid => "参数错误: TOTP 标签格式不正确",
             Self::ThirdHttpRequest => "第三方错误: 第三方 API 请求出错,请联系管理员",
             Self::ThirdHttpResponse => "第三方错误: 第三方 API 响应出错,请联系管理员",
             Self::ThirdHttpResponseParse => "第三方错误: 第三方 API 响应解析出错,请联系管理员",

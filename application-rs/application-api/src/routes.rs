@@ -68,7 +68,9 @@ fn api_v1_totp() -> Router {
         .push(
             Router::with_path("/edit")
                 .push(Router::with_path("/username").post(v1::totp::edit_username))
-                .push(Router::with_path("/issuer").post(v1::totp::edit_issuer)),
+                .push(Router::with_path("/issuer").post(v1::totp::edit_issuer))
+                .push(Router::with_path("/tags").post(v1::totp::edit_tags))
+                .push(Router::with_path("/pinned").post(v1::totp::edit_pinned)),
         )
         .push(Router::with_path("/delete").post(v1::totp::delete))
 }
