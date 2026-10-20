@@ -22,6 +22,7 @@ import { FormIntent } from '../../models/form/FormIntent';
 import { FormRoute } from '../../models/form/FormRoute';
 import { Authorization } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
+import { collectTags, countPinned, ItemFilterKind } from '../../utils/ItemFilter';
 
 @Builder
 export function builder() {
@@ -34,6 +35,16 @@ export struct Index {
   private isRefreshing: boolean = false;
   @Local
   private isSortMode: boolean = false;
+  // 搜索 / 筛选 / 分组：只影响本地渲染，不落盘、不发请求
+  @Local
+  private query: string = '';
+  @Local
+  private filterKind: ItemFilterKind = ItemFilterKind.ALL;
+  @Local
+  private filterTag: string = '';
+  @Local
+  private isGrouped: boolean = false;
+  private pinningId: string | undefined = undefined;
   private snapshotIds: string[] = [];
   // 请求去重：避免 onActive 与下拉刷新并发发起 Totp.all()
   private isFetching: boolean = false;
@@ -73,8 +84,33 @@ export struct Index {
             TotpListView({
               itemsRuntime: this.itemsRuntime,
               isSortMode: this.isSortMode,
+              query: this.query,
+              filterKind: this.filterKind,
+              filterTag: this.filterTag,
+              isGrouped: this.isGrouped,
+              onQueryChange: (query: string): void => {
+                this.query = query;
+              },
+              onFilterChange: (kind: ItemFilterKind, tag: string): void => {
+                this.filterKind = kind;
+                this.filterTag = tag;
+                this.isGrouped = false;
+              },
+              onGroupedChange: (grouped: boolean): void => {
+                this.isGrouped = grouped;
+
+                if (grouped) {
+                  this.filterKind = ItemFilterKind.ALL;
+                  this.filterTag = '';
+                }
+              },
               onToggleSort: (): void => {
                 this.toggleSort();
+              },
+              onTogglePin: (id: string): void => {
+                this.togglePin(id).catch(() => {
+                  // 失败已由 Toast 提示，仅避免 unhandled rejection
+                });
               },
               onDetail: (id: string): void => {
                 this.openDetail(id);
@@ -161,7 +197,17 @@ export struct Index {
           this.pages.pushPathByName(AppPagesName.USER_DETAIL, null);
         })
 
-      Text($r("app.string.app_name_short")).fontWeight(FontWeight.Bold).fontSize($r('app.float.title_font_size'))
+      Column({ space: 2 }) {
+        Text($r('app.string.app_name_short'))
+          .fontWeight(FontWeight.Bold)
+          .fontSize($r('app.float.header_title_font_size'))
+
+        Text($r('app.string.user_detail_page_protected', this.itemsRuntime.ids.length))
+          .fontSize($r('app.float.header_stat_font_size'))
+          .fontColor($r('sys.color.font_tertiary'))
+      }
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Center)
     }
     .width('100%')
     .height('100%')
@@ -318,8 +364,39 @@ export struct Index {
   }
 
   private enterSortMode(): void {
+    // 排序作用于完整列表：先清空搜索/筛选/分组，并忽略置顶权重（见 TotpListView.visibleIds）
+    this.query = '';
+    this.filterKind = ItemFilterKind.ALL;
+    this.filterTag = '';
+    this.isGrouped = false;
     this.isSortMode = true;
     this.snapshotIds = [...this.itemsRuntime.ids];
+  }
+
+  // 置顶切换：先请求服务端，成功才改内存；列表按 pinned 重新计算置顶优先顺序
+  private async togglePin(id: string): Promise<void> {
+    if ('undefined' !== typeof this.pinningId) {
+      return;
+    }
+
+    this.pinningId = id;
+
+    const runtime = this.itemsRuntime.get(id);
+    const next = !runtime.pinned;
+
+    try {
+      await Toast.execute(
+        () => Totp.editPinned(id, next),
+        () => this.loadingDialog(),
+        next ? $r('app.string.index_index_page_pinned_success') : $r('app.string.index_index_page_unpinned_success')
+      );
+
+      runtime.pinned = next;
+    } catch (e) {
+      // Toast.execute 已提示失败，内存保持不变
+    } finally {
+      this.pinningId = undefined;
+    }
   }
 
   private async saveSort(): Promise<void> {
@@ -360,9 +437,38 @@ export struct Index {
           () => this.fetchFailedDialog(() => this.refresh()));
 
       this.itemsRuntime.reload(items.values());
+      this.resetStaleViewState();
       this.syncCards();
     } finally {
       this.isFetching = false;
+    }
+  }
+
+  // 刷新后清理已失效的视图状态：标签被删空、置顶项被取消、分组已无意义时回到默认视图
+  private resetStaleViewState(): void {
+    if (this.itemsRuntime.ids.length === 0) {
+      this.query = '';
+      this.filterKind = ItemFilterKind.ALL;
+      this.filterTag = '';
+      this.isGrouped = false;
+
+      return;
+    }
+
+    const snapshot = this.itemsRuntime.snapshot();
+
+    if (this.filterKind === ItemFilterKind.TAG && !collectTags(snapshot).includes(this.filterTag)) {
+      this.filterKind = ItemFilterKind.ALL;
+      this.filterTag = '';
+    }
+
+    if (this.filterKind === ItemFilterKind.PINNED && countPinned(snapshot) === 0) {
+      this.filterKind = ItemFilterKind.ALL;
+      this.filterTag = '';
+    }
+
+    if (this.isGrouped && !this.itemsRuntime.hasMeta()) {
+      this.isGrouped = false;
     }
   }
 

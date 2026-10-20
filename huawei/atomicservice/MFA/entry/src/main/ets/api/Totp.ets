@@ -30,6 +30,16 @@ export interface DeleteRequest {
   id: string;
 }
 
+export interface EditTagsRequest {
+  id: string;
+  tags: string[];
+}
+
+export interface EditPinnedRequest {
+  id: string;
+  pinned: boolean;
+}
+
 export interface SortRequest {
   items: Array<SortRequestItem>;
 }
@@ -100,6 +110,36 @@ export class Totp {
         {
           id,
           username,
+        });
+
+    if (0 === response.data?.code) {
+      return;
+    }
+
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+  }
+
+  static async editTags(id: string, tags: string[]): Promise<void> {
+    const response: AxiosResponse<Response<void>> =
+      await http.post<void, AxiosResponse<Response<void>>, EditTagsRequest>('api/v1/totp/edit/tags',
+        {
+          id,
+          tags,
+        });
+
+    if (0 === response.data?.code) {
+      return;
+    }
+
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+  }
+
+  static async editPinned(id: string, pinned: boolean): Promise<void> {
+    const response: AxiosResponse<Response<void>> =
+      await http.post<void, AxiosResponse<Response<void>>, EditPinnedRequest>('api/v1/totp/edit/pinned',
+        {
+          id,
+          pinned,
         });
 
     if (0 === response.data?.code) {

@@ -36,6 +36,8 @@ export class ItemRuntime {
     this._code = item.code;
     this._issuer = item.issuer;
     this._username = item.username;
+    this._tags = item.tags ? [...item.tags] : [];
+    this._pinned = item.pinned === true;
     this._config = item.config;
   }
 
@@ -44,6 +46,8 @@ export class ItemRuntime {
       id: '',
       issuer: '',
       username: '',
+      tags: [],
+      pinned: false,
       code: '',
       config: { period: DEFAULT_PERIOD }
     });
@@ -101,6 +105,34 @@ export class ItemRuntime {
 
   public set username(value: string) {
     this._username = value;
+  }
+
+  // 标签/置顶：当前 UI 只支持单标签，数组结构为后续多标签预留
+  @Trace
+  private _tags: string[] = [];
+
+  public get tags(): string[] {
+    return this._tags;
+  }
+
+  public set tags(value: string[]) {
+    this._tags = [...value];
+  }
+
+  // 卡片右上角展示用：当前取第一个标签
+  public get tag(): string {
+    return this._tags.length > 0 ? this._tags[0] : '';
+  }
+
+  @Trace
+  private _pinned: boolean = false;
+
+  public get pinned(): boolean {
+    return this._pinned;
+  }
+
+  public set pinned(value: boolean) {
+    this._pinned = value;
   }
 
   private _config: IItemConfig;

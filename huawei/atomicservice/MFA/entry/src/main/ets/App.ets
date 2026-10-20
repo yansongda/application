@@ -34,6 +34,7 @@ export enum AppPagesName {
   INDEX_DETAIL = 'index/detail',
   INDEX_EDIT_ISSUER = 'index/edit/issuer',
   INDEX_EDIT_USERNAME = 'index/edit/username',
+  INDEX_EDIT_TAG = 'index/edit/tag',
   USER_DETAIL = 'user/detail',
   USER_DELETE = 'user/delete',
   USER_EDIT_SLOGAN = 'user/edit/slogan',

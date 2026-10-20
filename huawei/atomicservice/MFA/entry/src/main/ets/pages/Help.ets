@@ -30,6 +30,15 @@ struct Help {
             [$r('app.string.user_help_page_sync_tip')]
           )
           this.section(
+            $r('sys.symbol.line_3_horizontal'),
+            $r('app.string.user_help_page_organize_title'),
+            [
+              $r('app.string.user_help_page_organize_search'),
+              $r('app.string.user_help_page_organize_tag'),
+              $r('app.string.user_help_page_organize_pin')
+            ]
+          )
+          this.section(
             $r('sys.symbol.lock_shield'),
             $r('app.string.user_help_page_security_title'),
             [

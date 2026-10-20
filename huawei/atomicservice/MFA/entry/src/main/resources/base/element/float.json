@@ -51,6 +51,18 @@
     {
       "name": "form_action_font_size",
       "value": "13fp"
+    },
+    {
+      "name": "header_title_font_size",
+      "value": "22fp"
+    },
+    {
+      "name": "header_stat_font_size",
+      "value": "11fp"
+    },
+    {
+      "name": "tag_font_size",
+      "value": "10fp"
     }
   ]
 }

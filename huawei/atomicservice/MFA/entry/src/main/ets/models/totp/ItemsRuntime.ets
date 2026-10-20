@@ -1,5 +1,6 @@
 // TOTP 条目集合运行时：id 顺序（@Trace，供列表 Repeat 使用）+ 条目运行时映射。
 import { IItem } from '../../types/Item';
+import { ItemView } from '../../utils/ItemFilter';
 import { ItemRuntime } from './ItemRuntime';
 
 @ObservedV2
@@ -96,6 +97,42 @@ export class ItemsRuntime {
     this._ids = [...ids];
   }
 
+  // 供搜索/筛选/分组纯函数使用：按当前 id 顺序导出轻量视图，不复制定时器与配置
+  snapshot(): ItemView[] {
+    const items: ItemView[] = [];
+
+    for (const id of this._ids) {
+      const runtime = this._runtimes.get(id);
+
+      if ('undefined' === typeof runtime) {
+        continue;
+      }
+
+      items.push({
+        id: runtime.id,
+        issuer: runtime.issuer,
+        username: runtime.username,
+        tags: runtime.tags,
+        pinned: runtime.pinned,
+      });
+    }
+
+    return items;
+  }
+
+  // 是否存在可展示的标签/置顶：决定首页是否显示「筛选」入口
+  hasMeta(): boolean {
+    for (const id of this._ids) {
+      const runtime = this._runtimes.get(id);
+
+      if ('undefined' !== typeof runtime && (runtime.tags.length > 0 || runtime.pinned)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   // 以服务端数据原地刷新：顺序以服务端返回为准，更新已有条目（保留运行中的定时器）、增删差异条目
   reload(items: Iterable<IItem>) {
     const nextItems = Array.from(items);
@@ -111,6 +148,8 @@ export class ItemsRuntime {
       if (existing) {
         existing.issuer = item.issuer;
         existing.username = item.username;
+        existing.tags = item.tags ?? [];
+        existing.pinned = item.pinned === true;
         existing.config = item.config;
 
         // 端内算码是权威来源：仅在该条目尚无验证码时用服务端值兜底，

@@ -2,6 +2,10 @@ export interface IItem {
   id: string;
   issuer: string;
   username: string;
+  // 列表标签：后端 config.tags 的投影；旧后端缺省时按空数组处理
+  tags?: string[];
+  // 是否置顶：后端 config.pinned 的投影；旧后端缺省时按 false 处理
+  pinned?: boolean;
   code: string;
   config: IItemConfig;
 }

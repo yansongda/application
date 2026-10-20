@@ -47,6 +47,14 @@
     {
       "name": "avatar_size",
       "value": 30
+    },
+    {
+      "name": "tag_height",
+      "value": 16
+    },
+    {
+      "name": "tag_max_width",
+      "value": 80
     }
   ]
 }

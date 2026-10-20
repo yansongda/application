@@ -7,6 +7,14 @@
     {
       "name": "brand",
       "value": "#ff5bb43b"
+    },
+    {
+      "name": "tag_background",
+      "value": "#1A5BB43B"
+    },
+    {
+      "name": "tag_text",
+      "value": "#3E8E2A"
     }
   ]
 }

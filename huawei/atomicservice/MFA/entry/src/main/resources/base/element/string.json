@@ -451,6 +451,166 @@
     {
       "name": "lock_page_pin_expired",
       "value": "锁屏密码已过期，请先更新"
+    },
+    {
+      "name": "index_index_page_search_placeholder",
+      "value": "搜索账号或标签"
+    },
+    {
+      "name": "index_index_page_filter",
+      "value": "筛选"
+    },
+    {
+      "name": "index_index_page_sort",
+      "value": "排序"
+    },
+    {
+      "name": "index_index_page_sort_hint",
+      "value": "长按拖动调整顺序，置顶按普通顺序展示"
+    },
+    {
+      "name": "index_index_page_pin",
+      "value": "置顶"
+    },
+    {
+      "name": "index_index_page_unpin",
+      "value": "取消置顶"
+    },
+    {
+      "name": "index_index_page_pinned_success",
+      "value": "已置顶"
+    },
+    {
+      "name": "index_index_page_unpinned_success",
+      "value": "已取消置顶"
+    },
+    {
+      "name": "index_index_page_menu_view",
+      "value": "视图"
+    },
+    {
+      "name": "index_index_page_menu_filter",
+      "value": "筛选"
+    },
+    {
+      "name": "index_index_page_view_flat",
+      "value": "平铺列表"
+    },
+    {
+      "name": "index_index_page_view_grouped",
+      "value": "按标签分组"
+    },
+    {
+      "name": "index_index_page_view_grouped_short",
+      "value": "分组"
+    },
+    {
+      "name": "index_index_page_filter_all",
+      "value": "全部账号"
+    },
+    {
+      "name": "index_index_page_filter_pinned",
+      "value": "只看置顶"
+    },
+    {
+      "name": "index_index_page_filter_pinned_short",
+      "value": "置顶"
+    },
+    {
+      "name": "index_index_page_no_match",
+      "value": "没有匹配的账号"
+    },
+    {
+      "name": "index_index_page_clear_filter",
+      "value": "清除筛选"
+    },
+    {
+      "name": "index_index_page_unassigned",
+      "value": "未分类"
+    },
+    {
+      "name": "index_detail_page_organization",
+      "value": "组织"
+    },
+    {
+      "name": "index_page_tag",
+      "value": "标签"
+    },
+    {
+      "name": "index_page_tag_unset",
+      "value": "未设置"
+    },
+    {
+      "name": "index_page_pinned",
+      "value": "置顶"
+    },
+    {
+      "name": "index_detail_page_pinned_on",
+      "value": "已置顶"
+    },
+    {
+      "name": "index_detail_page_pinned_off",
+      "value": "未置顶"
+    },
+    {
+      "name": "index_tag_page_title",
+      "value": "设置标签"
+    },
+    {
+      "name": "index_tag_page_placeholder",
+      "value": "请输入标签"
+    },
+    {
+      "name": "index_tag_page_common",
+      "value": "常用标签"
+    },
+    {
+      "name": "index_tag_page_note",
+      "value": "标签会同步到你的账号，可在筛选菜单中按标签查看"
+    },
+    {
+      "name": "index_tag_page_preset_work",
+      "value": "工作"
+    },
+    {
+      "name": "index_tag_page_preset_personal",
+      "value": "个人"
+    },
+    {
+      "name": "index_tag_page_preset_finance",
+      "value": "财务"
+    },
+    {
+      "name": "index_tag_page_preset_dev",
+      "value": "开发"
+    },
+    {
+      "name": "index_tag_page_preset_other",
+      "value": "其他"
+    },
+    {
+      "name": "index_tag_page_clear",
+      "value": "清除标签"
+    },
+    {
+      "name": "index_tag_page_save",
+      "value": "保存"
+    },
+    {
+      "name": "user_help_page_organize_title",
+      "value": "搜索 / 标签 / 置顶"
+    },
+    {
+      "name": "user_help_page_organize_search",
+      "value": "在首页搜索发行方、用户名或标签，快速定位账号"
+    },
+    {
+      "name": "user_help_page_organize_tag",
+      "value": "在详情页设置标签；标签会同步到账号，并显示在列表项右上角"
+    },
+    {
+      "name": "user_help_page_organize_pin",
+      "value": "左滑或详情页可置顶；置顶账号排在最前，分组视图按置顶、标签、未分类排列"
     }
   ]
 }
