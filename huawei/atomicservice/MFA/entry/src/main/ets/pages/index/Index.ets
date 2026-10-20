@@ -19,6 +19,9 @@ import { AddFab } from '../../components/index/AddFab';
 import { TotpListView } from '../../components/index/TotpListView';
 import { FormBridge } from '../../models/form/FormBridge';
 import { FormIntent } from '../../models/form/FormIntent';
+import { FormRoute } from '../../models/form/FormRoute';
+import { Authorization } from '../../models/Auth';
+import { AppLock } from '../../models/security/AppLock';
 
 @Builder
 export function builder() {
@@ -43,6 +46,12 @@ export struct Index {
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
   // 卡片意图（点卡快捷入口）：EntryAbility 写入，@Monitor 感知；必须带 @Local 才能被 @Monitor 监听到变化
   @Local private formIntent: FormIntent = AppStorageV2.connect(FormIntent, () => new FormIntent())!;
+  // 意图消费门禁：未登录 / 应用锁锁定 / 页面未激活时保留 pending，条件满足后重试
+  private authorization: Authorization =
+    PersistenceV2.globalConnect({ type: Authorization, defaultCreator: () => new Authorization() })!;
+  @Local private appLock: AppLock = AppLock.instance();
+  // NavDestination 激活态：隐藏时不消费，避免从底层页拉起系统扫码
+  private isActive: boolean = false;
 
   build() {
     NavDestination() {
@@ -110,6 +119,8 @@ export struct Index {
     .backgroundColor($r('sys.color.background_secondary'))
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .onActive(() => {
+      this.isActive = true;
+
       hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '页面显示');
 
       if (this.isSortMode) {
@@ -124,6 +135,8 @@ export struct Index {
       });
     })
     .onHidden(() => {
+      this.isActive = false;
+
       hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '页面隐藏');
 
       // 仅暂停定时器，保留运行时实例以便返回时原地增量刷新
@@ -370,17 +383,35 @@ export struct Index {
     this.consumeFormIntent();
   }
 
-  // 消费卡片意图：'scan' 直达扫码添加、'input' 直达手动输入添加；消费一次即清空，避免重复触发
-  private consumeFormIntent(): void {
-    const route: string | undefined = this.formIntent.route;
+  // 解锁后重试：AppLock 在认证结果回调里先 unlock() 再复位 _verifying，
+  // 让出一帧，避免在系统认证控件退场过程中拉起扫码
+  @Monitor('appLock.unlockVersion')
+  onAppUnlocked(): void {
+    setTimeout((): void => {
+      this.consumeFormIntent();
+    }, 0);
+  }
 
-    if ('undefined' === typeof route || !(this.formIntent.version > 0)) {
+  // 消费卡片意图：FormRoute.SCAN 直达扫码添加、FormRoute.INPUT 直达手动输入添加；消费一次即清空，避免重复触发
+  private consumeFormIntent(): void {
+    const route: FormRoute | undefined = this.formIntent.pendingRoute();
+
+    if ('undefined' === typeof route) {
       return;
     }
 
-    this.formIntent.route = undefined;
+    // 门禁未满足时保留 route，等解锁（unlockVersion）或登录后回到页面再重试
+    if (!FormIntent.canConsume(this.isActive, this.appLock.locked, this.authorization.state())) {
+      hilog.info(LogDomain.PAGES, AppPagesName.INDEX,
+        '卡片意图暂缓: route=%{public}s, active=%{public}s, locked=%{public}s, auth=%{public}d',
+        route, this.isActive.toString(), this.appLock.locked.toString(), this.authorization.state());
 
-    if ('scan' === route) {
+      return;
+    }
+
+    this.formIntent.clear();
+
+    if (FormRoute.SCAN === route) {
       this.addByScan().catch(() => {
         // 取消/失败已在 addByScan 内部处理，仅避免 unhandled rejection
       });
@@ -388,7 +419,7 @@ export struct Index {
       return;
     }
 
-    if ('input' === route) {
+    if (FormRoute.INPUT === route) {
       this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
     }
   }

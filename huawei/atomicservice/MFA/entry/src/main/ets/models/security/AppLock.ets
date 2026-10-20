@@ -44,6 +44,11 @@ export class AppLock {
   @Trace
   private _locked: boolean = false;
 
+  // 解锁版本号：locked 是 getter，@Monitor 无法直接监听；页面据此感知「刚刚解锁」，
+  // 用于重试被门禁挡下的卡片意图。仅运行态，不落盘，不参与应用锁状态不变式。
+  @Trace
+  unlockVersion: number = 0;
+
   public get enabled(): boolean {
     return this._enabled;
   }
@@ -132,6 +137,7 @@ export class AppLock {
 
   unlock(): void {
     this._locked = false;
+    this.unlockVersion++;
   }
 
   // 发起身份认证。code = 原始 userAuth.UserAuthResultCode，供 UI 映射定向文案（LOCKED / PIN_EXPIRED）

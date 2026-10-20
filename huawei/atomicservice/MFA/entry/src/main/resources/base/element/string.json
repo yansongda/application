@@ -346,11 +346,15 @@
     },
     {
       "name": "user_help_page_card_title",
-      "value": "使用卡片"
+      "value": "卡片与负一屏"
     },
     {
       "name": "user_help_page_card_tip",
-      "value": "长按元服务图标或从服务面板把卡片添加到桌面，点一下即可取码"
+      "value": "打开元服务后点右上角“::”→“添加卡片”，可添加至桌面或负一屏"
+    },
+    {
+      "name": "user_help_page_card_negative_tip",
+      "value": "负一屏搜索框暂不支持搜卡添加，卡片市场是否展示以实际为准"
     },
     {
       "name": "user_help_page_security_title",
