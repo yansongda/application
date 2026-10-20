@@ -6,6 +6,7 @@ import { LogDomain } from '../App';
 import { User } from '../models/User';
 import { ItemsRuntime } from '../models/totp/ItemsRuntime';
 import { FormIntent } from '../models/form/FormIntent';
+import { FormRoute } from '../models/form/FormRoute';
 import { MainTheme } from '../themes/Main';
 import { AppLock } from '../models/security/AppLock';
 import { PrivacyWindow } from '../models/security/PrivacyWindow';
@@ -22,7 +23,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   private handleFormIntent(want: Want): void {
-    const route: string | undefined = FormIntent.fromWant(want);
+    const route: FormRoute | undefined = FormIntent.fromWant(want);
 
     if ('undefined' === typeof route) {
       return;

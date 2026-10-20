@@ -1,18 +1,19 @@
 // 卡片意图（主应用侧）：EntryAbility 解析 postCardAction(router) 的 want 参数后写入，
 // Index 页通过 @Monitor('formIntent.version') 感知并消费。
-// 当前路由：'scan' = 直达扫码添加；'input' = 直达手动输入添加页。
+// 路由定义见 FormRoute：FormRoute.SCAN = 直达扫码添加；FormRoute.INPUT = 直达手动输入添加页。
 // 未登录 / 应用锁锁定 / 页面未激活时由 Index 暂缓消费，超过 TTL 后丢弃。
 // 注意：postCardAction 的 params 被整体包装为 want.parameters.params（JSON 字符串），不逐键平铺；
 // 日志不得出现 token / 密钥 / 验证码。
 import { Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
+import { FORM_ROUTE_PARAM, FormRoute, parseFormRoute } from './FormRoute';
 
 @ObservedV2
 export class FormIntent {
-  // 卡片意图路由：'scan' = 扫码添加；'input' = 手动输入添加；缺省（普通点卡）视为仅打开应用
+  // 卡片意图路由；缺省（普通点卡）视为仅打开应用
   @Trace
-  route?: string;
+  route?: FormRoute;
 
   // 每次写入自增，供页面 @Monitor 感知
   @Trace
@@ -24,8 +25,8 @@ export class FormIntent {
   createdAt: number = 0;
 
   // 按官方契约解析 want：params 被整体包装为 want.parameters.params（JSON 字符串）。
-  // params 不存在 → 返回 undefined（普通点卡，无快捷意图）；JSON.parse 失败视为实现 bug，打点后忽略。
-  static fromWant(want: Want): string | undefined {
+  // params 不存在 → 返回 undefined（普通点卡，无快捷意图）；未知路由 / JSON.parse 失败视为无意图，打点后忽略。
+  static fromWant(want: Want): FormRoute | undefined {
     const raw = want?.parameters?.params;
 
     if ('string' !== typeof raw) {
@@ -35,7 +36,7 @@ export class FormIntent {
     try {
       const params: Record<string, string> = JSON.parse(raw) as Record<string, string>;
 
-      return params.mfa_route;
+      return parseFormRoute(params[FORM_ROUTE_PARAM]);
     } catch (e) {
       hilog.error(LogDomain.MODELS, 'models/form/FormIntent', '卡片意图参数解析失败: %{public}s',
         JSON.stringify(e));

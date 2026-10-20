@@ -12,6 +12,8 @@
 // 契约：下列 @Local 变量名必须与 models/form/FormBridge.ets 的 FORM_FIELD_* 常量逐字一致；
 //       改名不会编译报错、只会静默不刷新，改一侧必须同步改另一侧。
 // 文案只用无参 $r，不用带格式参数的 $r（卡片对格式化的支持未经证实）。
+import { FormRoute, formRouteParams } from '../../models/form/FormRoute';
+
 @Entry
 @ComponentV2
 struct Form2x2 {
@@ -97,7 +99,7 @@ struct Form2x2 {
           postCardAction(this, {
             action: 'router',
             abilityName: 'EntryAbility',
-            params: { mfa_route: 'scan' },
+            params: formRouteParams(FormRoute.SCAN),
           });
         })
     }

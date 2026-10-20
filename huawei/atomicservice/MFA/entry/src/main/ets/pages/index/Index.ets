@@ -19,6 +19,7 @@ import { AddFab } from '../../components/index/AddFab';
 import { TotpListView } from '../../components/index/TotpListView';
 import { FormBridge } from '../../models/form/FormBridge';
 import { FormIntent } from '../../models/form/FormIntent';
+import { FormRoute } from '../../models/form/FormRoute';
 import { Authorization, State } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
 
@@ -394,9 +395,9 @@ export struct Index {
     }, 0);
   }
 
-  // 消费卡片意图：'scan' 直达扫码添加、'input' 直达手动输入添加；消费一次即清空，避免重复触发
+  // 消费卡片意图：FormRoute.SCAN 直达扫码添加、FormRoute.INPUT 直达手动输入添加；消费一次即清空，避免重复触发
   private consumeFormIntent(): void {
-    const route: string | undefined = this.formIntent.route;
+    const route: FormRoute | undefined = this.formIntent.route;
 
     if ('undefined' === typeof route || !(this.formIntent.version > 0)) {
       return;
@@ -420,7 +421,7 @@ export struct Index {
 
     this.formIntent.route = undefined;
 
-    if ('scan' === route) {
+    if (FormRoute.SCAN === route) {
       this.addByScan().catch(() => {
         // 取消/失败已在 addByScan 内部处理，仅避免 unhandled rejection
       });
@@ -428,7 +429,7 @@ export struct Index {
       return;
     }
 
-    if ('input' === route) {
+    if (FormRoute.INPUT === route) {
       this.pages.pushPathByName(AppPagesName.INDEX_CREATE, null);
     }
   }
