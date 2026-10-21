@@ -159,8 +159,10 @@ export struct ListView {
       Button(this.itemsRuntime.get(id).pinned ? $r('app.string.index_index_page_unpin') :
         $r('app.string.index_index_page_pin'))
         .height('100%')
-        .width(70)
+        .width(80)
+        .padding({ left: 4, right: 4 })
         .type(ButtonType.Normal)
+        .fontSize($r('app.float.body_font_size'))
         .backgroundColor($r('app.color.brand'))
         .fontColor($r('sys.color.font_on_primary'))
         .onClick(() => {
@@ -171,9 +173,11 @@ export struct ListView {
       Button() {
         Text($r('app.string.index_index_page_delete_name'))
           .fontColor($r('sys.color.font_on_primary'))
+          .fontSize($r('app.float.body_font_size'))
       }
       .height('100%')
-      .width(60)
+      .width(64)
+      .padding({ left: 4, right: 4 })
       .type(ButtonType.Normal)
       .backgroundColor($r('sys.color.warning'))
       .onClick(() => {
