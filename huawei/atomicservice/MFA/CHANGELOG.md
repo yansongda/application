@@ -17,6 +17,7 @@
 - 端内验证码计算改用 `@yansongda/otp` 库实现，替换自研 TOTP 算法；算法与输出不变（SHA1 + 6 位，仍与后端一致），用户可见行为无变化 (#173)
 - 首页工具条与列表视图拆分为 `Toolbar` / `ListView` 两个组件，由 `Index` 统一编排；布局与交互不变
 - 空态提示卡由独立组件 `IndexGuide` 内联进 `EmptyState`（删除该文件），页面级组件统一收在 `components/index/` 下；空态外观不变
+- 列表项组件 `TotpCard` 重命名为 `ListItemCard` 并移入 `components/index/`，与 `Toolbar` / `ListView` 同目录；外观与行为不变
 
 ### Fixed
 

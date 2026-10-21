@@ -1,12 +1,12 @@
-import { DEFAULT_PERIOD, ItemRuntime } from '../models/totp/ItemRuntime';
-import { Clipboard } from '../utils/Clipboard';
-import { Toast } from '../utils/PromptAction';
+import { DEFAULT_PERIOD, ItemRuntime } from '../../models/totp/ItemRuntime';
+import { Clipboard } from '../../utils/Clipboard';
+import { Toast } from '../../utils/PromptAction';
 
-// TOTP 列表项卡片内容：发行方/用户名 + 验证码（点击右侧区域即复制）+ 周期进度。
+// 首页列表项内容卡片：发行方/用户名 + 验证码（点击右侧区域即复制）+ 周期进度。
 // 右上角叠加「标签 + 置顶」：绝对定位，不参与左右 4:6 布局，验证码字号与居中位置保持不变。
-// 注意：ListItem 本体必须留在 List 的直接子节点（拖拽排序 onMove 依赖），这里只承载内容
+// 注意：内置 ListItem 容器本体必须留在 List 的直接子节点（拖拽排序 onMove 依赖），本组件只承载内容。
 @ComponentV2
-export struct TotpCard {
+export struct ListItemCard {
   @Param runtime: ItemRuntime = ItemRuntime.empty();
   @Param isSortMode: boolean = false;
 

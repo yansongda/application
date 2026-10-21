@@ -1,7 +1,7 @@
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { AppPagesName, LogDomain } from '../../App';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { TotpCard } from '../TotpCard';
+import { ListItemCard } from './ListItemCard';
 import {
   filterItems,
   groupItems,
@@ -103,7 +103,7 @@ export struct ListView {
   @Builder
   listItem(id: string) {
     ListItem() {
-      TotpCard({
+      ListItemCard({
         runtime: this.itemsRuntime.get(id),
         isSortMode: this.isSortMode
       })
