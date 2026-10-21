@@ -4,11 +4,21 @@
 
 ## [Unreleased]
 
+### Added
+
+- 首页新增搜索（发行方 / 用户名 / 标签）、标签筛选与按标签分组视图，列表上方由三行收敛为一行工具条
+- 账号支持标签与置顶：标签/置顶保存在账号 config 中并随账号同步，列表项右上角展示
+- 详情页新增「组织」卡片（标签 / 置顶），新增标签设置页；使用帮助补充组织方式说明
+
 ### Changed
 
 - 本地存储收敛为单一 preferences 库 `mfa`（GSKV 模式，支持主应用与卡片提供方多进程并发读写）：安全设置改为逐字段 key（不再有 schema 版本号与整份 JSON，读写下沉到各自模型、去掉 `Store` 中间层）、卡片 formId 改为逐 key 存储，读写统一经 `utils/Prefs.ets`，用户可见行为无变化
 - 环境地址改为由构建模式（debug/release）在编译期注入，移除 `module.json5` 中需手工解除注释的 `env` metadata，正式包不再有误连测试环境的可能
 - 端内验证码计算改用 `@yansongda/otp` 库实现，替换自研 TOTP 算法；算法与输出不变（SHA1 + 6 位，仍与后端一致），用户可见行为无变化 (#173)
+- 首页工具条与列表视图拆分为 `Toolbar` / `ListView` 两个组件，由 `Index` 统一编排；布局与交互不变
+- 空态提示卡由独立组件 `IndexGuide` 内联进 `EmptyState`（删除该文件），页面级组件统一收在 `components/index/` 下；空态外观不变
+- 列表项组件 `TotpCard` 重命名为 `ListItemCard` 并移入 `components/index/`，与 `Toolbar` / `ListView` 同目录；外观与行为不变
+- 首页标题栏抽离为 `PageTitle` 组件、列表视图状态抽离为 `ListViewState` 模型，`Index` 由 552 行降至 480 行；界面与行为不变
 
 ### Fixed
 

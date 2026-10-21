@@ -16,12 +16,16 @@ import { User } from '../../models/User';
 import { displayOr } from '../../utils/Display';
 import { EmptyState } from '../../components/index/EmptyState';
 import { AddFab } from '../../components/index/AddFab';
-import { TotpListView } from '../../components/index/TotpListView';
+import { ListView } from '../../components/index/ListView';
+import { Toolbar } from '../../components/index/Toolbar';
+import { PageTitle } from '../../components/index/PageTitle';
 import { FormBridge } from '../../models/form/FormBridge';
 import { FormIntent } from '../../models/form/FormIntent';
 import { FormRoute } from '../../models/form/FormRoute';
 import { Authorization } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
+import { ListViewState } from '../../models/totp/ListViewState';
+import { ItemFilterKind } from '../../utils/ItemFilter';
 
 @Builder
 export function builder() {
@@ -34,6 +38,10 @@ export struct Index {
   private isRefreshing: boolean = false;
   @Local
   private isSortMode: boolean = false;
+  // 搜索 / 筛选 / 分组：只影响本地渲染，不落盘、不发请求
+  @Local
+  private listState: ListViewState = new ListViewState();
+  private pinningId: string | undefined = undefined;
   private snapshotIds: string[] = [];
   // 请求去重：避免 onActive 与下拉刷新并发发起 Totp.all()
   private isFetching: boolean = false;
@@ -70,19 +78,48 @@ export struct Index {
               }
             })
           } else {
-            TotpListView({
-              itemsRuntime: this.itemsRuntime,
-              isSortMode: this.isSortMode,
-              onToggleSort: (): void => {
-                this.toggleSort();
-              },
-              onDetail: (id: string): void => {
-                this.openDetail(id);
-              },
-              onDelete: (id: string): void => {
-                this.requestDelete(id);
-              }
-            })
+            Column() {
+              Toolbar({
+                itemsRuntime: this.itemsRuntime,
+                isSortMode: this.isSortMode,
+                state: this.listState,
+                onQueryChange: (query: string): void => {
+                  this.listState.query = query;
+                },
+                onFilterChange: (kind: ItemFilterKind, tag: string): void => {
+                  this.listState.applyFilter(kind, tag);
+                },
+                onGroupedChange: (grouped: boolean): void => {
+                  this.listState.applyGrouped(grouped);
+                },
+                onToggleSort: (): void => {
+                  this.toggleSort();
+                }
+              })
+
+              ListView({
+                itemsRuntime: this.itemsRuntime,
+                isSortMode: this.isSortMode,
+                state: this.listState,
+                onTogglePin: (id: string): void => {
+                  this.togglePin(id).catch(() => {
+                    // 失败已由 Toast 提示，仅避免 unhandled rejection
+                  });
+                },
+                onDetail: (id: string): void => {
+                  this.openDetail(id);
+                },
+                onDelete: (id: string): void => {
+                  this.requestDelete(id);
+                },
+                onClearFilter: (): void => {
+                  this.listState.clearFilter();
+                }
+              })
+              .layoutWeight(1)
+            }
+            .width('100%')
+            .height('100%')
           }
         }
         .onRefreshing(() => {
@@ -146,27 +183,13 @@ export struct Index {
 
   @Builder
   title() {
-    Row() {
-      Image(displayOr(this.user.config.avatar, $r('app.media.default_avatar')))
-        .width($r('app.integer.avatar_size'))
-        .height($r('app.integer.avatar_size'))
-        .autoResize(true)
-        .interpolation(ImageInterpolation.Medium)
-        .margin({ right: 10 })
-        .borderRadius($r('app.integer.card_radius'))
-        .onError(() => {
-          hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '头像加载失败，保持当前展示');
-        })
-        .onClick(() => {
-          this.pages.pushPathByName(AppPagesName.USER_DETAIL, null);
-        })
-
-      Text($r("app.string.app_name_short")).fontWeight(FontWeight.Bold).fontSize($r('app.float.title_font_size'))
-    }
-    .width('100%')
-    .height('100%')
-    .margin({ left: 10, right: 10 })
-    .alignItems(VerticalAlign.Center)
+    PageTitle({
+      avatar: displayOr(this.user.config.avatar, $r('app.media.default_avatar')),
+      protectedCount: this.itemsRuntime.ids.length,
+      onAvatarClick: (): void => {
+        this.pages.pushPathByName(AppPagesName.USER_DETAIL, null);
+      }
+    })
   }
 
   // 排序态切换：进入排序 / 保存排序（失败由 Toast 提示并回滚）
@@ -318,8 +341,38 @@ export struct Index {
   }
 
   private enterSortMode(): void {
+    // 排序作用于完整列表：先清空搜索/筛选/分组，并忽略置顶权重（见 ListView.visibleIds）
+    this.listState.clearFilter();
+    // 分组视图下没有拖拽排序（Repeat.onMove 仅平铺分支），进入排序必须回到平铺
+    this.listState.isGrouped = false;
     this.isSortMode = true;
     this.snapshotIds = [...this.itemsRuntime.ids];
+  }
+
+  // 置顶切换：先请求服务端，成功才改内存；列表按 pinned 重新计算置顶优先顺序
+  private async togglePin(id: string): Promise<void> {
+    if ('undefined' !== typeof this.pinningId) {
+      return;
+    }
+
+    this.pinningId = id;
+
+    const runtime = this.itemsRuntime.get(id);
+    const next = !runtime.pinned;
+
+    try {
+      await Toast.execute(
+        () => Totp.editPinned(id, next),
+        () => this.loadingDialog(),
+        next ? $r('app.string.index_index_page_pinned_success') : $r('app.string.index_index_page_unpinned_success')
+      );
+
+      runtime.pinned = next;
+    } catch (e) {
+      // Toast.execute 已提示失败，内存保持不变
+    } finally {
+      this.pinningId = undefined;
+    }
   }
 
   private async saveSort(): Promise<void> {
@@ -360,6 +413,7 @@ export struct Index {
           () => this.fetchFailedDialog(() => this.refresh()));
 
       this.itemsRuntime.reload(items.values());
+      this.listState.syncView(this.itemsRuntime.snapshot(), this.itemsRuntime.hasMeta());
       this.syncCards();
     } finally {
       this.isFetching = false;

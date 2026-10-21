@@ -1,5 +1,3 @@
-import { IndexGuide } from '../IndexGuide';
-
 // 首页空态（纯展示）：英雄区 + 提示卡 + 两个添加主按钮 + 帮助入口。
 // 整屏垂直居中，内容高于一屏时自动可滚动；交互全部通过 @Event 上报，由页面决定具体行为。
 @ComponentV2
@@ -34,7 +32,7 @@ export struct EmptyState {
         .width('100%')
 
         // 空态提示卡：无账号时固定展示
-        IndexGuide()
+        this.guide()
 
         // 两个并列主按钮：扫码添加 / 手动输入
         Row({ space: $r('app.integer.column_space_smaller') }) {
@@ -83,5 +81,42 @@ export struct EmptyState {
     .width('100%')
     .height('100%')
     .align(Alignment.Top)
+  }
+
+  // 空态提示卡：无账号时固定展示 3 条价值要点
+  @Builder
+  guide() {
+    Column({ space: $r('app.integer.column_space_smaller') }) {
+      this.guideTip($r('sys.symbol.arrow_2_circlepath'), $r('app.string.index_index_page_empty_tip_sync'))
+      this.guideTip($r('sys.symbol.rectangle_on_rectangle'), $r('app.string.index_index_page_empty_tip_card'))
+      this.guideTip($r('sys.symbol.qrcode'), $r('app.string.index_index_page_empty_tip_add'))
+    }
+    .width('100%')
+    .padding($r('app.integer.page_padding'))
+    .backgroundColor($r('sys.color.background_primary'))
+    .borderRadius($r('app.integer.card_radius'))
+    .margin({ top: $r('app.integer.column_space_biggest') })
+  }
+
+  // 提示行：图标列固定宽度，文字占满剩余宽度并左对齐（换行时不挤压图标）
+  @Builder
+  guideTip(icon: Resource, text: ResourceStr) {
+    Row({ space: $r('app.integer.page_padding_smaller') }) {
+      Row() {
+        SymbolGlyph(icon)
+          .fontSize($r('app.float.icon_font_size'))
+          .fontColor([$r('app.color.brand')])
+      }
+      .width(30)
+      .justifyContent(FlexAlign.Start)
+
+      Text(text)
+        .fontSize($r('app.float.body_font_size'))
+        .fontColor($r('sys.color.font_secondary'))
+        .textAlign(TextAlign.Start)
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Center)
   }
 }
