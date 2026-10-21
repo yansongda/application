@@ -18,6 +18,7 @@ import { EmptyState } from '../../components/index/EmptyState';
 import { AddFab } from '../../components/index/AddFab';
 import { ListView } from '../../components/index/ListView';
 import { Toolbar } from '../../components/index/Toolbar';
+import { PageTitle } from '../../components/index/PageTitle';
 import { FormBridge } from '../../models/form/FormBridge';
 import { FormIntent } from '../../models/form/FormIntent';
 import { FormRoute } from '../../models/form/FormRoute';
@@ -202,37 +203,13 @@ export struct Index {
 
   @Builder
   title() {
-    Row() {
-      Image(displayOr(this.user.config.avatar, $r('app.media.default_avatar')))
-        .width($r('app.integer.avatar_size'))
-        .height($r('app.integer.avatar_size'))
-        .autoResize(true)
-        .interpolation(ImageInterpolation.Medium)
-        .margin({ right: 10 })
-        .borderRadius($r('app.integer.card_radius'))
-        .onError(() => {
-          hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '头像加载失败，保持当前展示');
-        })
-        .onClick(() => {
-          this.pages.pushPathByName(AppPagesName.USER_DETAIL, null);
-        })
-
-      Column({ space: 2 }) {
-        Text($r('app.string.app_name_short'))
-          .fontWeight(FontWeight.Bold)
-          .fontSize($r('app.float.header_title_font_size'))
-
-        Text($r('app.string.user_detail_page_protected', this.itemsRuntime.ids.length))
-          .fontSize($r('app.float.header_stat_font_size'))
-          .fontColor($r('sys.color.font_tertiary'))
+    PageTitle({
+      avatar: displayOr(this.user.config.avatar, $r('app.media.default_avatar')),
+      protectedCount: this.itemsRuntime.ids.length,
+      onAvatarClick: (): void => {
+        this.pages.pushPathByName(AppPagesName.USER_DETAIL, null);
       }
-      .alignItems(HorizontalAlign.Start)
-      .justifyContent(FlexAlign.Center)
-    }
-    .width('100%')
-    .height('100%')
-    .margin({ left: 10, right: 10 })
-    .alignItems(VerticalAlign.Center)
+    })
   }
 
   // 排序态切换：进入排序 / 保存排序（失败由 Toast 提示并回滚）
