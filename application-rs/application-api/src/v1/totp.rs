@@ -3,7 +3,7 @@ use salvo::{Depot, Request, handler};
 use crate::request::Validator;
 use crate::request::totp::{
     CreateRequest, DeleteRequest, DetailRequest, DetailResponse, EditIssuerRequest,
-    EditUsernameRequest, SortRequest,
+    EditPinnedRequest, EditTagsRequest, EditUsernameRequest, SortRequest,
 };
 use crate::response::Resp;
 use crate::response::Response;
@@ -82,6 +82,32 @@ pub async fn edit_username(request: &mut Request, depot: &mut Depot) -> Resp<()>
     let params = request.parse_json::<EditUsernameRequest>().await?;
 
     service::totp::edit_username(access_token, params.validate()?).await?;
+
+    Ok(Response::success(()))
+}
+
+#[handler]
+pub async fn edit_tags(request: &mut Request, depot: &mut Depot) -> Resp<()> {
+    let access_token = depot
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
+
+    let params = request.parse_json::<EditTagsRequest>().await?;
+
+    service::totp::edit_tags(access_token, params.validate()?).await?;
+
+    Ok(Response::success(()))
+}
+
+#[handler]
+pub async fn edit_pinned(request: &mut Request, depot: &mut Depot) -> Resp<()> {
+    let access_token = depot
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
+
+    let params = request.parse_json::<EditPinnedRequest>().await?;
+
+    service::totp::edit_pinned(access_token, params.validate()?).await?;
 
     Ok(Response::success(()))
 }
