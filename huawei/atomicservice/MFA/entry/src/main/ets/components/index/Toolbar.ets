@@ -105,6 +105,8 @@ export struct Toolbar {
         MenuItem({ content: $r('app.string.index_index_page_filter_all'), labelInfo: this.itemsRuntime.ids.length.toString() })
           .selectIcon(true)
           .selected(this.filterKind === ItemFilterKind.ALL)
+          .labelFont({ size: $r('app.float.caption_font_size') })
+          .labelFontColor($r('sys.color.font_tertiary'))
           .onClick(() => {
             this.onFilterChange(ItemFilterKind.ALL, '');
           })
@@ -112,6 +114,8 @@ export struct Toolbar {
         MenuItem({ content: $r('app.string.index_index_page_filter_pinned'), labelInfo: this.pinnedCount().toString() })
           .selectIcon(true)
           .selected(this.filterKind === ItemFilterKind.PINNED)
+          .labelFont({ size: $r('app.float.caption_font_size') })
+          .labelFontColor($r('sys.color.font_tertiary'))
           .enabled(this.pinnedCount() > 0)
           .onClick(() => {
             this.onFilterChange(ItemFilterKind.PINNED, '');
@@ -121,12 +125,16 @@ export struct Toolbar {
           MenuItem({ content: tag, labelInfo: this.tagCount(tag).toString() })
             .selectIcon(true)
             .selected(this.filterKind === ItemFilterKind.TAG && this.filterTag === tag)
+            .labelFont({ size: $r('app.float.caption_font_size') })
+            .labelFontColor($r('sys.color.font_tertiary'))
             .onClick(() => {
               this.onFilterChange(ItemFilterKind.TAG, tag);
             })
         }, (tag: string): string => tag)
       }
     }
+    // 菜单默认 16fp / Medium，比列表正文（14fp）偏大；统一为 body_font_size
+    .font({ size: $r('app.float.body_font_size') })
   }
 
   private hasMeta(): boolean {
