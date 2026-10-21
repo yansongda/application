@@ -1,8 +1,15 @@
-## [Unreleased]
+## [1.23.0] - 2026-10-21
 
 ### Added
 
-- feat(api): TOTP 列表/详情/创建响应新增 `tags` / `pinned`，新增 `POST /api/v1/totp/edit/tags` 与 `POST /api/v1/totp/edit/pinned`；标签与置顶存储在 `config` JSON 中，无需数据库迁移
+- feat(api): TOTP 列表/详情/创建响应新增 `tags` / `pinned`，新增 `POST /api/v1/totp/edit/tags` 与 `POST /api/v1/totp/edit/pinned`；标签与置顶存储在 `config` JSON 中，无需数据库迁移 (#183) ([4473e81](https://github.com/yansongda/application/commit/4473e81))
+- feat(kernel): 新增参数错误码 `2022`（`ParamsTotpTagsInvalid`），标签格式非法时返回该错误 (#183) ([4473e81](https://github.com/yansongda/application/commit/4473e81))
+- chore(deploy): 新增 `Caddyfile`：80 端口反向代理到 `127.0.0.1:8080`，对 `/metrics` 直接返回 404，启用 zstd/gzip 压缩，并对 `/health` 做健康探测 (#179) ([c78ca84](https://github.com/yansongda/application/commit/c78ca84))
+- chore(deploy): 新增 `docker-compose.yml`：`api`（prod，8080）/ `api-test`（test，8081）双实例，镜像 `ghcr.io/yansongda/application:application-api-vX.Y.Z`，端口仅绑定 `127.0.0.1`，挂载 `config.toml` / `config.test.toml` 只读，配置 `no-new-privileges`、`json-file` 日志轮转（20m×3）、基于 `/health` 的容器健康检查与内存限制 (#179) ([c78ca84](https://github.com/yansongda/application/commit/c78ca84))
+
+### Changed
+
+- chore(deploy): `env.example` 移除 `APP__BIN__API__LISTEN`，监听地址改由部署层控制（容器内监听 + 反向代理对外），存量部署不受影响 (#179) ([c78ca84](https://github.com/yansongda/application/commit/c78ca84))
 
 ## [1.22.0] - 2026-10-19
 
