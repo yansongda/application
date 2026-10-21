@@ -1,4 +1,5 @@
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
+import { ListViewState } from '../../models/totp/ListViewState';
 import { AppPagesName, LogDomain } from '../../App';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { ListItemCard } from './ListItemCard';
@@ -19,10 +20,7 @@ import {
 export struct ListView {
   @Param itemsRuntime: ItemsRuntime = new ItemsRuntime();
   @Param isSortMode: boolean = false;
-  @Param query: string = '';
-  @Param filterKind: ItemFilterKind = ItemFilterKind.ALL;
-  @Param filterTag: string = '';
-  @Param isGrouped: boolean = false;
+  @Param state: ListViewState = new ListViewState();
   @Event onTogglePin: (id: string) => void = () => {
   };
   @Event onDetail: (id: string) => void = () => {
@@ -70,7 +68,7 @@ export struct ListView {
   @Builder
   items() {
     List({ scroller: this.scroller, space: 10 }) {
-      if (this.isGrouped) {
+      if (this.state.isGrouped) {
         ForEach(this.groups(), (group: ItemGroupView) => {
           ListItemGroup({ header: this.groupHeader(group), space: 10 }) {
             ForEach(group.ids, (id: string) => {
@@ -97,7 +95,7 @@ export struct ListView {
     .width('100%')
     .height('100%')
     .contentEndOffset(80)
-    .sticky(this.isGrouped ? StickyStyle.Header : StickyStyle.None)
+    .sticky(this.state.isGrouped ? StickyStyle.Header : StickyStyle.None)
   }
 
   @Builder
@@ -199,7 +197,7 @@ export struct ListView {
   }
 
   private visibleIds(): string[] {
-    const filtered = filterItems(this.snapshot(), this.filterKind, this.filterTag, this.query);
+    const filtered = filterItems(this.snapshot(), this.state.filterKind, this.state.filterTag, this.state.query);
     const ordered = this.isSortMode ? filtered : sortPinnedFirst(filtered);
     const ids: string[] = [];
 
@@ -215,7 +213,7 @@ export struct ListView {
   }
 
   private groups(): ItemGroupView[] {
-    return groupItems(sortPinnedFirst(filterItems(this.snapshot(), this.filterKind, this.filterTag, this.query)));
+    return groupItems(sortPinnedFirst(filterItems(this.snapshot(), this.state.filterKind, this.state.filterTag, this.state.query)));
   }
 
   private groupTitle(group: ItemGroupView): ResourceStr {

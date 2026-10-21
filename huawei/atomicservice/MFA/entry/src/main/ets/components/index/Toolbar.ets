@@ -1,4 +1,5 @@
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
+import { ListViewState } from '../../models/totp/ListViewState';
 import { collectTags, countPinned, countTag, ItemFilterKind } from '../../utils/ItemFilter';
 
 // 首页工具条：搜索 + 筛选（视图与筛选合一菜单）+ 排序；排序态退化为提示 + 完成，避免三行头部挤压列表。
@@ -7,10 +8,7 @@ import { collectTags, countPinned, countTag, ItemFilterKind } from '../../utils/
 export struct Toolbar {
   @Param itemsRuntime: ItemsRuntime = new ItemsRuntime();
   @Param isSortMode: boolean = false;
-  @Param query: string = '';
-  @Param filterKind: ItemFilterKind = ItemFilterKind.ALL;
-  @Param filterTag: string = '';
-  @Param isGrouped: boolean = false;
+  @Param state: ListViewState = new ListViewState();
   @Event onQueryChange: (query: string) => void = () => {
   };
   @Event onFilterChange: (kind: ItemFilterKind, tag: string) => void = () => {
@@ -40,7 +38,7 @@ export struct Toolbar {
             this.onToggleSort();
           })
       } else {
-        Search({ value: this.query, placeholder: $r('app.string.index_index_page_search_placeholder') })
+        Search({ value: this.state.query, placeholder: $r('app.string.index_index_page_search_placeholder') })
           .layoutWeight(1)
           .height(36)
           .backgroundColor($r('sys.color.background_primary'))
@@ -88,14 +86,14 @@ export struct Toolbar {
       MenuItemGroup({ header: $r('app.string.index_index_page_menu_view') }) {
         MenuItem({ content: $r('app.string.index_index_page_view_flat') })
           .selectIcon(true)
-          .selected(!this.isGrouped)
+          .selected(!this.state.isGrouped)
           .onClick(() => {
             this.onGroupedChange(false);
           })
 
         MenuItem({ content: $r('app.string.index_index_page_view_grouped') })
           .selectIcon(true)
-          .selected(this.isGrouped)
+          .selected(this.state.isGrouped)
           .onClick(() => {
             this.onGroupedChange(true);
           })
@@ -104,7 +102,7 @@ export struct Toolbar {
       MenuItemGroup({ header: $r('app.string.index_index_page_menu_filter') }) {
         MenuItem({ content: $r('app.string.index_index_page_filter_all'), labelInfo: this.itemsRuntime.ids.length.toString() })
           .selectIcon(true)
-          .selected(this.filterKind === ItemFilterKind.ALL)
+          .selected(this.state.filterKind === ItemFilterKind.ALL)
           .labelFont({ size: $r('app.float.caption_font_size') })
           .labelFontColor($r('sys.color.font_tertiary'))
           .onClick(() => {
@@ -113,7 +111,7 @@ export struct Toolbar {
 
         MenuItem({ content: $r('app.string.index_index_page_filter_pinned'), labelInfo: this.pinnedCount().toString() })
           .selectIcon(true)
-          .selected(this.filterKind === ItemFilterKind.PINNED)
+          .selected(this.state.filterKind === ItemFilterKind.PINNED)
           .labelFont({ size: $r('app.float.caption_font_size') })
           .labelFontColor($r('sys.color.font_tertiary'))
           .enabled(this.pinnedCount() > 0)
@@ -124,7 +122,7 @@ export struct Toolbar {
         ForEach(this.tagNames(), (tag: string) => {
           MenuItem({ content: tag, labelInfo: this.tagCount(tag).toString() })
             .selectIcon(true)
-            .selected(this.filterKind === ItemFilterKind.TAG && this.filterTag === tag)
+            .selected(this.state.filterKind === ItemFilterKind.TAG && this.state.filterTag === tag)
             .labelFont({ size: $r('app.float.caption_font_size') })
             .labelFontColor($r('sys.color.font_tertiary'))
             .onClick(() => {
@@ -142,20 +140,20 @@ export struct Toolbar {
   }
 
   private viewActive(): boolean {
-    return this.isGrouped || this.filterKind !== ItemFilterKind.ALL;
+    return this.state.isGrouped || this.state.filterKind !== ItemFilterKind.ALL;
   }
 
   private filterLabel(): ResourceStr {
-    if (this.isGrouped) {
+    if (this.state.isGrouped) {
       return $r('app.string.index_index_page_view_grouped_short');
     }
 
-    if (this.filterKind === ItemFilterKind.PINNED) {
+    if (this.state.filterKind === ItemFilterKind.PINNED) {
       return $r('app.string.index_index_page_filter_pinned_short');
     }
 
-    if (this.filterKind === ItemFilterKind.TAG && this.filterTag.length > 0) {
-      return `#${this.filterTag}`;
+    if (this.state.filterKind === ItemFilterKind.TAG && this.state.filterTag.length > 0) {
+      return `#${this.state.filterTag}`;
     }
 
     return $r('app.string.index_index_page_filter');

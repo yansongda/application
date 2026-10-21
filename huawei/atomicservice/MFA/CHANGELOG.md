@@ -18,6 +18,7 @@
 - 首页工具条与列表视图拆分为 `Toolbar` / `ListView` 两个组件，由 `Index` 统一编排；布局与交互不变
 - 空态提示卡由独立组件 `IndexGuide` 内联进 `EmptyState`（删除该文件），页面级组件统一收在 `components/index/` 下；空态外观不变
 - 列表项组件 `TotpCard` 重命名为 `ListItemCard` 并移入 `components/index/`，与 `Toolbar` / `ListView` 同目录；外观与行为不变
+- 首页标题栏抽离为 `PageTitle` 组件、列表视图状态抽离为 `ListViewState` 模型，`Index` 由 552 行降至 480 行；界面与行为不变
 
 ### Fixed
 

@@ -24,7 +24,8 @@ import { FormIntent } from '../../models/form/FormIntent';
 import { FormRoute } from '../../models/form/FormRoute';
 import { Authorization } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
-import { collectTags, countPinned, ItemFilterKind } from '../../utils/ItemFilter';
+import { ListViewState } from '../../models/totp/ListViewState';
+import { ItemFilterKind } from '../../utils/ItemFilter';
 
 @Builder
 export function builder() {
@@ -39,13 +40,7 @@ export struct Index {
   private isSortMode: boolean = false;
   // 搜索 / 筛选 / 分组：只影响本地渲染，不落盘、不发请求
   @Local
-  private query: string = '';
-  @Local
-  private filterKind: ItemFilterKind = ItemFilterKind.ALL;
-  @Local
-  private filterTag: string = '';
-  @Local
-  private isGrouped: boolean = false;
+  private listState: ListViewState = new ListViewState();
   private pinningId: string | undefined = undefined;
   private snapshotIds: string[] = [];
   // 请求去重：避免 onActive 与下拉刷新并发发起 Totp.all()
@@ -87,25 +82,15 @@ export struct Index {
               Toolbar({
                 itemsRuntime: this.itemsRuntime,
                 isSortMode: this.isSortMode,
-                query: this.query,
-                filterKind: this.filterKind,
-                filterTag: this.filterTag,
-                isGrouped: this.isGrouped,
+                state: this.listState,
                 onQueryChange: (query: string): void => {
-                  this.query = query;
+                  this.listState.query = query;
                 },
                 onFilterChange: (kind: ItemFilterKind, tag: string): void => {
-                  this.filterKind = kind;
-                  this.filterTag = tag;
-                  this.isGrouped = false;
+                  this.listState.applyFilter(kind, tag);
                 },
                 onGroupedChange: (grouped: boolean): void => {
-                  this.isGrouped = grouped;
-
-                  if (grouped) {
-                    this.filterKind = ItemFilterKind.ALL;
-                    this.filterTag = '';
-                  }
+                  this.listState.applyGrouped(grouped);
                 },
                 onToggleSort: (): void => {
                   this.toggleSort();
@@ -115,10 +100,7 @@ export struct Index {
               ListView({
                 itemsRuntime: this.itemsRuntime,
                 isSortMode: this.isSortMode,
-                query: this.query,
-                filterKind: this.filterKind,
-                filterTag: this.filterTag,
-                isGrouped: this.isGrouped,
+                state: this.listState,
                 onTogglePin: (id: string): void => {
                   this.togglePin(id).catch(() => {
                     // 失败已由 Toast 提示，仅避免 unhandled rejection
@@ -131,9 +113,7 @@ export struct Index {
                   this.requestDelete(id);
                 },
                 onClearFilter: (): void => {
-                  this.query = '';
-                  this.filterKind = ItemFilterKind.ALL;
-                  this.filterTag = '';
+                  this.listState.clearFilter();
                 }
               })
               .layoutWeight(1)
@@ -362,10 +342,9 @@ export struct Index {
 
   private enterSortMode(): void {
     // 排序作用于完整列表：先清空搜索/筛选/分组，并忽略置顶权重（见 ListView.visibleIds）
-    this.query = '';
-    this.filterKind = ItemFilterKind.ALL;
-    this.filterTag = '';
-    this.isGrouped = false;
+    this.listState.clearFilter();
+    // 分组视图下没有拖拽排序（Repeat.onMove 仅平铺分支），进入排序必须回到平铺
+    this.listState.isGrouped = false;
     this.isSortMode = true;
     this.snapshotIds = [...this.itemsRuntime.ids];
   }
@@ -434,38 +413,10 @@ export struct Index {
           () => this.fetchFailedDialog(() => this.refresh()));
 
       this.itemsRuntime.reload(items.values());
-      this.resetStaleViewState();
+      this.listState.syncView(this.itemsRuntime.snapshot(), this.itemsRuntime.hasMeta());
       this.syncCards();
     } finally {
       this.isFetching = false;
-    }
-  }
-
-  // 刷新后清理已失效的视图状态：标签被删空、置顶项被取消、分组已无意义时回到默认视图
-  private resetStaleViewState(): void {
-    if (this.itemsRuntime.ids.length === 0) {
-      this.query = '';
-      this.filterKind = ItemFilterKind.ALL;
-      this.filterTag = '';
-      this.isGrouped = false;
-
-      return;
-    }
-
-    const snapshot = this.itemsRuntime.snapshot();
-
-    if (this.filterKind === ItemFilterKind.TAG && !collectTags(snapshot).includes(this.filterTag)) {
-      this.filterKind = ItemFilterKind.ALL;
-      this.filterTag = '';
-    }
-
-    if (this.filterKind === ItemFilterKind.PINNED && countPinned(snapshot) === 0) {
-      this.filterKind = ItemFilterKind.ALL;
-      this.filterTag = '';
-    }
-
-    if (this.isGrouped && !this.itemsRuntime.hasMeta()) {
-      this.isGrouped = false;
     }
   }
 
