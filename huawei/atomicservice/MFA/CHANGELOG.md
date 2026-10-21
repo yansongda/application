@@ -16,6 +16,7 @@
 - 环境地址改为由构建模式（debug/release）在编译期注入，移除 `module.json5` 中需手工解除注释的 `env` metadata，正式包不再有误连测试环境的可能
 - 端内验证码计算改用 `@yansongda/otp` 库实现，替换自研 TOTP 算法；算法与输出不变（SHA1 + 6 位，仍与后端一致），用户可见行为无变化 (#173)
 - 首页工具条与列表视图拆分为 `Toolbar` / `ListView` 两个组件，由 `Index` 统一编排；布局与交互不变
+- 空态提示卡由独立组件 `IndexGuide` 内联进 `EmptyState`（删除该文件），页面级组件统一收在 `components/index/` 下；空态外观不变
 
 ### Fixed
 
