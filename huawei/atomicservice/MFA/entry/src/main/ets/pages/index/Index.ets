@@ -16,7 +16,8 @@ import { User } from '../../models/User';
 import { displayOr } from '../../utils/Display';
 import { EmptyState } from '../../components/index/EmptyState';
 import { AddFab } from '../../components/index/AddFab';
-import { TotpListView } from '../../components/index/TotpListView';
+import { ListView } from '../../components/index/ListView';
+import { Toolbar } from '../../components/index/Toolbar';
 import { FormBridge } from '../../models/form/FormBridge';
 import { FormIntent } from '../../models/form/FormIntent';
 import { FormRoute } from '../../models/form/FormRoute';
@@ -81,44 +82,63 @@ export struct Index {
               }
             })
           } else {
-            TotpListView({
-              itemsRuntime: this.itemsRuntime,
-              isSortMode: this.isSortMode,
-              query: this.query,
-              filterKind: this.filterKind,
-              filterTag: this.filterTag,
-              isGrouped: this.isGrouped,
-              onQueryChange: (query: string): void => {
-                this.query = query;
-              },
-              onFilterChange: (kind: ItemFilterKind, tag: string): void => {
-                this.filterKind = kind;
-                this.filterTag = tag;
-                this.isGrouped = false;
-              },
-              onGroupedChange: (grouped: boolean): void => {
-                this.isGrouped = grouped;
+            Column() {
+              Toolbar({
+                itemsRuntime: this.itemsRuntime,
+                isSortMode: this.isSortMode,
+                query: this.query,
+                filterKind: this.filterKind,
+                filterTag: this.filterTag,
+                isGrouped: this.isGrouped,
+                onQueryChange: (query: string): void => {
+                  this.query = query;
+                },
+                onFilterChange: (kind: ItemFilterKind, tag: string): void => {
+                  this.filterKind = kind;
+                  this.filterTag = tag;
+                  this.isGrouped = false;
+                },
+                onGroupedChange: (grouped: boolean): void => {
+                  this.isGrouped = grouped;
 
-                if (grouped) {
+                  if (grouped) {
+                    this.filterKind = ItemFilterKind.ALL;
+                    this.filterTag = '';
+                  }
+                },
+                onToggleSort: (): void => {
+                  this.toggleSort();
+                }
+              })
+
+              ListView({
+                itemsRuntime: this.itemsRuntime,
+                isSortMode: this.isSortMode,
+                query: this.query,
+                filterKind: this.filterKind,
+                filterTag: this.filterTag,
+                isGrouped: this.isGrouped,
+                onTogglePin: (id: string): void => {
+                  this.togglePin(id).catch(() => {
+                    // 失败已由 Toast 提示，仅避免 unhandled rejection
+                  });
+                },
+                onDetail: (id: string): void => {
+                  this.openDetail(id);
+                },
+                onDelete: (id: string): void => {
+                  this.requestDelete(id);
+                },
+                onClearFilter: (): void => {
+                  this.query = '';
                   this.filterKind = ItemFilterKind.ALL;
                   this.filterTag = '';
                 }
-              },
-              onToggleSort: (): void => {
-                this.toggleSort();
-              },
-              onTogglePin: (id: string): void => {
-                this.togglePin(id).catch(() => {
-                  // 失败已由 Toast 提示，仅避免 unhandled rejection
-                });
-              },
-              onDetail: (id: string): void => {
-                this.openDetail(id);
-              },
-              onDelete: (id: string): void => {
-                this.requestDelete(id);
-              }
-            })
+              })
+              .layoutWeight(1)
+            }
+            .width('100%')
+            .height('100%')
           }
         }
         .onRefreshing(() => {
@@ -364,7 +384,7 @@ export struct Index {
   }
 
   private enterSortMode(): void {
-    // 排序作用于完整列表：先清空搜索/筛选/分组，并忽略置顶权重（见 TotpListView.visibleIds）
+    // 排序作用于完整列表：先清空搜索/筛选/分组，并忽略置顶权重（见 ListView.visibleIds）
     this.query = '';
     this.filterKind = ItemFilterKind.ALL;
     this.filterTag = '';

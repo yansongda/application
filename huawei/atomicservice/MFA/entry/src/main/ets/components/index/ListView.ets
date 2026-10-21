@@ -3,9 +3,6 @@ import { AppPagesName, LogDomain } from '../../App';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { TotpCard } from '../TotpCard';
 import {
-  collectTags,
-  countPinned,
-  countTag,
   filterItems,
   groupItems,
   ItemFilterKind,
@@ -15,36 +12,29 @@ import {
   sortPinnedFirst
 } from '../../utils/ItemFilter';
 
-// 首页列表视图（工具条 + 搜索 + 筛选菜单 + 平铺/分组列表 + 左滑置顶/删除）。
-// 自持 ListScroller；详情 / 删除 / 置顶 / 排序 / 筛选通过 @Event 上报，由页面负责路由跳转、接口调用与持久化。
+// 首页列表视图（平铺/分组列表 + 无匹配占位 + 左滑置顶/删除）。
+// 工具条由页面单独编排；自持 ListScroller；详情 / 删除 / 置顶 / 清空筛选通过 @Event 上报，
+// 由页面负责路由跳转、接口调用与持久化。
 @ComponentV2
-export struct TotpListView {
+export struct ListView {
   @Param itemsRuntime: ItemsRuntime = new ItemsRuntime();
   @Param isSortMode: boolean = false;
   @Param query: string = '';
   @Param filterKind: ItemFilterKind = ItemFilterKind.ALL;
   @Param filterTag: string = '';
   @Param isGrouped: boolean = false;
-  @Event onQueryChange: (query: string) => void = () => {
-  };
-  @Event onFilterChange: (kind: ItemFilterKind, tag: string) => void = () => {
-  };
-  @Event onGroupedChange: (grouped: boolean) => void = () => {
-  };
-  @Event onToggleSort: () => void = () => {
-  };
   @Event onTogglePin: (id: string) => void = () => {
   };
   @Event onDetail: (id: string) => void = () => {
   };
   @Event onDelete: (id: string) => void = () => {
   };
+  @Event onClearFilter: () => void = () => {
+  };
   private scroller: ListScroller = new ListScroller();
 
   build() {
     Column() {
-      this.listToolbar()
-
       if (this.isNoMatch()) {
         this.noMatch()
       } else {
@@ -53,117 +43,6 @@ export struct TotpListView {
     }
     .width('100%')
     .height('100%')
-  }
-
-  // 工具条：搜索 + 筛选 + 排序；排序态退化为提示 + 完成，避免三行头部挤压列表
-  @Builder
-  listToolbar() {
-    Row({ space: 8 }) {
-      if (this.isSortMode) {
-        Text($r('app.string.index_index_page_sort_hint'))
-          .layoutWeight(1)
-          .fontSize($r('app.float.caption_smaller_font_size'))
-          .fontColor($r('sys.color.font_tertiary'))
-          .maxLines(2)
-
-        Button($r('app.string.index_index_page_sort_mode_done'))
-          .type(ButtonType.Normal)
-          .height(36)
-          .padding({ left: 5, right: 5 })
-          .backgroundColor(Color.Transparent)
-          .fontColor($r('app.color.tag_text'))
-          .fontSize($r('app.float.body_font_size'))
-          .onClick(() => {
-            this.onToggleSort();
-          })
-      } else {
-        Search({ value: this.query, placeholder: $r('app.string.index_index_page_search_placeholder') })
-          .layoutWeight(1)
-          .height(36)
-          .backgroundColor($r('sys.color.background_primary'))
-          .borderRadius(18)
-          .onChange((value: string): void => {
-            this.onQueryChange(value);
-          })
-
-        if (this.hasMeta()) {
-          Button(this.filterLabel())
-            .type(ButtonType.Normal)
-            .height(36)
-            .padding({ left: 5, right: 5 })
-            .backgroundColor(Color.Transparent)
-            .fontColor(this.viewActive() ? $r('app.color.tag_text') : $r('sys.color.font_secondary'))
-            .fontSize($r('app.float.body_font_size'))
-            .bindMenu(this.filterMenu)
-        }
-
-        Button($r('app.string.index_index_page_sort'))
-          .type(ButtonType.Normal)
-          .height(36)
-          .padding({ left: 5, right: 5 })
-          .backgroundColor(Color.Transparent)
-          .fontColor(this.isSortMode ? $r('app.color.tag_text') : $r('sys.color.font_secondary'))
-          .fontSize($r('app.float.body_font_size'))
-          .onClick(() => {
-            this.onToggleSort();
-          })
-      }
-    }
-    .width('100%')
-    .padding({
-      left: $r('app.integer.page_padding'),
-      right: $r('app.integer.page_padding'),
-      top: 2,
-      bottom: $r('app.integer.page_padding_smaller')
-    })
-  }
-
-  // 筛选菜单：一个入口承载「视图」与「筛选」，选中项显示对勾
-  @Builder
-  filterMenu() {
-    Menu() {
-      MenuItemGroup({ header: $r('app.string.index_index_page_menu_view') }) {
-        MenuItem({ content: $r('app.string.index_index_page_view_flat') })
-          .selectIcon(true)
-          .selected(!this.isGrouped)
-          .onClick(() => {
-            this.onGroupedChange(false);
-          })
-
-        MenuItem({ content: $r('app.string.index_index_page_view_grouped') })
-          .selectIcon(true)
-          .selected(this.isGrouped)
-          .onClick(() => {
-            this.onGroupedChange(true);
-          })
-      }
-
-      MenuItemGroup({ header: $r('app.string.index_index_page_menu_filter') }) {
-        MenuItem({ content: $r('app.string.index_index_page_filter_all'), labelInfo: this.itemsRuntime.ids.length.toString() })
-          .selectIcon(true)
-          .selected(this.filterKind === ItemFilterKind.ALL)
-          .onClick(() => {
-            this.onFilterChange(ItemFilterKind.ALL, '');
-          })
-
-        MenuItem({ content: $r('app.string.index_index_page_filter_pinned'), labelInfo: this.pinnedCount().toString() })
-          .selectIcon(true)
-          .selected(this.filterKind === ItemFilterKind.PINNED)
-          .enabled(this.pinnedCount() > 0)
-          .onClick(() => {
-            this.onFilterChange(ItemFilterKind.PINNED, '');
-          })
-
-        ForEach(this.tagNames(), (tag: string) => {
-          MenuItem({ content: tag, labelInfo: this.tagCount(tag).toString() })
-            .selectIcon(true)
-            .selected(this.filterKind === ItemFilterKind.TAG && this.filterTag === tag)
-            .onClick(() => {
-              this.onFilterChange(ItemFilterKind.TAG, tag);
-            })
-        }, (tag: string): string => tag)
-      }
-    }
   }
 
   // 无匹配结果：只占列表区域，不显示全屏空态
@@ -180,8 +59,7 @@ export struct TotpListView {
         .fontColor($r('app.color.tag_text'))
         .fontSize($r('app.float.caption_font_size'))
         .onClick(() => {
-          this.onQueryChange('');
-          this.onFilterChange(ItemFilterKind.ALL, '');
+          this.onClearFilter();
         })
     }
     .width('100%')
@@ -312,30 +190,6 @@ export struct TotpListView {
     }
   }
 
-  private hasMeta(): boolean {
-    return this.itemsRuntime.hasMeta();
-  }
-
-  private viewActive(): boolean {
-    return this.isGrouped || this.filterKind !== ItemFilterKind.ALL;
-  }
-
-  private filterLabel(): ResourceStr {
-    if (this.isGrouped) {
-      return $r('app.string.index_index_page_view_grouped_short');
-    }
-
-    if (this.filterKind === ItemFilterKind.PINNED) {
-      return $r('app.string.index_index_page_filter_pinned_short');
-    }
-
-    if (this.filterKind === ItemFilterKind.TAG && this.filterTag.length > 0) {
-      return `#${this.filterTag}`;
-    }
-
-    return $r('app.string.index_index_page_filter');
-  }
-
   private snapshot(): ItemView[] {
     return this.itemsRuntime.snapshot();
   }
@@ -358,18 +212,6 @@ export struct TotpListView {
 
   private groups(): ItemGroupView[] {
     return groupItems(sortPinnedFirst(filterItems(this.snapshot(), this.filterKind, this.filterTag, this.query)));
-  }
-
-  private tagNames(): string[] {
-    return collectTags(this.snapshot());
-  }
-
-  private pinnedCount(): number {
-    return countPinned(this.snapshot());
-  }
-
-  private tagCount(tag: string): number {
-    return countTag(this.snapshot(), tag);
   }
 
   private groupTitle(group: ItemGroupView): ResourceStr {
