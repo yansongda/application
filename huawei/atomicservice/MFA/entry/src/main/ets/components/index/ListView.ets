@@ -63,7 +63,7 @@ export struct ListView {
         })
     }
     .width('100%')
-    .layoutWeight(1)
+    .height('100%')
     .justifyContent(FlexAlign.Center)
   }
 
@@ -95,7 +95,7 @@ export struct ListView {
       }
     }
     .width('100%')
-    .layoutWeight(1)
+    .height('100%')
     .contentEndOffset(80)
     .sticky(this.isGrouped ? StickyStyle.Header : StickyStyle.None)
   }
