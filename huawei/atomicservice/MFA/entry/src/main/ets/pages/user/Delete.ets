@@ -4,6 +4,7 @@ import { Authorization } from '../../models/Auth';
 import { AppPagesName } from '../../App';
 import { Toast } from '../../utils/PromptAction';
 import { AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
+import { ListViewStateStore } from '../../models/totp/ListViewStateStore';
 
 @Builder
 export function builder() {
@@ -63,6 +64,13 @@ struct Delete {
               this.authorization.clear();
               this.user.config = new Config();
               this.user.phone = undefined;
+
+              // 首页的筛选/分组是针对已删账号的标签产生的，一并清掉，避免下一个账号继承
+              const context = this.getUIContext().getHostContext();
+
+              if ('undefined' !== typeof context) {
+                ListViewStateStore.clear(context);
+              }
 
               this.pages.clear();
               this.pages.pushPathByName(AppPagesName.LOGIN, null);

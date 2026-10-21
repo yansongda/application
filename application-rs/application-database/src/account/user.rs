@@ -19,6 +19,28 @@ pub struct Config {
     pub avatar: Option<String>,
     pub nickname: Option<String>,
     pub slogan: Option<String>,
+    /// MFA 相关配置：按服务分组（`mfa.security` 之外后续可扩 `mfa.totp` 等），
+    /// 缺省即老数据（无 `mfa` 键），不写回 null（避免无谓的磁盘变更）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mfa: Option<MfaConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MfaConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub security: Option<MfaSecurity>,
+}
+
+/// 元服务本地安全设置的云端副本（字段名与端上 preferences 一一对应，端侧无需再加一层映射）。
+/// 只保存「用户意愿值」，绝不涉及 `locked` 等运行态。
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MfaSecurity {
+    /// 防截屏（窗口隐私模式）开关
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub privacy_window: Option<bool>,
+    /// 应用锁开关
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_lock: Option<bool>,
 }
 
 pub async fn fetch(user_id: u64) -> application_kernel::result::Result<User> {
@@ -78,6 +100,16 @@ pub async fn update_phone(id: u64, phone: &str) -> application_kernel::result::R
     let pool_ref = Pool::mysql("account")?;
 
     let _ = update!(pool_ref, sql, phone, id);
+
+    Ok(())
+}
+
+pub async fn update_config(id: u64, config: &Config) -> application_kernel::result::Result<()> {
+    let sql = "update account.user set config = ? where id = ?";
+    let pool_ref = Pool::mysql("account")?;
+    let config = Json(config);
+
+    let _ = update!(pool_ref, sql, &config, id);
 
     Ok(())
 }

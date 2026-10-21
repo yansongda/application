@@ -2,6 +2,17 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- 「我的 - 安全」的防截屏与应用锁设置同步到服务端（`config.mfa.security`）：本地写入成功后异步上行，登录后按「本地未同步变更优先，否则以服务端恢复」调和，换机 / 重装登录后可恢复
+
+### Changed
+
+- 首页「筛选」菜单改为自绘弹层：分组标题 12fp 三级色、选项行 36vp、数量右对齐，层级更清晰、整体更紧凑（对齐设计稿）
+- 首页筛选 / 分组状态落盘（`index.filter` / `index.grouped`），元服务进程被杀后重新进入不再重置；注销账号时一并清理
+
 ## [1.6.0] - 2026-10-21
 
 ### Added

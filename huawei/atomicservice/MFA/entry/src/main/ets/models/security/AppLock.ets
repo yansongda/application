@@ -11,7 +11,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LogDomain } from '../../App';
 import { shouldRelock, shouldDebounceVerify } from '../../utils/AppLockPolicy';
-import { KEY_SECURITY_APP_LOCK, Prefs } from '../../utils/Prefs';
+import { KEY_SECURITY_APP_LOCK, KEY_SECURITY_DIRTY, Prefs, PrefsInstance } from '../../utils/Prefs';
 
 // 用户设置默认关：开启后「重新打开或离开 1 分钟后」需验证身份
 const DEFAULT_APP_LOCK: boolean = false;
@@ -79,16 +79,40 @@ export class AppLock {
   // 开关写入：**先落盘、成功才改内存**——失败返回 false 且内存不变（调用方提示用户）。
   // 防锁死降级（设备确无凭据）也走这里，落盘失败时内存仍为 true，仅日志留痕，不阻塞解锁
   setEnabled(context: Context, on: boolean): boolean {
-    if (!Prefs.putBoolean(Prefs.open(context), KEY_SECURITY_APP_LOCK, on)) {
+    const prefs: PrefsInstance | undefined = Prefs.open(context);
+
+    if (!Prefs.putBoolean(prefs, KEY_SECURITY_APP_LOCK, on)) {
       hilog.error(LogDomain.MODELS, 'models/security', 'app_lock_save_failed: appLock=%{public}s', on.toString());
 
       return false;
     }
 
+    // 本地已生效后只标记「待同步」：真正上行由 SecuritySync.flush 统一负责（模型不发请求）
+    Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, true);
+
     this._enabled = on;
     hilog.info(LogDomain.MODELS, 'models/security', 'app_lock_set: appLock=%{public}s', on.toString());
 
     return true;
+  }
+
+  // 用服务端保存的用户意愿值恢复开关。
+  // 只改 `_enabled`，**绝不**碰 `_locked`：否则登录后会在页面中途凭空弹出遮罩；
+  // 加锁时机仍由 `reset()`（冷启动）/ `onForeground()`（离开超 60s）决定。
+  applyRemote(context: Context, on: boolean): void {
+    if (this._enabled === on) {
+      return;
+    }
+
+    if (!Prefs.putBoolean(Prefs.open(context), KEY_SECURITY_APP_LOCK, on)) {
+      hilog.error(LogDomain.MODELS, 'models/security', 'app_lock_restore_failed: appLock=%{public}s',
+        on.toString());
+
+      return;
+    }
+
+    this._enabled = on;
+    hilog.info(LogDomain.MODELS, 'models/security', 'app_lock_restore: appLock=%{public}s', on.toString());
   }
 
   // 冷启动：locked = 持久化设置（AppLock 自身不落盘，由 enabled 决定初始值）。

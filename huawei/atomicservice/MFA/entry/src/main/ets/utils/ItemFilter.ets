@@ -28,6 +28,56 @@ export interface ItemGroupView {
   ids: string[];
 }
 
+// 落盘的 kind 取值：用字符串而非枚举数字（磁盘数据可读，增删枚举不会串值）
+const KIND_ALL: string = 'all';
+const KIND_PINNED: string = 'pinned';
+const KIND_TAG: string = 'tag';
+
+// preferences 中 `index.filter` 的存储结构：kind 与 tag 语义耦合（tag 仅在 kind=tag 时有意义），
+// 所以两者必须同一个 key 原子写入，避免出现「kind 已改、tag 还是旧值」的中间态
+export interface StoredFilter {
+  kind: string;
+  tag: string;
+}
+
+export interface DecodedFilter {
+  kind: ItemFilterKind;
+  tag: string;
+}
+
+// 生效筛选 → 磁盘结构（搜索词不参与持久化）
+export function encodeFilter(kind: ItemFilterKind, tag: string): StoredFilter {
+  if (ItemFilterKind.PINNED === kind) {
+    return { kind: KIND_PINNED, tag: '' };
+  }
+
+  if (ItemFilterKind.TAG === kind) {
+    return { kind: KIND_TAG, tag: tag };
+  }
+
+  return { kind: KIND_ALL, tag: '' };
+}
+
+// 磁盘结构 → 生效筛选：kind 非法 / tag 为空 / 类型不符一律回落「全部」（脏数据不能让首页空列表）
+export function decodeFilter(raw: object | undefined): DecodedFilter {
+  if ('undefined' === typeof raw) {
+    return { kind: ItemFilterKind.ALL, tag: '' };
+  }
+
+  const stored: StoredFilter = raw as StoredFilter;
+  const tag: string = 'string' === typeof stored.tag ? stored.tag : '';
+
+  if (KIND_PINNED === stored.kind) {
+    return { kind: ItemFilterKind.PINNED, tag: '' };
+  }
+
+  if (KIND_TAG === stored.kind && tag.length > 0) {
+    return { kind: ItemFilterKind.TAG, tag: tag };
+  }
+
+  return { kind: ItemFilterKind.ALL, tag: '' };
+}
+
 // 搜索分词：按空白拆分、归一化为小写；空串表示不过滤
 function queryTokens(query: string): string[] {
   const tokens: string[] = [];

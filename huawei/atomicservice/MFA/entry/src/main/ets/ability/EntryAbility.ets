@@ -10,6 +10,7 @@ import { FormRoute } from '../models/form/FormRoute';
 import { MainTheme } from '../themes/Main';
 import { AppLock } from '../models/security/AppLock';
 import { PrivacyWindow } from '../models/security/PrivacyWindow';
+import { SecuritySync } from '../models/security/Sync';
 
 export default class EntryAbility extends UIAbility {
   // 冷启动：卡片点击拉起时 want 可能携带快捷意图，写入共享状态供 Index 页消费
@@ -85,6 +86,9 @@ export default class EntryAbility extends UIAbility {
     // 先恢复用户设置（同时清掉退后台的临时遮挡），再按 60s 阈值判定是否重锁
     PrivacyWindow.instance().occlude(false, 'foreground');
     AppLock.instance().onForeground();
+
+    // 上次退后台 / 上次运行时的安全设置若没同步成功（dirty），回前台顺手补一次
+    SecuritySync.flush(this.context);
   }
 
   onBackground(): void {

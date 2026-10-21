@@ -9,7 +9,7 @@ import { AppStorageV2, window } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
 import { PrivacyWindow as PrivacyWindowWriter } from '../../utils/PrivacyWindow';
-import { KEY_SECURITY_PRIVACY_WINDOW, Prefs } from '../../utils/Prefs';
+import { KEY_SECURITY_DIRTY, KEY_SECURITY_PRIVACY_WINDOW, Prefs, PrefsInstance } from '../../utils/Prefs';
 
 // 用户设置默认开 = fail-closed（用户在不知情时被截屏的风险 > 自己被挡的风险）
 const DEFAULT_PRIVACY_WINDOW: boolean = true;
@@ -46,18 +46,43 @@ export class PrivacyWindow {
   // 设置该项：**先落盘、成功才改内存**——失败直接 false 且内存不变（调用方提示用户），
   // 因此不需要「先乐观改内存再回滚」那套闭包。成功后立即落地到窗口，页面无需再手工 apply。
   setEnabled(context: Context, on: boolean): boolean {
-    if (!Prefs.putBoolean(Prefs.open(context), KEY_SECURITY_PRIVACY_WINDOW, on)) {
+    const prefs: PrefsInstance | undefined = Prefs.open(context);
+
+    if (!Prefs.putBoolean(prefs, KEY_SECURITY_PRIVACY_WINDOW, on)) {
       hilog.error(LogDomain.MODELS, 'models/security', 'screen_protect_save_failed: enabled=%{public}s',
         on.toString());
 
       return false;
     }
 
+    // 本地已生效后只标记「待同步」：真正上行由 SecuritySync.flush 统一负责（模型不发请求）
+    Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, true);
+
     this._enabled = on;
     this.apply('setting');
     hilog.info(LogDomain.MODELS, 'models/security', 'screen_protect_set: enabled=%{public}s', on.toString());
 
     return true;
+  }
+
+  // 从服务端恢复用户设置（登录后一次）：与本地相同则不动（避免无谓写盘）；
+  // 不置 dirty——远端值再上行没有意义
+  applyRemote(context: Context, on: boolean): void {
+    if (this._enabled === on) {
+      return;
+    }
+
+    if (!Prefs.putBoolean(Prefs.open(context), KEY_SECURITY_PRIVACY_WINDOW, on)) {
+      hilog.error(LogDomain.MODELS, 'models/security', 'screen_protect_restore_failed: enabled=%{public}s',
+        on.toString());
+
+      return;
+    }
+
+    this._enabled = on;
+    this.apply('remote');
+    hilog.info(LogDomain.MODELS, 'models/security', 'screen_protect_restore: enabled=%{public}s',
+      on.toString());
   }
 
   // 把「当前该不该遮挡」写进窗口：用户设置与临时遮挡取或，是窗口状态的**唯一真相源**

@@ -25,6 +25,7 @@ import { FormRoute } from '../../models/form/FormRoute';
 import { Authorization } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
 import { ListViewState } from '../../models/totp/ListViewState';
+import { ListViewStateStore } from '../../models/totp/ListViewStateStore';
 import { ItemFilterKind } from '../../utils/ItemFilter';
 
 @Builder
@@ -61,6 +62,17 @@ export struct Index {
   // NavDestination 激活态：隐藏时不消费，避免从底层页拉起系统扫码
   private isActive: boolean = false;
 
+  // 冷启动恢复筛选/分组：拿不到 context 时用默认视图（不阻塞页面）
+  aboutToAppear(): void {
+    const context = this.getUIContext().getHostContext();
+
+    if ('undefined' === typeof context) {
+      return;
+    }
+
+    this.listState = ListViewStateStore.restore(context);
+  }
+
   build() {
     NavDestination() {
       Stack({ alignContent: Alignment.BottomEnd }) {
@@ -88,9 +100,11 @@ export struct Index {
                 },
                 onFilterChange: (kind: ItemFilterKind, tag: string): void => {
                   this.listState.applyFilter(kind, tag);
+                  this.saveListState();
                 },
                 onGroupedChange: (grouped: boolean): void => {
                   this.listState.applyGrouped(grouped);
+                  this.saveListState();
                 },
                 onToggleSort: (): void => {
                   this.toggleSort();
@@ -114,6 +128,7 @@ export struct Index {
                 },
                 onClearFilter: (): void => {
                   this.listState.clearFilter();
+                  this.saveListState();
                 }
               })
               .layoutWeight(1)
@@ -345,8 +360,21 @@ export struct Index {
     this.listState.clearFilter();
     // 分组视图下没有拖拽排序（Repeat.onMove 仅平铺分支），进入排序必须回到平铺
     this.listState.isGrouped = false;
+    // 屏幕上已是全量列表，落盘也要同步成「全部 + 平铺」，避免重启后又回到旧筛选
+    this.saveListState();
     this.isSortMode = true;
     this.snapshotIds = [...this.itemsRuntime.ids];
+  }
+
+  // 视图状态落盘（搜索词不参与）：拿不到 context 时静默跳过，不把 UI 事件变成异常
+  private saveListState(): void {
+    const context = this.getUIContext().getHostContext();
+
+    if ('undefined' === typeof context) {
+      return;
+    }
+
+    ListViewStateStore.save(context, this.listState);
   }
 
   // 置顶切换：先请求服务端，成功才改内存；列表按 pinned 重新计算置顶优先顺序
@@ -413,7 +441,12 @@ export struct Index {
           () => this.fetchFailedDialog(() => this.refresh()));
 
       this.itemsRuntime.reload(items.values());
-      this.listState.syncView(this.itemsRuntime.snapshot(), this.itemsRuntime.hasMeta());
+
+      // 数据变了，已失效的筛选/分组（标签被删、置顶被取消）要一并回写，否则下次启动会再加载一遍
+      if (this.listState.syncView(this.itemsRuntime.snapshot(), this.itemsRuntime.hasMeta())) {
+        this.saveListState();
+      }
+
       this.syncCards();
     } finally {
       this.isFetching = false;

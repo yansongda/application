@@ -1,9 +1,17 @@
 import { AxiosResponse } from '@ohos/axios';
-import { IUser } from '../models/User';
+import { IMfaSecurity, IUser } from '../models/User';
 import http, { HttpError, Response } from '../utils/Http';
 
 export interface EditAvatarRequest {
   avatar: string;
+}
+
+export interface EditMfaBody {
+  security: IMfaSecurity;
+}
+
+export interface EditMfaRequest {
+  mfa: EditMfaBody;
 }
 
 export interface EditNicknameRequest {
@@ -60,6 +68,19 @@ export class User {
         {
           slogan,
         });
+
+    if (0 === response.data?.code) {
+      return;
+    }
+
+    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+  }
+
+  // 安全设置云端副本：`config.mfa.security`（后端按叶子 merge，未传的字段保持原值）
+  static async editMfa(security: IMfaSecurity): Promise<void> {
+    const body: EditMfaRequest = { mfa: { security: security } };
+    const response: AxiosResponse<Response<void>> =
+      await http.post<void, AxiosResponse<Response<void>>, EditMfaRequest>('api/v1/users/edit/mfa', body);
 
     if (0 === response.data?.code) {
       return;

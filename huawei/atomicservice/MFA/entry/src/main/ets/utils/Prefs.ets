@@ -29,6 +29,11 @@ export const STORE_NAME: string = 'mfa';
 // 安全设置：逐字段 key（不存整份 JSON）——写入天然按字段隔离，不需要"读整份 → 合并 → 整份写"
 export const KEY_SECURITY_PRIVACY_WINDOW: string = 'security.privacyWindow';
 export const KEY_SECURITY_APP_LOCK: string = 'security.appLock';
+// 安全设置「本地已变更、尚未上行服务端」的脏标记（boolean）；同步逻辑见 models/security/Sync.ets
+export const KEY_SECURITY_DIRTY: string = 'security.dirty';
+// 首页列表视图：筛选（kind 与 tag 语义耦合，合成一个 object key 保证原子写）与分组开关
+export const KEY_INDEX_FILTER: string = 'index.filter';
+export const KEY_INDEX_GROUPED: string = 'index.grouped';
 // 卡片快照：主应用独写、卡片进程只读（object 值）
 export const KEY_FORM_SNAPSHOT: string = 'form.snapshot';
 // 卡片 formId：**每个 formId 一个 key**（`form.id.<formId>`），加/删卡是单 key 写/删，

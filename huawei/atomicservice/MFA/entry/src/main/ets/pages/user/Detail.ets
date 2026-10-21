@@ -6,6 +6,7 @@ import { User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
 import { PrivacyWindow } from '../../models/security/PrivacyWindow';
 import { AppLock, VerifyOutcome } from '../../models/security/AppLock';
+import { SecuritySync } from '../../models/security/Sync';
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Dialog, Toast } from '../../utils/PromptAction';
@@ -264,7 +265,12 @@ struct Detail {
     if (!this.privacyWindow.setEnabled(context, next)) {
       // 写盘失败：模型内存值未变，这里提示「设置保存失败」并保持开关原位
       Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
+
+      return;
     }
+
+    // 本地已生效：异步上行服务端（失败保留脏标记，下次登录 / 回前台重试）
+    SecuritySync.flush(context);
   }
 
   // 应用锁开关：开启前必须通过系统认证，认证成功才写盘；关闭直接写盘
@@ -285,7 +291,12 @@ struct Detail {
           // 成功不弹「已开启」提示（开关本身就是反馈）；但写盘失败必须提示，否则开关静默弹回、用户不知原因
           if (!this.appLock.setEnabled(context, true)) {
             Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
+
+            return;
           }
+
+          SecuritySync.flush(context);
+
           return;
         }
         if (VerifyOutcome.NO_CREDENTIAL === outcome) {
@@ -301,6 +312,10 @@ struct Detail {
     // 写盘失败时内存值不变（开关随重建弹回原位），提示原因避免用户以为点了没反应
     if (!this.appLock.setEnabled(context, false)) {
       Toast.show({ message: $r('app.string.user_detail_page_setting_failed'), duration: 3000 });
+
+      return;
     }
+
+    SecuritySync.flush(context);
   }
 }
