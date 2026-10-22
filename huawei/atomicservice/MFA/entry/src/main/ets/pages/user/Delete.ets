@@ -4,7 +4,7 @@ import { Authorization } from '../../models/Auth';
 import { AppPagesName } from '../../App';
 import { Toast } from '../../utils/PromptAction';
 import { AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
-import { ListViewStateStore } from '../../models/totp/ListViewStateStore';
+import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
 
 @Builder
 export function builder() {
@@ -69,7 +69,7 @@ struct Delete {
               const context = this.getUIContext().getHostContext();
 
               if ('undefined' !== typeof context) {
-                ListViewStateStore.clear(context);
+                ListViewStatePrefs.clear(context);
               }
 
               this.pages.clear();

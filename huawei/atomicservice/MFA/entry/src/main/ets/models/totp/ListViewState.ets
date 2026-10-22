@@ -1,8 +1,8 @@
 import { collectTags, countPinned, ItemFilterKind, ItemView } from '../../utils/ItemFilter';
 
 // 首页列表视图状态：搜索 / 筛选 / 分组。
-// **不依赖 ArkUI / preferences**（落盘在 models/totp/ListViewStateStore.ets），便于单测；
-// 搜索词只影响本地渲染、不持久化；筛选与分组跨进程存活，由页面在变更后显式调用 Store 落盘。
+// **不依赖 ArkUI / preferences**（落盘在 models/totp/ListViewStatePrefs.ets），便于单测；
+// 搜索词只影响本地渲染、不持久化；筛选与分组跨进程存活，由页面在变更后显式调用 Prefs 适配层落盘。
 // 与 ItemsRuntime 解耦：需要数据快照的判断由调用方传入 ItemView[]，便于单测。
 @ObservedV2
 export class ListViewState {

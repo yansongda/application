@@ -6,11 +6,13 @@ import { KEY_INDEX_FILTER, KEY_INDEX_GROUPED, Prefs, PrefsInstance } from '../..
 import { ListViewState } from './ListViewState';
 
 // 首页筛选 / 分组视图的落盘：单库 `mfa` 的 `index.filter`（object：kind + tag）与 `index.grouped`（boolean）。
-// 与 ListViewState 分离：状态模型保持纯逻辑（可单测），读写 preferences 只在本文件。
+// **只是本地 preferences 的读写适配**（`save` 写本机 KV，**不上云**、无脏标记、无异步）：
+// 与 ListViewState 分离——状态模型保持纯逻辑（可单测），读写 preferences 只在本文件。
 // 搜索词**不落盘**（关闭页面即丢弃）。
-const TAG: string = 'models/list_view_state';
+// 端云同步是另一回事，见 models/security/Sync.ets（本地优先 + 脏标记），不要混入本文件。
+const TAG: string = 'models/list_view_state_prefs';
 
-export class ListViewStateStore {
+export class ListViewStatePrefs {
   // 冷启动恢复：读不到 / 脏数据一律回落默认视图（「全部 + 平铺」），不影响启动
   static restore(context: Context): ListViewState {
     const state = new ListViewState();

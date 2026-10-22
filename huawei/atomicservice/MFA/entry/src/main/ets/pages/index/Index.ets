@@ -25,7 +25,7 @@ import { FormRoute } from '../../models/form/FormRoute';
 import { Authorization } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
 import { ListViewState } from '../../models/totp/ListViewState';
-import { ListViewStateStore } from '../../models/totp/ListViewStateStore';
+import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
 import { ItemFilterKind } from '../../utils/ItemFilter';
 
 @Builder
@@ -70,7 +70,7 @@ export struct Index {
       return;
     }
 
-    this.listState = ListViewStateStore.restore(context);
+    this.listState = ListViewStatePrefs.restore(context);
   }
 
   build() {
@@ -374,7 +374,7 @@ export struct Index {
       return;
     }
 
-    ListViewStateStore.save(context, this.listState);
+    ListViewStatePrefs.save(context, this.listState);
   }
 
   // 置顶切换：先请求服务端，成功才改内存；列表按 pinned 重新计算置顶优先顺序
