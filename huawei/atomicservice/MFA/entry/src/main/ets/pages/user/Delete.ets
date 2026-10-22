@@ -4,6 +4,8 @@ import { Authorization } from '../../models/Auth';
 import { AppPagesName } from '../../App';
 import { Toast } from '../../utils/PromptAction';
 import { AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
+import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
+import { SecuritySync } from '../../models/security/Sync';
 
 @Builder
 export function builder() {
@@ -63,6 +65,16 @@ struct Delete {
               this.authorization.clear();
               this.user.config = new Config();
               this.user.phone = undefined;
+
+              // 首页的筛选/分组是针对已删账号的标签产生的，一并清掉，避免下一个账号继承；
+              // 安全设置的「待上行」标记也要清：服务端副本已随账号删除，残留脏标记会让下一个登录的
+              // 账号在 reconcile 时被本次的本地值覆盖（settings 本身是设备级偏好，保留）
+              const context = this.getUIContext().getHostContext();
+
+              if ('undefined' !== typeof context) {
+                ListViewStatePrefs.clear(context);
+                SecuritySync.clearDirty(context);
+              }
 
               this.pages.clear();
               this.pages.pushPathByName(AppPagesName.LOGIN, null);

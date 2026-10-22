@@ -1,6 +1,21 @@
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { ListViewState } from '../../models/totp/ListViewState';
-import { collectTags, countPinned, countTag, ItemFilterKind } from '../../utils/ItemFilter';
+import { collectTagStats, countPinned, ItemFilterKind, TagStat } from '../../utils/ItemFilter';
+
+// 筛选弹层视觉规格（对齐 design: docs/2026-10-20-huawei-mfa-search-tag-pin-ui-preview.html）：
+// 弹层容器（背景 / 圆角 / 阴影 / 点外关闭 / 进出动效）由系统菜单提供，这里只管内容排版
+const MENU_WIDTH: number = 218;
+const MENU_PADDING_H: number = 14;
+const MENU_PADDING_V: number = 5;
+const MENU_ROW_HEIGHT: number = 36;
+const MENU_ROW_SPACE: number = 8;
+const MENU_SECTION_HEIGHT: number = 26;
+// 对勾槽位固定宽度：选中/未选中时文字不左右跳动
+const MENU_CHECK_SLOT: number = 18;
+const MENU_CHECK_FONT_SIZE: number = 16;
+const MENU_DIVIDER_STROKE: number = 0.5;
+// 不可选项（无置顶项时的「置顶」）降透明度
+const MENU_DISABLED_OPACITY: number = 0.4;
 
 // 首页工具条：搜索 + 筛选（视图与筛选合一菜单）+ 排序；排序态退化为提示 + 完成，避免三行头部挤压列表。
 // 工具栏状态由页面持有，本组件只做展示与 @Event 上报，不与列表渲染耦合。
@@ -9,6 +24,9 @@ export struct Toolbar {
   @Param itemsRuntime: ItemsRuntime = new ItemsRuntime();
   @Param isSortMode: boolean = false;
   @Param state: ListViewState = new ListViewState();
+  // 筛选菜单显隐（bindMenu 的 isShow 形态，内容自绘）：系统 Menu 的菜单项行高固定（约 48vp）、
+  // 分组标题没有字体属性，做不出设计稿的「标题小字 + 紧凑行高」层级
+  @Local private isMenuShow: boolean = false;
   @Event onQueryChange: (query: string) => void = () => {
   };
   @Event onFilterChange: (kind: ItemFilterKind, tag: string) => void = () => {
@@ -55,7 +73,17 @@ export struct Toolbar {
             .backgroundColor(Color.Transparent)
             .fontColor(this.viewActive() ? $r('app.color.tag_text') : $r('sys.color.font_secondary'))
             .fontSize($r('app.float.body_font_size'))
-            .bindMenu(this.filterMenu)
+            .bindMenu(this.isMenuShow, this.filterMenuContent, {
+              // 点菜单外区域由系统关闭；这里复位状态，否则下次点击会被当成「已展开」而打不开
+              onDisappear: (): void => {
+                this.isMenuShow = false;
+              },
+            })
+            .onClick((): void => {
+              // 用 toggle 而非恒置 true：菜单已展开时再点按钮，系统会先关闭并触发 onDisappear，
+              // 若这里强行置 true 会立刻重开（表现为闪一下）
+              this.isMenuShow = !this.isMenuShow;
+            })
         }
 
         Button($r('app.string.index_index_page_sort'))
@@ -79,60 +107,109 @@ export struct Toolbar {
     })
   }
 
-  // 筛选菜单：一个入口承载「视图」与「筛选」，选中项显示对勾
+  // 筛选菜单（视图 + 筛选合一）：结构对齐设计稿
+  // design: docs/2026-10-20-huawei-mfa-search-tag-pin-ui-preview.html
   @Builder
-  filterMenu() {
-    Menu() {
-      MenuItemGroup({ header: $r('app.string.index_index_page_menu_view') }) {
-        MenuItem({ content: $r('app.string.index_index_page_view_flat') })
-          .selectIcon(true)
-          .selected(!this.state.isGrouped)
-          .onClick(() => {
-            this.onGroupedChange(false);
-          })
+  filterMenuContent() {
+    Column() {
+      this.menuSection($r('app.string.index_index_page_menu_view'))
 
-        MenuItem({ content: $r('app.string.index_index_page_view_grouped') })
-          .selectIcon(true)
-          .selected(this.state.isGrouped)
-          .onClick(() => {
-            this.onGroupedChange(true);
-          })
-      }
+      this.menuOption($r('app.string.index_index_page_view_flat'), '', !this.state.isGrouped, true,
+        (): void => {
+          this.onGroupedChange(false);
+        })
 
-      MenuItemGroup({ header: $r('app.string.index_index_page_menu_filter') }) {
-        MenuItem({ content: $r('app.string.index_index_page_filter_all'), labelInfo: this.itemsRuntime.ids.length.toString() })
-          .selectIcon(true)
-          .selected(this.state.filterKind === ItemFilterKind.ALL)
-          .labelFont({ size: $r('app.float.caption_font_size') })
-          .labelFontColor($r('sys.color.font_tertiary'))
-          .onClick(() => {
-            this.onFilterChange(ItemFilterKind.ALL, '');
-          })
+      this.menuOption($r('app.string.index_index_page_view_grouped'), '', this.state.isGrouped, true,
+        (): void => {
+          this.onGroupedChange(true);
+        })
 
-        MenuItem({ content: $r('app.string.index_index_page_filter_pinned'), labelInfo: this.pinnedCount().toString() })
-          .selectIcon(true)
-          .selected(this.state.filterKind === ItemFilterKind.PINNED)
-          .labelFont({ size: $r('app.float.caption_font_size') })
-          .labelFontColor($r('sys.color.font_tertiary'))
-          .enabled(this.pinnedCount() > 0)
-          .onClick(() => {
-            this.onFilterChange(ItemFilterKind.PINNED, '');
-          })
+      this.menuDivider()
 
-        ForEach(this.tagNames(), (tag: string) => {
-          MenuItem({ content: tag, labelInfo: this.tagCount(tag).toString() })
-            .selectIcon(true)
-            .selected(this.state.filterKind === ItemFilterKind.TAG && this.state.filterTag === tag)
-            .labelFont({ size: $r('app.float.caption_font_size') })
-            .labelFontColor($r('sys.color.font_tertiary'))
-            .onClick(() => {
-              this.onFilterChange(ItemFilterKind.TAG, tag);
-            })
-        }, (tag: string): string => tag)
+      this.menuSection($r('app.string.index_index_page_menu_filter'))
+
+      this.menuOption($r('app.string.index_index_page_filter_all'), this.itemsRuntime.ids.length.toString(),
+        this.state.filterKind === ItemFilterKind.ALL, true, (): void => {
+          this.onFilterChange(ItemFilterKind.ALL, '');
+        })
+
+      // 计数只算一次（@Builder 内不能声明局部变量，故交给子 builder 传参）
+      this.pinnedOption(this.pinnedCount())
+
+      // 标签与计数一次快照算完，避免每个选项各自 snapshot() 扫全量。
+      // key 带 count：ForEach 在 key 未变时不会重新执行 itemGenerator，只用 tag 会让计数停留在旧值
+      ForEach(this.tagStats(), (stat: TagStat) => {
+        this.menuOption(stat.tag, stat.count.toString(),
+          this.state.filterKind === ItemFilterKind.TAG && this.state.filterTag === stat.tag, true, (): void => {
+            this.onFilterChange(ItemFilterKind.TAG, stat.tag);
+          })
+      }, (stat: TagStat): string => `${stat.tag}:${stat.count}`)
+    }
+    .width(MENU_WIDTH)
+    .padding({ top: MENU_PADDING_V, bottom: MENU_PADDING_V })
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  pinnedOption(count: number) {
+    this.menuOption($r('app.string.index_index_page_filter_pinned'), count.toString(),
+      this.state.filterKind === ItemFilterKind.PINNED, count > 0, (): void => {
+        this.onFilterChange(ItemFilterKind.PINNED, '');
+      })
+  }
+
+  // 分组标题：设计稿 10px 在真机偏小（系统字体放大后更甚），取最小可读档 12fp + 三级色，
+  // 与 14fp 正文形成「标题 / 选项 / 计数」三级层级
+  @Builder
+  menuSection(title: ResourceStr) {
+    Text(title)
+      .width('100%')
+      .height(MENU_SECTION_HEIGHT)
+      .padding({ left: MENU_PADDING_H, right: MENU_PADDING_H })
+      .fontSize($r('app.float.caption_smaller_font_size'))
+      .fontWeight(FontWeight.Medium)
+      .fontColor($r('sys.color.font_tertiary'))
+  }
+
+  // 选项行：对勾槽位固定宽度（选中/未选中文字不左右跳动）；数量右对齐小字
+  @Builder
+  menuOption(content: ResourceStr, count: string, selected: boolean, selectable: boolean, action: () => void) {
+    Row({ space: MENU_ROW_SPACE }) {
+      SymbolGlyph($r('sys.symbol.checkmark'))
+        .width(MENU_CHECK_SLOT)
+        .fontSize(MENU_CHECK_FONT_SIZE)
+        .fontColor([$r('app.color.tag_text')])
+        .visibility(selected ? Visibility.Visible : Visibility.Hidden)
+
+      Text(content)
+        .layoutWeight(1)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .fontSize($r('app.float.body_font_size'))
+        .fontColor(selected ? $r('app.color.tag_text') : $r('sys.color.font_primary'))
+
+      if (count.length > 0) {
+        Text(count)
+          .fontSize($r('app.float.caption_smaller_font_size'))
+          .fontColor($r('sys.color.font_tertiary'))
       }
     }
-    // 菜单默认 16fp / Medium，比列表正文（14fp）偏大；统一为 body_font_size
-    .font({ size: $r('app.float.body_font_size') })
+    .width('100%')
+    .height(MENU_ROW_HEIGHT)
+    .padding({ left: MENU_PADDING_H, right: MENU_PADDING_H })
+    .enabled(selectable)
+    .opacity(selectable ? 1 : MENU_DISABLED_OPACITY)
+    .onClick((): void => {
+      action();
+      this.isMenuShow = false;
+    })
+  }
+
+  @Builder
+  menuDivider() {
+    Divider()
+      .strokeWidth(MENU_DIVIDER_STROKE)
+      .margin({ top: MENU_PADDING_V, bottom: MENU_PADDING_V })
   }
 
   private hasMeta(): boolean {
@@ -159,15 +236,11 @@ export struct Toolbar {
     return $r('app.string.index_index_page_filter');
   }
 
-  private tagNames(): string[] {
-    return collectTags(this.itemsRuntime.snapshot());
+  private tagStats(): TagStat[] {
+    return collectTagStats(this.itemsRuntime.snapshot());
   }
 
   private pinnedCount(): number {
     return countPinned(this.itemsRuntime.snapshot());
-  }
-
-  private tagCount(tag: string): number {
-    return countTag(this.itemsRuntime.snapshot(), tag);
   }
 }

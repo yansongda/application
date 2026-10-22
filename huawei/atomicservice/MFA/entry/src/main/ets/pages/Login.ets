@@ -7,6 +7,7 @@ import {
 import { Dialog } from '../utils/PromptAction';
 import { User } from '../models/User';
 import { User as UserApi } from '../api/User';
+import { SecuritySync } from '../models/security/Sync';
 
 export interface LoginPageParams {
   forceAuthorizationState: State;
@@ -148,6 +149,13 @@ struct Login {
       // 必须逐字段原地更新：user 是接口返回的普通 JSON 对象，
       // 整体替换 this.user.config 会让被观测的 Config 实例失效，后续修改不再刷新 UI
       this.user.apply(user);
+
+      // 安全设置调和（本地优先）：在用户信息回来之后做一次，之后不再用远端覆盖本地
+      const context = this.getUIContext().getHostContext();
+
+      if ('undefined' !== typeof context) {
+        SecuritySync.reconcile(context, user.config?.mfa?.security);
+      }
     } catch (e) {
       hilog.warn(LogDomain.PAGES, AppPagesName.LOGIN, '获取用户信息失败: %{public}s', JSON.stringify(e));
     }

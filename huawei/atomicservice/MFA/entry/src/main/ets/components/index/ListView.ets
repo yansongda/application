@@ -6,7 +6,6 @@ import { ListItemCard } from './ListItemCard';
 import {
   filterItems,
   groupItems,
-  ItemFilterKind,
   ItemGroupKind,
   ItemGroupView,
   ItemView,
@@ -69,13 +68,16 @@ export struct ListView {
   items() {
     List({ scroller: this.scroller, space: 10 }) {
       if (this.state.isGrouped) {
+        // 分组 key 必须包含组内成员：ArkUI 的 ForEach 在 key 未变时**不会**重新执行 itemGenerator，
+        // 只用 `${kind}:${tag}` 会让「组内条目增减」停留在旧值（取消置顶后该项仍留在置顶组，
+        // 而卡片内容已通过 @Trace 刷新成未置顶——表现为置顶组里多一条无置顶标记的重复项）
         ForEach(this.groups(), (group: ItemGroupView) => {
           ListItemGroup({ header: this.groupHeader(group), space: 10 }) {
             ForEach(group.ids, (id: string) => {
               this.listItem(id)
             }, (id: string): string => id)
           }
-        }, (group: ItemGroupView): string => `${group.kind}:${group.tag}`)
+        }, (group: ItemGroupView): string => `${group.kind}:${group.tag}:${group.ids.join(',')}`)
       } else {
         Repeat<string>(this.visibleIds())
           .each((ri: RepeatItem<string>) => {

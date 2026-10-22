@@ -1,10 +1,22 @@
 import { Type } from '@kit.ArkUI';
 
+export interface IMfaConfigSecurity {
+  // 字段名与后端 `config.mfa.security` 一致（snake_case），与端上 preferences 一一对应
+  privacy_window?: boolean | null;
+  app_lock?: boolean | null;
+}
+
+export interface IConfigMfa {
+  security?: IMfaConfigSecurity | null;
+}
+
 // 接口返回的是普通 JSON（不是被观测的类实例），因此对外只承诺这些字段
 export interface IUserConfig {
   avatar?: string | null;
   nickname?: string | null;
   slogan?: string | null;
+  // MFA 安全设置的云端副本：老数据无该字段，读取方按「服务端未保存过」处理
+  mfa?: IConfigMfa | null;
 }
 
 export interface IUser {
@@ -52,7 +64,9 @@ export class Config {
     this._slogan = normalizeText(value);
   }
 
-  // 原地更新：逐字段赋值会触发 @Trace 刷新，整体替换对象则不会
+  // 原地更新：逐字段赋值会触发 @Trace 刷新，整体替换对象则不会。
+  // 注意：`config.mfa`（安全设置云端副本）**不进模型**——它只在登录成功时被 `SecuritySync.reconcile`
+  // 消费一次；端上真相源是 preferences（见 models/security/），若把它持久化到 User 会造成双份真相
   update(source: IUserConfig): void {
     this.avatar = source.avatar;
     this.nickname = source.nickname;

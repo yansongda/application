@@ -28,6 +28,76 @@ export interface ItemGroupView {
   ids: string[];
 }
 
+// 落盘的 kind 取值：用字符串而非枚举数字（磁盘数据可读，增删枚举不会串值）
+const KIND_ALL: string = 'all';
+const KIND_PINNED: string = 'pinned';
+const KIND_TAG: string = 'tag';
+
+// preferences 中 `index.filter` 的存储结构：kind 与 tag 语义耦合（tag 仅在 kind=tag 时有意义），
+// 所以两者必须同一个 key 原子写入，避免出现「kind 已改、tag 还是旧值」的中间态
+export interface StoredFilter {
+  kind: string;
+  tag: string;
+}
+
+export interface DecodedFilter {
+  kind: ItemFilterKind;
+  tag: string;
+}
+
+// 生效筛选 → 磁盘结构（搜索词不参与持久化）
+export function encodeFilter(kind: ItemFilterKind, tag: string): StoredFilter {
+  if (ItemFilterKind.PINNED === kind) {
+    return { kind: KIND_PINNED, tag: '' };
+  }
+
+  if (ItemFilterKind.TAG === kind) {
+    return { kind: KIND_TAG, tag: tag };
+  }
+
+  return { kind: KIND_ALL, tag: '' };
+}
+
+// 磁盘结构 → 生效筛选：kind 非法 / tag 为空 / 类型不符一律回落「全部」（脏数据不能让首页空列表）
+export function decodeFilter(raw: object | undefined): DecodedFilter {
+  if ('undefined' === typeof raw) {
+    return { kind: ItemFilterKind.ALL, tag: '' };
+  }
+
+  const stored: StoredFilter = raw as StoredFilter;
+  const tag: string = 'string' === typeof stored.tag ? stored.tag : '';
+
+  if (KIND_PINNED === stored.kind) {
+    return { kind: ItemFilterKind.PINNED, tag: '' };
+  }
+
+  if (KIND_TAG === stored.kind && tag.length > 0) {
+    return { kind: ItemFilterKind.TAG, tag: tag };
+  }
+
+  return { kind: ItemFilterKind.ALL, tag: '' };
+}
+
+// 冷启动要恢复的完整视图（含分组开关）：与落盘结构合并后的最终形态
+export interface StoredView {
+  kind: ItemFilterKind;
+  tag: string;
+  isGrouped: boolean;
+}
+
+// 磁盘结构 + 分组开关 → 生效视图。
+// 分组与筛选互斥（见 ListViewState.applyFilter / applyGrouped）：磁盘数据若两者都成立，以筛选为准
+// （否则会渲染出「分组视图 + 标签筛选」这种组合，得到空组）
+export function decodeView(raw: object | undefined, grouped: boolean): StoredView {
+  const decoded: DecodedFilter = decodeFilter(raw);
+
+  return {
+    kind: decoded.kind,
+    tag: decoded.tag,
+    isGrouped: grouped && ItemFilterKind.ALL === decoded.kind,
+  };
+}
+
 // 搜索分词：按空白拆分、归一化为小写；空串表示不过滤
 function queryTokens(query: string): string[] {
   const tokens: string[] = [];
@@ -189,6 +259,49 @@ export function countTag(items: ItemView[], tag: string): number {
   }
 
   return count;
+}
+
+// 单标签的渲染数据：标签名 + 条目数
+export interface TagStat {
+  tag: string;
+  count: number;
+}
+
+// 标签 → 条目数（首次出现顺序）：一次遍历算完，供菜单一次性渲染。
+// 语义与 `collectTags` + 每个 tag 各调一次 `countTag` 等价（同一 item 内的重复标签只计一次），
+// 但只有一次数组遍历与一次 snapshot，标签多时不会 O(tag × item) 反复扫全量
+export function collectTagStats(items: ItemView[]): TagStat[] {
+  const order: string[] = [];
+  const counts: Map<string, number> = new Map();
+
+  for (const item of items) {
+    const seen: Set<string> = new Set();
+
+    for (const tag of item.tags) {
+      if (tag.length === 0 || seen.has(tag)) {
+        continue;
+      }
+
+      seen.add(tag);
+
+      const current: number | undefined = counts.get(tag);
+
+      if ('undefined' === typeof current) {
+        order.push(tag);
+        counts.set(tag, 1);
+      } else {
+        counts.set(tag, current + 1);
+      }
+    }
+  }
+
+  const stats: TagStat[] = [];
+
+  for (const tag of order) {
+    stats.push({ tag: tag, count: counts.get(tag) ?? 0 });
+  }
+
+  return stats;
 }
 
 export function countPinned(items: ItemView[]): number {

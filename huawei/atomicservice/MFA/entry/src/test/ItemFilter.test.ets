@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@ohos/hypium';
 import {
   collectTags,
+  collectTagStats,
   countPinned,
   countTag,
   filterItems,
@@ -9,7 +10,8 @@ import {
   ItemGroupKind,
   ItemGroupView,
   ItemView,
-  sortPinnedFirst
+  sortPinnedFirst,
+  TagStat
 } from '../main/ets/utils/ItemFilter';
 
 function view(id: string, issuer: string, username: string, tags: string[], pinned: boolean): ItemView {
@@ -98,6 +100,35 @@ export default function itemFilterTest(): void {
       expect(countTag(all, '工作')).assertEqual(2);
       expect(countTag(all, '不存在')).assertEqual(0);
       expect(countPinned(all)).assertEqual(1);
+    });
+
+    // 菜单用的一次性聚合：顺序与 collectTags 一致、计数与 countTag 一致
+    it('collect_tag_stats_matches_collect_tags_and_count_tag', 0, () => {
+      const stats: TagStat[] = collectTagStats(all);
+
+      expect(stats.length).assertEqual(3);
+      expect(stats[0].tag).assertEqual('工作');
+      expect(stats[0].count).assertEqual(2);
+      expect(stats[1].tag).assertEqual('开发');
+      expect(stats[1].count).assertEqual(1);
+      expect(stats[2].tag).assertEqual('个人');
+      expect(stats[2].count).assertEqual(1);
+
+      for (const stat of stats) {
+        expect(stat.count).assertEqual(countTag(all, stat.tag));
+      }
+    });
+
+    // 同一 item 内重复标签只计一次、空标签忽略（与 countTag / collectTags 语义一致）
+    it('collect_tag_stats_dedupes_within_item', 0, () => {
+      const stats: TagStat[] = collectTagStats([
+        view('1', 'A', 'a', ['工作', '工作', ''], false),
+        view('2', 'B', 'b', ['工作'], false),
+      ]);
+
+      expect(stats.length).assertEqual(1);
+      expect(stats[0].tag).assertEqual('工作');
+      expect(stats[0].count).assertEqual(2);
     });
   });
 }
