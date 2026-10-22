@@ -3,8 +3,8 @@
     "bundleName": "com.atomicservice.6917576589568238756",
     "bundleType": "atomicService",
     "vendor": "yansongda",
-    "versionCode": 10600,
-    "versionName": "1.6.0",
+    "versionCode": 10700,
+    "versionName": "1.7.0",
     "icon": "$media:icon",
     "label": "$string:app_name",
     "description": "$string:app_description"
