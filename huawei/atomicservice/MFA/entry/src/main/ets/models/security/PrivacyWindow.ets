@@ -55,8 +55,12 @@ export class PrivacyWindow {
       return false;
     }
 
-    // 本地已生效后只标记「待同步」：真正上行由 SecuritySync.flush 统一负责（模型不发请求）
-    Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, true);
+    // 本地已生效后只标记「待同步」：真正上行由 SecuritySync.flush 统一负责（模型不发请求）。
+    // 标记写失败不改变返回值（设置本身已落盘生效），但必须留痕：否则下次登录 reconcile 会用服务端旧值覆盖本地
+    if (!Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, true)) {
+      hilog.error(LogDomain.MODELS, 'models/security', 'screen_protect_dirty_failed: enabled=%{public}s',
+        on.toString());
+    }
 
     this._enabled = on;
     this.apply('setting');

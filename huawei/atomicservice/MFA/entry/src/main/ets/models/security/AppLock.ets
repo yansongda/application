@@ -70,7 +70,7 @@ export class AppLock {
     return AppStorageV2.connect(AppLock, () => new AppLock())!;
   }
 
-  // 冷启动读设置（由 EntryAbility.onCreate 调用一次，必须早于 onForeground）
+  // 冷启动读设置（由 EntryAbility.onWindowStageCreate 调用一次，必须早于 onForeground）
   load(context: Context): void {
     this._enabled = Prefs.getBoolean(Prefs.open(context), KEY_SECURITY_APP_LOCK, DEFAULT_APP_LOCK);
     hilog.info(LogDomain.MODELS, 'models/security', 'app_lock_load: appLock=%{public}s', this._enabled.toString());
@@ -87,8 +87,11 @@ export class AppLock {
       return false;
     }
 
-    // 本地已生效后只标记「待同步」：真正上行由 SecuritySync.flush 统一负责（模型不发请求）
-    Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, true);
+    // 本地已生效后只标记「待同步」：真正上行由 SecuritySync.flush 统一负责（模型不发请求）。
+    // 标记写失败不改变返回值（设置本身已落盘生效），但必须留痕：否则下次登录 reconcile 会用服务端旧值覆盖本地
+    if (!Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, true)) {
+      hilog.error(LogDomain.MODELS, 'models/security', 'app_lock_dirty_failed: appLock=%{public}s', on.toString());
+    }
 
     this._enabled = on;
     hilog.info(LogDomain.MODELS, 'models/security', 'app_lock_set: appLock=%{public}s', on.toString());
