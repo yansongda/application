@@ -2,7 +2,7 @@
 
 ### Added
 
-- feat(api): 用户详情 `config` 新增 `mfa` 分组，新增 `POST /api/v1/users/edit/mfa`（写入 `config.mfa.security.privacy_window` / `app_lock`，按叶子 merge、未传字段保持原值）；存量数据无需数据库迁移，老客户端不受影响
+- feat(api): 用户详情 `config` 新增 `mfa` 分组，新增 `POST /api/v1/users/edit/config/mfa`（写入 `config.mfa.security.privacy_window` / `app_lock`，按叶子 merge、未传字段保持原值）；存量数据无需数据库迁移，老客户端不受影响
 
 ## [1.23.0] - 2026-10-21
 

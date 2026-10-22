@@ -1,4 +1,4 @@
-use crate::request::user::EditMfaRequestParams;
+use crate::request::user::EditConfigMfaRequestParams;
 use application_database::account::access_token;
 use application_database::account::user;
 use application_database::tool::totp;
@@ -34,9 +34,9 @@ pub async fn update_phone(access_token: &access_token::AccessToken, phone: &str)
 
 /// 写入 `config.mfa`（目前仅 `security` 子对象）。
 /// 按叶子 merge：请求里没给的叶子保持服务端原值，避免「只改防截屏把应用锁重置」。
-pub async fn update_mfa(
+pub async fn update_config_mfa(
     access_token: &access_token::AccessToken,
-    params: EditMfaRequestParams,
+    params: EditConfigMfaRequestParams,
 ) -> Result<()> {
     let mut user = user::fetch(access_token.user_id).await?;
     let mut config = user.config.take().map(|v| v.0).unwrap_or_default();

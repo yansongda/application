@@ -1,6 +1,6 @@
 use crate::request::Validator;
 use crate::request::user::{
-    DetailResponse, EditAvatarRequest, EditMfaRequest, EditNicknameRequest, EditPhoneRequest,
+    DetailResponse, EditAvatarRequest, EditConfigMfaRequest, EditNicknameRequest, EditPhoneRequest,
     EditSloganRequest,
 };
 use crate::response::Resp;
@@ -75,14 +75,14 @@ pub async fn edit_phone(request: &mut Request, depot: &mut Depot) -> Resp<()> {
 
 // 元服务本地安全设置（防截屏 / 应用锁）的云端副本：`config.mfa.security`
 #[handler]
-pub async fn edit_mfa(request: &mut Request, depot: &mut Depot) -> Resp<()> {
+pub async fn edit_config_mfa(request: &mut Request, depot: &mut Depot) -> Resp<()> {
     let access_token = depot
         .get_typed::<AccessToken>()
         .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
 
-    let params = request.parse_json::<EditMfaRequest>().await?;
+    let params = request.parse_json::<EditConfigMfaRequest>().await?;
 
-    service::user::update_mfa(access_token, params.validate()?).await?;
+    service::user::update_config_mfa(access_token, params.validate()?).await?;
 
     Ok(Response::success(()))
 }
