@@ -93,6 +93,50 @@ impl Validator for EditPhoneRequest {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditConfigMfaRequest {
+    pub mfa: Option<EditConfigMfaBody>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditConfigMfaBody {
+    pub security: Option<EditConfigMfaSecurityBody>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditConfigMfaSecurityBody {
+    pub privacy_window: Option<bool>,
+    pub app_lock: Option<bool>,
+}
+
+/// 校验后的参数：`None` 表示调用方没给该叶子，服务层保持服务端原值（按叶子 merge）
+#[derive(Debug, Clone)]
+pub struct EditConfigMfaRequestParams {
+    pub privacy_window: Option<bool>,
+    pub app_lock: Option<bool>,
+}
+
+impl Validator for EditConfigMfaRequest {
+    type Data = EditConfigMfaRequestParams;
+
+    fn validate(&self) -> application_kernel::result::Result<Self::Data> {
+        let security = self
+            .mfa
+            .as_ref()
+            .and_then(|mfa| mfa.security.as_ref())
+            .ok_or(ErrorCode::ParamsJsonInvalid)?;
+
+        if security.privacy_window.is_none() && security.app_lock.is_none() {
+            return Err(ErrorCode::ParamsJsonInvalid);
+        }
+
+        Ok(Self::Data {
+            privacy_window: security.privacy_window,
+            app_lock: security.app_lock,
+        })
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct DetailResponse {
     pub phone: Option<String>,
@@ -105,5 +149,59 @@ impl From<User> for DetailResponse {
             phone: user.phone,
             config: user.config.map(|v| v.0),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::all)]
+
+    use super::*;
+
+    /// 测试场景：`mfa.security` 缺失 → 预期参数错误
+    #[test]
+    fn edit_config_mfa_requires_security() {
+        let request: EditConfigMfaRequest = serde_json::from_str(r#"{"mfa":{}}"#).unwrap();
+
+        assert_eq!(
+            request.validate().unwrap_err(),
+            ErrorCode::ParamsJsonInvalid
+        );
+    }
+
+    /// 测试场景：`security` 存在但两个叶子都未给 → 预期参数错误
+    #[test]
+    fn edit_config_mfa_requires_at_least_one_leaf() {
+        let request: EditConfigMfaRequest =
+            serde_json::from_str(r#"{"mfa":{"security":{}}}"#).unwrap();
+
+        assert_eq!(
+            request.validate().unwrap_err(),
+            ErrorCode::ParamsJsonInvalid
+        );
+    }
+
+    /// 测试场景：只给一个叶子 → 预期另一个为 `None`（按叶子 merge 的前提）
+    #[test]
+    fn edit_config_mfa_accepts_partial_leaves() {
+        let request: EditConfigMfaRequest =
+            serde_json::from_str(r#"{"mfa":{"security":{"app_lock":true}}}"#).unwrap();
+        let params = request.validate().unwrap();
+
+        assert_eq!(params.privacy_window, None);
+        assert_eq!(params.app_lock, Some(true));
+    }
+
+    /// 测试场景：两个叶子都给 → 原样透传
+    #[test]
+    fn edit_config_mfa_accepts_both_leaves() {
+        let request: EditConfigMfaRequest = serde_json::from_str(
+            r#"{"mfa":{"security":{"privacy_window":false,"app_lock":true}}}"#,
+        )
+        .unwrap();
+        let params = request.validate().unwrap();
+
+        assert_eq!(params.privacy_window, Some(false));
+        assert_eq!(params.app_lock, Some(true));
     }
 }

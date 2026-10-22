@@ -53,7 +53,8 @@ fn api_v1_users() -> Router {
                 .push(Router::with_path("/avatar").post(v1::users::edit_avatar))
                 .push(Router::with_path("/nickname").post(v1::users::edit_nickname))
                 .push(Router::with_path("/slogan").post(v1::users::edit_slogan))
-                .push(Router::with_path("/phone").post(v1::users::edit_phone)),
+                .push(Router::with_path("/phone").post(v1::users::edit_phone))
+                .push(Router::with_path("/config/mfa").post(v1::users::edit_config_mfa)),
         )
         .push(Router::with_path("/delete").post(v1::users::delete))
 }
