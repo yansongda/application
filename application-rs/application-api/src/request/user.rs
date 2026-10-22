@@ -94,30 +94,30 @@ impl Validator for EditPhoneRequest {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct EditMfaRequest {
-    pub mfa: Option<EditMfaBody>,
+pub struct EditConfigMfaRequest {
+    pub mfa: Option<EditConfigMfaBody>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct EditMfaBody {
-    pub security: Option<EditMfaSecurityBody>,
+pub struct EditConfigMfaBody {
+    pub security: Option<EditConfigMfaSecurityBody>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct EditMfaSecurityBody {
+pub struct EditConfigMfaSecurityBody {
     pub privacy_window: Option<bool>,
     pub app_lock: Option<bool>,
 }
 
 /// 校验后的参数：`None` 表示调用方没给该叶子，服务层保持服务端原值（按叶子 merge）
 #[derive(Debug, Clone)]
-pub struct EditMfaRequestParams {
+pub struct EditConfigMfaRequestParams {
     pub privacy_window: Option<bool>,
     pub app_lock: Option<bool>,
 }
 
-impl Validator for EditMfaRequest {
-    type Data = EditMfaRequestParams;
+impl Validator for EditConfigMfaRequest {
+    type Data = EditConfigMfaRequestParams;
 
     fn validate(&self) -> application_kernel::result::Result<Self::Data> {
         let security = self
@@ -160,8 +160,8 @@ mod tests {
 
     /// 测试场景：`mfa.security` 缺失 → 预期参数错误
     #[test]
-    fn edit_mfa_requires_security() {
-        let request: EditMfaRequest = serde_json::from_str(r#"{"mfa":{}}"#).unwrap();
+    fn edit_config_mfa_requires_security() {
+        let request: EditConfigMfaRequest = serde_json::from_str(r#"{"mfa":{}}"#).unwrap();
 
         assert_eq!(
             request.validate().unwrap_err(),
@@ -171,8 +171,9 @@ mod tests {
 
     /// 测试场景：`security` 存在但两个叶子都未给 → 预期参数错误
     #[test]
-    fn edit_mfa_requires_at_least_one_leaf() {
-        let request: EditMfaRequest = serde_json::from_str(r#"{"mfa":{"security":{}}}"#).unwrap();
+    fn edit_config_mfa_requires_at_least_one_leaf() {
+        let request: EditConfigMfaRequest =
+            serde_json::from_str(r#"{"mfa":{"security":{}}}"#).unwrap();
 
         assert_eq!(
             request.validate().unwrap_err(),
@@ -182,8 +183,8 @@ mod tests {
 
     /// 测试场景：只给一个叶子 → 预期另一个为 `None`（按叶子 merge 的前提）
     #[test]
-    fn edit_mfa_accepts_partial_leaves() {
-        let request: EditMfaRequest =
+    fn edit_config_mfa_accepts_partial_leaves() {
+        let request: EditConfigMfaRequest =
             serde_json::from_str(r#"{"mfa":{"security":{"app_lock":true}}}"#).unwrap();
         let params = request.validate().unwrap();
 
@@ -193,8 +194,8 @@ mod tests {
 
     /// 测试场景：两个叶子都给 → 原样透传
     #[test]
-    fn edit_mfa_accepts_both_leaves() {
-        let request: EditMfaRequest = serde_json::from_str(
+    fn edit_config_mfa_accepts_both_leaves() {
+        let request: EditConfigMfaRequest = serde_json::from_str(
             r#"{"mfa":{"security":{"privacy_window":false,"app_lock":true}}}"#,
         )
         .unwrap();

@@ -22,19 +22,19 @@ pub struct Config {
     /// MFA 相关配置：按服务分组（`mfa.security` 之外后续可扩 `mfa.totp` 等），
     /// 缺省即老数据（无 `mfa` 键），不写回 null（避免无谓的磁盘变更）
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mfa: Option<MfaConfig>,
+    pub mfa: Option<ConfigMfa>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct MfaConfig {
+pub struct ConfigMfa {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub security: Option<MfaSecurity>,
+    pub security: Option<MfaConfigSecurity>,
 }
 
 /// 元服务本地安全设置的云端副本（字段名与端上 preferences 一一对应，端侧无需再加一层映射）。
 /// 只保存「用户意愿值」，绝不涉及 `locked` 等运行态。
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct MfaSecurity {
+pub struct MfaConfigSecurity {
     /// 防截屏（窗口隐私模式）开关
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub privacy_window: Option<bool>,
