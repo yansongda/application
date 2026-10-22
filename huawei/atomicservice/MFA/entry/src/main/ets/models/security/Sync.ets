@@ -11,7 +11,7 @@ import { Context } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
 import { User as UserApi } from '../../api/User';
-import { IMfaSecurity } from '../User';
+import { IMfaConfigSecurity } from '../User';
 import { KEY_SECURITY_DIRTY, Prefs, PrefsInstance } from '../../utils/Prefs';
 import { AppLock } from './AppLock';
 import { PrivacyWindow } from './PrivacyWindow';
@@ -23,7 +23,7 @@ export class SecuritySync {
   private static _inFlight: boolean = false;
 
   // 登录后调和（只调一次，不要在每次页面显示时调用）
-  static reconcile(context: Context, server: IMfaSecurity | null | undefined): void {
+  static reconcile(context: Context, server: IMfaConfigSecurity | null | undefined): void {
     if (SecuritySync.isDirty(context)) {
       hilog.info(LogDomain.MODELS, TAG, 'reconcile: 本地有未同步变更，以本地为准上行');
       SecuritySync.flush(context);
@@ -60,11 +60,11 @@ export class SecuritySync {
 
     const privacyWindow: boolean = PrivacyWindow.instance().enabled;
     const appLock: boolean = AppLock.instance().enabled;
-    const security: IMfaSecurity = { privacy_window: privacyWindow, app_lock: appLock };
+    const security: IMfaConfigSecurity = { privacy_window: privacyWindow, app_lock: appLock };
 
     SecuritySync._inFlight = true;
 
-    UserApi.editMfa(security)
+    UserApi.editConfigMfa(security)
       .then((): void => {
         SecuritySync._inFlight = false;
         Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, false);
