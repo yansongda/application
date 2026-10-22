@@ -35,36 +35,32 @@ export class ListViewState {
   }
 
   // 刷新后清理已失效的视图状态：标签被删空、置顶项被取消、分组已无意义时回到默认视图。
-  // 返回是否发生变更——变更后调用方需要回写，否则下次启动会再加载一遍失效状态
+  // 返回是否发生变更——变更后调用方需要回写，否则下次启动会再加载一遍失效状态。
+  // 只比较落盘字段（搜索词不参与：clearFilter 会顺带清 query，但不影响是否需要回写）
   syncView(snapshot: ItemView[], hasMeta: boolean): boolean {
-    const before: string = this.signature();
+    const kind: ItemFilterKind = this.filterKind;
+    const tag: string = this.filterTag;
+    const grouped: boolean = this.isGrouped;
 
     if (snapshot.length === 0) {
       this.clearFilter();
       this.isGrouped = false;
+    } else {
+      if (this.filterKind === ItemFilterKind.TAG && !collectTags(snapshot).includes(this.filterTag)) {
+        this.filterKind = ItemFilterKind.ALL;
+        this.filterTag = '';
+      }
 
-      return before !== this.signature();
+      if (this.filterKind === ItemFilterKind.PINNED && countPinned(snapshot) === 0) {
+        this.filterKind = ItemFilterKind.ALL;
+        this.filterTag = '';
+      }
+
+      if (this.isGrouped && !hasMeta) {
+        this.isGrouped = false;
+      }
     }
 
-    if (this.filterKind === ItemFilterKind.TAG && !collectTags(snapshot).includes(this.filterTag)) {
-      this.filterKind = ItemFilterKind.ALL;
-      this.filterTag = '';
-    }
-
-    if (this.filterKind === ItemFilterKind.PINNED && countPinned(snapshot) === 0) {
-      this.filterKind = ItemFilterKind.ALL;
-      this.filterTag = '';
-    }
-
-    if (this.isGrouped && !hasMeta) {
-      this.isGrouped = false;
-    }
-
-    return before !== this.signature();
-  }
-
-  // 只覆盖落盘字段（搜索词不参与比较，避免输入搜索词时误判为需要回写）
-  private signature(): string {
-    return `${this.filterKind}:${this.filterTag}:${this.isGrouped}`;
+    return kind !== this.filterKind || tag !== this.filterTag || grouped !== this.isGrouped;
   }
 }

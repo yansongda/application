@@ -1,6 +1,21 @@
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { ListViewState } from '../../models/totp/ListViewState';
-import { collectTags, countPinned, countTag, ItemFilterKind } from '../../utils/ItemFilter';
+import { collectTagStats, countPinned, ItemFilterKind, TagStat } from '../../utils/ItemFilter';
+
+// 筛选弹层视觉规格（对齐 design: docs/2026-10-20-huawei-mfa-search-tag-pin-ui-preview.html）：
+// 弹层容器（背景 / 圆角 / 阴影 / 点外关闭 / 进出动效）由系统菜单提供，这里只管内容排版
+const MENU_WIDTH: number = 218;
+const MENU_PADDING_H: number = 14;
+const MENU_PADDING_V: number = 5;
+const MENU_ROW_HEIGHT: number = 36;
+const MENU_ROW_SPACE: number = 8;
+const MENU_SECTION_HEIGHT: number = 26;
+// 对勾槽位固定宽度：选中/未选中时文字不左右跳动
+const MENU_CHECK_SLOT: number = 18;
+const MENU_CHECK_FONT_SIZE: number = 16;
+const MENU_DIVIDER_STROKE: number = 0.5;
+// 不可选项（无置顶项时的「置顶」）降透明度
+const MENU_DISABLED_OPACITY: number = 0.4;
 
 // 首页工具条：搜索 + 筛选（视图与筛选合一菜单）+ 排序；排序态退化为提示 + 完成，避免三行头部挤压列表。
 // 工具栏状态由页面持有，本组件只做展示与 @Event 上报，不与列表渲染耦合。
@@ -65,7 +80,9 @@ export struct Toolbar {
               },
             })
             .onClick((): void => {
-              this.isMenuShow = true;
+              // 用 toggle 而非恒置 true：菜单已展开时再点按钮，系统会先关闭并触发 onDisappear，
+              // 若这里强行置 true 会立刻重开（表现为闪一下）
+              this.isMenuShow = !this.isMenuShow;
             })
         }
 
@@ -92,7 +109,6 @@ export struct Toolbar {
 
   // 筛选菜单（视图 + 筛选合一）：结构对齐设计稿
   // design: docs/2026-10-20-huawei-mfa-search-tag-pin-ui-preview.html
-  // 弹层容器（背景 / 圆角 / 阴影 / 点外关闭 / 进出动效）仍由系统菜单提供，这里只自绘内容
   @Builder
   filterMenuContent() {
     Column() {
@@ -117,21 +133,28 @@ export struct Toolbar {
           this.onFilterChange(ItemFilterKind.ALL, '');
         })
 
-      this.menuOption($r('app.string.index_index_page_filter_pinned'), this.pinnedCount().toString(),
-        this.state.filterKind === ItemFilterKind.PINNED, this.pinnedCount() > 0, (): void => {
-          this.onFilterChange(ItemFilterKind.PINNED, '');
-        })
+      // 计数只算一次（@Builder 内不能声明局部变量，故交给子 builder 传参）
+      this.pinnedOption(this.pinnedCount())
 
-      ForEach(this.tagNames(), (tag: string) => {
-        this.menuOption(tag, this.tagCount(tag).toString(),
-          this.state.filterKind === ItemFilterKind.TAG && this.state.filterTag === tag, true, (): void => {
-            this.onFilterChange(ItemFilterKind.TAG, tag);
+      // 标签与计数一次快照算完，避免每个选项各自 snapshot() 扫全量
+      ForEach(this.tagStats(), (stat: TagStat) => {
+        this.menuOption(stat.tag, stat.count.toString(),
+          this.state.filterKind === ItemFilterKind.TAG && this.state.filterTag === stat.tag, true, (): void => {
+            this.onFilterChange(ItemFilterKind.TAG, stat.tag);
           })
-      }, (tag: string): string => tag)
+      }, (stat: TagStat): string => stat.tag)
     }
-    .width(218)
-    .padding({ top: 5, bottom: 5 })
+    .width(MENU_WIDTH)
+    .padding({ top: MENU_PADDING_V, bottom: MENU_PADDING_V })
     .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  pinnedOption(count: number) {
+    this.menuOption($r('app.string.index_index_page_filter_pinned'), count.toString(),
+      this.state.filterKind === ItemFilterKind.PINNED, count > 0, (): void => {
+        this.onFilterChange(ItemFilterKind.PINNED, '');
+      })
   }
 
   // 分组标题：设计稿 10px 在真机偏小（系统字体放大后更甚），取最小可读档 12fp + 三级色，
@@ -140,20 +163,20 @@ export struct Toolbar {
   menuSection(title: ResourceStr) {
     Text(title)
       .width('100%')
-      .height(26)
-      .padding({ left: 14, right: 14 })
+      .height(MENU_SECTION_HEIGHT)
+      .padding({ left: MENU_PADDING_H, right: MENU_PADDING_H })
       .fontSize($r('app.float.caption_smaller_font_size'))
       .fontWeight(FontWeight.Medium)
       .fontColor($r('sys.color.font_tertiary'))
   }
 
-  // 选项行：对勾槽位固定 18vp（选中/未选中文字不左右跳动）；数量右对齐小字；行高 36vp
+  // 选项行：对勾槽位固定宽度（选中/未选中文字不左右跳动）；数量右对齐小字
   @Builder
   menuOption(content: ResourceStr, count: string, selected: boolean, selectable: boolean, action: () => void) {
-    Row({ space: 8 }) {
+    Row({ space: MENU_ROW_SPACE }) {
       SymbolGlyph($r('sys.symbol.checkmark'))
-        .width(18)
-        .fontSize(16)
+        .width(MENU_CHECK_SLOT)
+        .fontSize(MENU_CHECK_FONT_SIZE)
         .fontColor([$r('app.color.tag_text')])
         .visibility(selected ? Visibility.Visible : Visibility.Hidden)
 
@@ -171,10 +194,10 @@ export struct Toolbar {
       }
     }
     .width('100%')
-    .height(36)
-    .padding({ left: 14, right: 14 })
+    .height(MENU_ROW_HEIGHT)
+    .padding({ left: MENU_PADDING_H, right: MENU_PADDING_H })
     .enabled(selectable)
-    .opacity(selectable ? 1 : 0.4)
+    .opacity(selectable ? 1 : MENU_DISABLED_OPACITY)
     .onClick((): void => {
       action();
       this.isMenuShow = false;
@@ -184,8 +207,8 @@ export struct Toolbar {
   @Builder
   menuDivider() {
     Divider()
-      .strokeWidth(0.5)
-      .margin({ top: 5, bottom: 5 })
+      .strokeWidth(MENU_DIVIDER_STROKE)
+      .margin({ top: MENU_PADDING_V, bottom: MENU_PADDING_V })
   }
 
   private hasMeta(): boolean {
@@ -212,15 +235,11 @@ export struct Toolbar {
     return $r('app.string.index_index_page_filter');
   }
 
-  private tagNames(): string[] {
-    return collectTags(this.itemsRuntime.snapshot());
+  private tagStats(): TagStat[] {
+    return collectTagStats(this.itemsRuntime.snapshot());
   }
 
   private pinnedCount(): number {
     return countPinned(this.itemsRuntime.snapshot());
-  }
-
-  private tagCount(tag: string): number {
-    return countTag(this.itemsRuntime.snapshot(), tag);
   }
 }

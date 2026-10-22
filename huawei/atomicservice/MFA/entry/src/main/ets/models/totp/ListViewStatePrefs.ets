@@ -1,7 +1,7 @@
 import { Context } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
-import { decodeFilter, encodeFilter, ItemFilterKind, StoredFilter } from '../../utils/ItemFilter';
+import { decodeView, encodeFilter, StoredFilter, StoredView } from '../../utils/ItemFilter';
 import { KEY_INDEX_FILTER, KEY_INDEX_GROUPED, Prefs, PrefsInstance } from '../../utils/Prefs';
 import { ListViewState } from './ListViewState';
 
@@ -22,12 +22,13 @@ export class ListViewStatePrefs {
       return state;
     }
 
-    const decoded = decodeFilter(Prefs.getObject(prefs, KEY_INDEX_FILTER));
+    // 分组与筛选互斥的归并规则在纯函数里（见 ItemFilter.decodeView），本文件只负责读写 preferences
+    const view: StoredView = decodeView(Prefs.getObject(prefs, KEY_INDEX_FILTER),
+      Prefs.getBoolean(prefs, KEY_INDEX_GROUPED, false));
 
-    state.filterKind = decoded.kind;
-    state.filterTag = decoded.tag;
-    // 分组与筛选互斥（见 applyFilter / applyGrouped）：磁盘数据若两者都成立，以筛选为准
-    state.isGrouped = Prefs.getBoolean(prefs, KEY_INDEX_GROUPED, false) && ItemFilterKind.ALL === decoded.kind;
+    state.filterKind = view.kind;
+    state.filterTag = view.tag;
+    state.isGrouped = view.isGrouped;
 
     hilog.info(LogDomain.MODELS, TAG, 'restore: kind=%{public}d, tag=%{public}s, grouped=%{public}s',
       state.filterKind, state.filterTag, state.isGrouped.toString());

@@ -78,6 +78,26 @@ export function decodeFilter(raw: object | undefined): DecodedFilter {
   return { kind: ItemFilterKind.ALL, tag: '' };
 }
 
+// 冷启动要恢复的完整视图（含分组开关）：与落盘结构合并后的最终形态
+export interface StoredView {
+  kind: ItemFilterKind;
+  tag: string;
+  isGrouped: boolean;
+}
+
+// 磁盘结构 + 分组开关 → 生效视图。
+// 分组与筛选互斥（见 ListViewState.applyFilter / applyGrouped）：磁盘数据若两者都成立，以筛选为准
+// （否则会渲染出「分组视图 + 标签筛选」这种组合，得到空组）
+export function decodeView(raw: object | undefined, grouped: boolean): StoredView {
+  const decoded: DecodedFilter = decodeFilter(raw);
+
+  return {
+    kind: decoded.kind,
+    tag: decoded.tag,
+    isGrouped: grouped && ItemFilterKind.ALL === decoded.kind,
+  };
+}
+
 // 搜索分词：按空白拆分、归一化为小写；空串表示不过滤
 function queryTokens(query: string): string[] {
   const tokens: string[] = [];
@@ -239,6 +259,49 @@ export function countTag(items: ItemView[], tag: string): number {
   }
 
   return count;
+}
+
+// 单标签的渲染数据：标签名 + 条目数
+export interface TagStat {
+  tag: string;
+  count: number;
+}
+
+// 标签 → 条目数（首次出现顺序）：一次遍历算完，供菜单一次性渲染。
+// 语义与 `collectTags` + 每个 tag 各调一次 `countTag` 等价（同一 item 内的重复标签只计一次），
+// 但只有一次数组遍历与一次 snapshot，标签多时不会 O(tag × item) 反复扫全量
+export function collectTagStats(items: ItemView[]): TagStat[] {
+  const order: string[] = [];
+  const counts: Map<string, number> = new Map();
+
+  for (const item of items) {
+    const seen: Set<string> = new Set();
+
+    for (const tag of item.tags) {
+      if (tag.length === 0 || seen.has(tag)) {
+        continue;
+      }
+
+      seen.add(tag);
+
+      const current: number | undefined = counts.get(tag);
+
+      if ('undefined' === typeof current) {
+        order.push(tag);
+        counts.set(tag, 1);
+      } else {
+        counts.set(tag, current + 1);
+      }
+    }
+  }
+
+  const stats: TagStat[] = [];
+
+  for (const tag of order) {
+    stats.push({ tag: tag, count: counts.get(tag) ?? 0 });
+  }
+
+  return stats;
 }
 
 export function countPinned(items: ItemView[]): number {

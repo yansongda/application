@@ -2,11 +2,13 @@ import { describe, expect, it } from '@ohos/hypium';
 import { ListViewState } from '../main/ets/models/totp/ListViewState';
 import {
   decodeFilter,
+  decodeView,
   DecodedFilter,
   encodeFilter,
   ItemFilterKind,
   ItemView,
-  StoredFilter
+  StoredFilter,
+  StoredView
 } from '../main/ets/utils/ItemFilter';
 
 function view(id: string, tags: string[], pinned: boolean): ItemView {
@@ -34,6 +36,19 @@ export default function listViewStateTest(): void {
 
       expect(result.kind).assertEqual(ItemFilterKind.PINNED);
       expect(result.tag).assertEqual('');
+    });
+
+    // 标签筛选与分组互斥：磁盘上两者都成立时以筛选为准（否则会渲染出空组）
+    it('decode_view_grouped_requires_all_filter', 0, () => {
+      const filtered: StoredView = decodeView(stored('tag', '工作'), true);
+      const all: StoredView = decodeView(stored('all', ''), true);
+      const missing: StoredView = decodeView(undefined, true);
+
+      expect(filtered.kind).assertEqual(ItemFilterKind.TAG);
+      expect(filtered.tag).assertEqual('工作');
+      expect(filtered.isGrouped).assertFalse();
+      expect(all.isGrouped).assertTrue();
+      expect(missing.isGrouped).assertTrue();
     });
 
     // 标签筛选：kind 与 tag 都有效才生效
