@@ -136,13 +136,14 @@ export struct Toolbar {
       // 计数只算一次（@Builder 内不能声明局部变量，故交给子 builder 传参）
       this.pinnedOption(this.pinnedCount())
 
-      // 标签与计数一次快照算完，避免每个选项各自 snapshot() 扫全量
+      // 标签与计数一次快照算完，避免每个选项各自 snapshot() 扫全量。
+      // key 带 count：ForEach 在 key 未变时不会重新执行 itemGenerator，只用 tag 会让计数停留在旧值
       ForEach(this.tagStats(), (stat: TagStat) => {
         this.menuOption(stat.tag, stat.count.toString(),
           this.state.filterKind === ItemFilterKind.TAG && this.state.filterTag === stat.tag, true, (): void => {
             this.onFilterChange(ItemFilterKind.TAG, stat.tag);
           })
-      }, (stat: TagStat): string => stat.tag)
+      }, (stat: TagStat): string => `${stat.tag}:${stat.count}`)
     }
     .width(MENU_WIDTH)
     .padding({ top: MENU_PADDING_V, bottom: MENU_PADDING_V })
