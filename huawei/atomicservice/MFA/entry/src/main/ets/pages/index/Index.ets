@@ -26,8 +26,8 @@ import { Authorization } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
 import { ListViewState } from '../../models/totp/ListViewState';
 import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
+import { OTPAuthURI } from '@yansongda/otp';
 import { ItemFilterKind } from '../../utils/ItemFilter';
-import { canonicalSecret, replaceSecretInUri, secretOfOtpauthUri } from '../../utils/Base32';
 
 @Builder
 export function builder() {
@@ -360,22 +360,18 @@ export struct Index {
 
     hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果: %{public}s', uri);
 
-    const rawSecret: string | undefined = secretOfOtpauthUri(uri);
+    // strict 解析：非规范 Base32（尾长非法 / 填充位非 0）会抛 INVALID_BASE32_PADDING，
+    // 避免后端把 secret 静默截断后入库；build 同时给出规范化 URI（secret 大写、无填充），
+    // 顺带把非法 otpauth 链接挡在本地
+    try {
+      uri = OTPAuthURI.build(OTPAuthURI.parse(uri, { strict: true }));
+    } catch (e) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果不是合法或规范的 otpauth 链接: %{public}s',
+        JSON.stringify(e));
 
-    // 后端会把 Base32 文本解码后重新编码入库：尾长非法或填充位非 0 的密钥会被静默截断，
-    // 这里提前拦截；小写/带填充的密钥就地换成库给出的规范值（后端字母表只接受大写无填充）
-    if ('undefined' !== typeof rawSecret) {
-      const secret: string | undefined = canonicalSecret(rawSecret);
+      Toast.show({ message: $r('app.string.index_index_page_qr_invalid'), duration: 3000 });
 
-      if ('undefined' === typeof secret) {
-        hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果中的密钥格式不合法，已忽略');
-
-        Toast.show({ message: $r('app.string.index_create_page_secret_format_error'), duration: 3000 });
-
-        return;
-      }
-
-      uri = replaceSecretInUri(uri, secret);
+      return;
     }
 
     try {
