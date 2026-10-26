@@ -1,29 +1,12 @@
-// Base32（RFC 4648）密钥文本校验：与后端 totp-rs / base32 crate 的解码语义对齐。
-// 后端会把 otpauth:// 里的 secret 解码成字节、重新编码后入库（base32::decode 的
-// output_length = len * 5 / 8，向下取整），所以「尾长非法」或「尾部填充位非 0」的文本
-// 会被静默截断（例如 GGG 入库变成 GE）。这里在提交前拦截，避免保存到与二维码不一致的密钥。
+import { Secret } from '@yansongda/otp';
 
-const BASE32_ALPHABET: string = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+// 密钥（Base32）规范化与校验。
+// 后端把 otpauth:// 里的 secret 解码成字节后重新编码入库（base32::decode 的
+// output_length = len * 5 / 8，向下取整），因此「尾长非法」或「尾部填充位非 0」的
+// 文本会被静默截断（例如 GGG 入库变成 GE）。判定完全复用 @yansongda/otp 的
+// Secret：解码再编码，只有能原样往返的密钥才放行，语义与后端一致。
 
-// 尾部字符数 → 最后一个字符中不参与解码的低位掩码（这些位必须为 0，否则重新编码会变形）
-// 2 字符 = 10 bit → 1 字节，余 2 bit；4 字符 = 20 bit → 2 字节，余 4 bit；
-// 5 字符 = 25 bit → 3 字节，余 1 bit；7 字符 = 35 bit → 4 字节，余 3 bit。
-function tailMask(tail: number): number {
-  switch (tail) {
-    case 2:
-      return 0x03;
-    case 4:
-      return 0x0F;
-    case 5:
-      return 0x01;
-    case 7:
-      return 0x07;
-    default:
-      return -1;
-  }
-}
-
-// 归一化：去掉 padding（=）与区分空白，统一大写（RFC 4648 只接受大写字母表）
+// 去 padding 与空白、统一大写：库的宽松解析接受这些差异，这里作为往返比较的基准
 function normalizeSecret(secret: string): string {
   let normalized = '';
 
@@ -40,39 +23,27 @@ function normalizeSecret(secret: string): string {
   return normalized;
 }
 
-// 密钥是否可「解码 → 重新编码」无损往返：与后端入库后的值保持一致
-function isBase32SecretValid(secret: string): boolean {
+// 返回可直接提交的规范密钥（大写、无填充）；字符集非法 / 尾长非法 / 填充位非 0 时返回 undefined
+function canonicalSecret(secret: string): string | undefined {
   const normalized = normalizeSecret(secret);
 
   if (0 === normalized.length) {
-    return false;
+    return undefined;
   }
 
-  for (let i = 0; i < normalized.length; i++) {
-    if (BASE32_ALPHABET.indexOf(normalized.charAt(i)) < 0) {
-      return false;
-    }
+  try {
+    const canonical: string = Secret.fromBase32(normalized).toBase32();
+
+    // 往返不一致说明后端会静默截断该密钥，直接拦下
+    return canonical === normalized ? canonical : undefined;
+  } catch (e) {
+    // 字符集非法 / 解码为空：库抛 OtpError
+    return undefined;
   }
-
-  const tail = normalized.length % 8;
-
-  // 正好整数个分组时没有填充位
-  if (0 === tail) {
-    return true;
-  }
-
-  const mask = tailMask(tail);
-
-  if (mask < 0) {
-    return false;
-  }
-
-  const lastValue = BASE32_ALPHABET.indexOf(normalized.charAt(normalized.length - 1));
-
-  return 0 === (lastValue & mask);
 }
 
-// 从 otpauth:// URI 中取出 secret 参数（只做提交前的格式预检，不做完整 URI 校验）
+// 从 otpauth:// URI 中取出 secret 的原始取值：库只暴露规范化后的值，
+// 而「是否会被截断」必须拿原始文本比对，所以这里只做取值、不做 base32 处理
 function secretOfOtpauthUri(uri: string): string | undefined {
   const queryStart = uri.indexOf('?');
 
@@ -95,8 +66,9 @@ function secretOfOtpauthUri(uri: string): string | undefined {
   return undefined;
 }
 
-// 把 URI 里 secret 参数就地转成大写：部分认证器导出的 URI 用小写 Base32，后端只接受大写字母表
-function uppercaseSecretInUri(uri: string): string {
+// 用规范值就地替换 URI 里的 secret 取值，其余部分原样保留
+// （不重建 URI，避免参数顺序/默认值裁剪影响后端解析）
+function replaceSecretInUri(uri: string, secret: string): string {
   const queryStart = uri.indexOf('?');
 
   if (queryStart < 0) {
@@ -109,7 +81,7 @@ function uppercaseSecretInUri(uri: string): string {
     const separator = pair.indexOf('=');
 
     if (separator >= 0 && 'secret' === decodeURIComponent(pair.substring(0, separator)).toLowerCase()) {
-      pairs.push(`${pair.substring(0, separator + 1)}${pair.substring(separator + 1).toUpperCase()}`);
+      pairs.push(`${pair.substring(0, separator + 1)}${secret}`);
       continue;
     }
 
@@ -119,4 +91,4 @@ function uppercaseSecretInUri(uri: string): string {
   return `${uri.substring(0, queryStart + 1)}${pairs.join('&')}`;
 }
 
-export { isBase32SecretValid, normalizeSecret, secretOfOtpauthUri, uppercaseSecretInUri };
+export { canonicalSecret, replaceSecretInUri, secretOfOtpauthUri };

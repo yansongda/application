@@ -27,7 +27,7 @@ import { AppLock } from '../../models/security/AppLock';
 import { ListViewState } from '../../models/totp/ListViewState';
 import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
 import { ItemFilterKind } from '../../utils/ItemFilter';
-import { isBase32SecretValid, secretOfOtpauthUri, uppercaseSecretInUri } from '../../utils/Base32';
+import { canonicalSecret, replaceSecretInUri, secretOfOtpauthUri } from '../../utils/Base32';
 
 @Builder
 export function builder() {
@@ -360,12 +360,14 @@ export struct Index {
 
     hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果: %{public}s', uri);
 
-    const secret: string | undefined = secretOfOtpauthUri(uri);
+    const rawSecret: string | undefined = secretOfOtpauthUri(uri);
 
     // 后端会把 Base32 文本解码后重新编码入库：尾长非法或填充位非 0 的密钥会被静默截断，
-    // 这里提前拦截；小写 Base32 就地转大写（后端字母表只接受大写）
-    if ('undefined' !== typeof secret) {
-      if (!isBase32SecretValid(secret)) {
+    // 这里提前拦截；小写/带填充的密钥就地换成库给出的规范值（后端字母表只接受大写无填充）
+    if ('undefined' !== typeof rawSecret) {
+      const secret: string | undefined = canonicalSecret(rawSecret);
+
+      if ('undefined' === typeof secret) {
         hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果中的密钥格式不合法，已忽略');
 
         Toast.show({ message: $r('app.string.index_create_page_secret_format_error'), duration: 3000 });
@@ -373,7 +375,7 @@ export struct Index {
         return;
       }
 
-      uri = uppercaseSecretInUri(uri);
+      uri = replaceSecretInUri(uri, secret);
     }
 
     try {
