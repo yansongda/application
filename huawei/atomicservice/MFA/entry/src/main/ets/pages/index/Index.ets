@@ -26,6 +26,7 @@ import { Authorization } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
 import { ListViewState } from '../../models/totp/ListViewState';
 import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
+import { OTPAuthURI } from '@yansongda/otp';
 import { ItemFilterKind } from '../../utils/ItemFilter';
 
 @Builder
@@ -226,7 +227,19 @@ export struct Index {
   }
 
   // 请求删除：记录待删 id 并弹确认框（真正删除在 deleteDialog 内）
+  // 兜底校验：swipeAction 的滑出面板不会随数据项删除而收起，其按钮回调可能仍持有已删除的 id，
+  // 命中即说明列表与服务端不一致，直接刷新，避免把失效 id 发给后端（会得到 2008 TOTP 信息未找到）
   private requestDelete(id: string): void {
+    if (!this.itemsRuntime.ids.includes(id)) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '忽略已失效的删除请求: %{public}s，改为刷新列表', id);
+
+      this.refresh().catch(() => {
+        // 失败已由重试对话框提示，仅避免 unhandled rejection
+      });
+
+      return;
+    }
+
     this.swipeActionId = id;
 
     Dialog.open(() => this.deleteDialog());
@@ -273,19 +286,23 @@ export struct Index {
         content: $r('app.string.index_index_page_delete_name'),
         role: ButtonRole.ERROR,
         action: async () => {
-          if ('undefined' == typeof this.swipeActionId) {
+          // 先拷成局部常量并立即清空页面级字段：Dialog.open 之后还有 await，
+          // 并发/重入的 action 如果读字段会拿到被改写的 id
+          const id: string | undefined = this.swipeActionId;
+
+          if ('undefined' === typeof id) {
             return;
           }
 
+          this.swipeActionId = undefined;
+
           try {
-            const dialogId = await Dialog.open(() => this.loadingDialog());
+            // Dialog.execute 保证成功与失败都关闭 loading；手写 open/close 时失败分支会留下
+            // 一个 autoCancel: false 的「处理中...」对话框永久遮挡页面
+            await Dialog.execute(() => this.loadingDialog(), () => Totp.delete(id));
 
-            await Totp.delete(this.swipeActionId);
-            this.itemsRuntime.delete(this.swipeActionId);
-            this.swipeActionId = undefined;
+            this.itemsRuntime.delete(id);
             this.syncCards();
-
-            Dialog.close(dialogId);
           } catch (e) {
             await Dialog.open(() => this.deleteFailedDialog(e.message));
           }
@@ -342,6 +359,20 @@ export struct Index {
     }
 
     hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果: %{public}s', uri);
+
+    // strict 解析：非规范 Base32（尾长非法 / 填充位非 0）会抛 INVALID_BASE32_PADDING，
+    // 避免后端把 secret 静默截断后入库；build 同时给出规范化 URI（secret 大写、无填充），
+    // 顺带把非法 otpauth 链接挡在本地
+    try {
+      uri = OTPAuthURI.build(OTPAuthURI.parse(uri, { strict: true }));
+    } catch (e) {
+      hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果不是合法或规范的 otpauth 链接: %{public}s',
+        JSON.stringify(e));
+
+      Toast.show({ message: $r('app.string.index_index_page_qr_invalid'), duration: 3000 });
+
+      return;
+    }
 
     try {
       const data =

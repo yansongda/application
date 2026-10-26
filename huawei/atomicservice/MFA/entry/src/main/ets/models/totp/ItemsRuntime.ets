@@ -73,6 +73,10 @@ export class ItemsRuntime {
     this._ids.push(item.id);
     this._ids = [...this._ids];
 
+    // 新增即启动：不能只依赖 ListItem 的 onAttach —— 节点被复用时 onAttach 不会重新触发，
+    // 表现为新增行的验证码与进度条停在初始值，只能杀进程重建
+    runtime.start();
+
     return runtime;
   }
 

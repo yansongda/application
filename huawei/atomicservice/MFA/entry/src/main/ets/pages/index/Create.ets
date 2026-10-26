@@ -4,6 +4,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppPagesName, LogDomain } from '../../App';
 import { Toast } from '../../utils/PromptAction';
 import { Totp } from '../../api/Totp';
+import { Secret } from '@yansongda/otp';
 import { Header } from '../../components/Header';
 
 // 摘要算法下拉选项：与后端 Totp::algorithm() 可接受值一致
@@ -160,10 +161,25 @@ struct Index {
               }
 
               const algorithm = this.algorithm;
+              // strict 模式要求规范化后仍是规范 Base32（尾长 ∈ {0,2,4,5,7} 且填充位为 0），
+              // 否则抛 INVALID_BASE32_PADDING —— 后端会把非规范密钥解码后重新编码入库
+              // （GGG 会被静默截断成 GE），这里必须提前拦住
+              let secret: string;
+
+              try {
+                secret = Secret.fromBase32(this.secret, { strict: true }).toBase32();
+              } catch (e) {
+                hilog.warn(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '密钥格式不合法: %{public}s',
+                  JSON.stringify(e));
+
+                Toast.show({ message: $r('app.string.index_create_page_secret_format_error') });
+
+                return;
+              }
 
               const label = `${encodeURIComponent(this.issuer)}:${encodeURIComponent(this.username)}`;
               const uri =
-                `otpauth://totp/${label}?secret=${this.secret}&issuer=${encodeURIComponent(
+                `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(
                   this.issuer)}&period=${period}&digits=${digits}&algorithm=${algorithm}`;
 
               hilog.info(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建: %{private}s', uri);

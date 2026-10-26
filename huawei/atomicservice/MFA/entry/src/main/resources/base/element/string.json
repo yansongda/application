@@ -125,6 +125,10 @@
       "value": "您输入的密钥不符合 MFA 规范，请重新输入"
     },
     {
+      "name": "index_create_page_secret_format_error",
+      "value": "密钥格式不合法：Base32 长度或填充位不正确，请重新输入或扫码"
+    },
+    {
       "name": "index_create_page_info_error",
       "value": "请输入用户名、发行方、密钥"
     },
@@ -519,6 +523,10 @@
     {
       "name": "index_index_page_no_match",
       "value": "没有匹配的账号"
+    },
+    {
+      "name": "index_index_page_qr_invalid",
+      "value": "二维码不是有效的 otpauth 链接，或其中的密钥不符合 Base32 规范"
     },
     {
       "name": "index_index_page_clear_filter",
