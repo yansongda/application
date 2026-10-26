@@ -6,21 +6,11 @@ import { Secret } from '@yansongda/otp';
 // 文本会被静默截断（例如 GGG 入库变成 GE）。判定完全复用 @yansongda/otp 的
 // Secret：解码再编码，只有能原样往返的密钥才放行，语义与后端一致。
 
-// 去 padding 与空白、统一大写：库的宽松解析接受这些差异，这里作为往返比较的基准
+// 去 padding 与空白、统一大写：与 @yansongda/otp 内部 decode 的归一化表达式完全一致
+// （库源码 internal/Base32.ets: input.replace(/\s/g, '').replace(/=+$/, '').toUpperCase()），
+// 保证「比较基准」不会比库本身更严，避免合法的带空白/填充密钥被误判
 function normalizeSecret(secret: string): string {
-  let normalized = '';
-
-  for (let i = 0; i < secret.length; i++) {
-    const char = secret.charAt(i);
-
-    if ('=' === char || ' ' === char || '\n' === char || '\r' === char || '\t' === char) {
-      continue;
-    }
-
-    normalized += char.toUpperCase();
-  }
-
-  return normalized;
+  return secret.replace(/\s/g, '').replace(/=+$/, '').toUpperCase();
 }
 
 // 返回可直接提交的规范密钥（大写、无填充）；字符集非法 / 尾长非法 / 填充位非 0 时返回 undefined
