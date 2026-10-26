@@ -124,19 +124,6 @@ export class ItemsRuntime {
     return items;
   }
 
-  // 是否存在可展示的标签/置顶：决定首页是否显示「筛选」入口
-  hasMeta(): boolean {
-    for (const id of this._ids) {
-      const runtime = this._runtimes.get(id);
-
-      if ('undefined' !== typeof runtime && (runtime.tags.length > 0 || runtime.pinned)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   // 以服务端数据原地刷新：顺序以服务端返回为准，更新已有条目（保留运行中的定时器）、增删差异条目
   reload(items: Iterable<IItem>) {
     const nextItems = Array.from(items);
