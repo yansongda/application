@@ -5,6 +5,7 @@ import { AppPagesName, LogDomain } from '../../App';
 import { Toast } from '../../utils/PromptAction';
 import { Totp } from '../../api/Totp';
 import { Header } from '../../components/Header';
+import { isBase32SecretValid, normalizeSecret } from '../../utils/Base32';
 
 // 摘要算法下拉选项：与后端 Totp::algorithm() 可接受值一致
 const ALGORITHM_OPTIONS: SelectOption[] = [
@@ -160,10 +161,19 @@ struct Index {
               }
 
               const algorithm = this.algorithm;
+              // 归一并校验密钥：后端会把 Base32 文本解码后重新编码入库，尾长非法或填充位非 0
+              // 的密钥会被静默截断（例如 GGG → GE），必须在提交前拦住
+              const secret = normalizeSecret(this.secret);
+
+              if (!isBase32SecretValid(secret)) {
+                Toast.show({ message: $r('app.string.index_create_page_secret_format_error') });
+
+                return;
+              }
 
               const label = `${encodeURIComponent(this.issuer)}:${encodeURIComponent(this.username)}`;
               const uri =
-                `otpauth://totp/${label}?secret=${this.secret}&issuer=${encodeURIComponent(
+                `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(
                   this.issuer)}&period=${period}&digits=${digits}&algorithm=${algorithm}`;
 
               hilog.info(LogDomain.PAGES, AppPagesName.INDEX_CREATE, '新建: %{private}s', uri);
