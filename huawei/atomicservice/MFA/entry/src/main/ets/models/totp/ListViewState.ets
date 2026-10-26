@@ -34,10 +34,11 @@ export class ListViewState {
     this.filterTag = '';
   }
 
-  // 刷新后清理已失效的视图状态：标签被删空、置顶项被取消、分组已无意义时回到默认视图。
+  // 刷新后清理已失效的视图状态：标签被删空、置顶项被取消时回到默认视图。
+  // 分组不需要清理：没有标签时所有条目归入「未分类」，分组入口恒可用。
   // 返回是否发生变更——变更后调用方需要回写，否则下次启动会再加载一遍失效状态。
   // 只比较落盘字段（搜索词不参与：clearFilter 会顺带清 query，但不影响是否需要回写）
-  syncView(snapshot: ItemView[], hasMeta: boolean): boolean {
+  syncView(snapshot: ItemView[]): boolean {
     const kind: ItemFilterKind = this.filterKind;
     const tag: string = this.filterTag;
     const grouped: boolean = this.isGrouped;
@@ -54,10 +55,6 @@ export class ListViewState {
       if (this.filterKind === ItemFilterKind.PINNED && countPinned(snapshot) === 0) {
         this.filterKind = ItemFilterKind.ALL;
         this.filterTag = '';
-      }
-
-      if (this.isGrouped && !hasMeta) {
-        this.isGrouped = false;
       }
     }
 

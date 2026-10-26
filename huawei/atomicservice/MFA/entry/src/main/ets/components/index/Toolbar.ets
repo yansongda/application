@@ -65,26 +65,26 @@ export struct Toolbar {
             this.onQueryChange(value);
           })
 
-        if (this.hasMeta()) {
-          Button(this.filterLabel())
-            .type(ButtonType.Normal)
-            .height(36)
-            .padding({ left: 5, right: 5 })
-            .backgroundColor(Color.Transparent)
-            .fontColor(this.viewActive() ? $r('app.color.tag_text') : $r('sys.color.font_secondary'))
-            .fontSize($r('app.float.body_font_size'))
-            .bindMenu(this.isMenuShow, this.filterMenuContent, {
-              // 点菜单外区域由系统关闭；这里复位状态，否则下次点击会被当成「已展开」而打不开
-              onDisappear: (): void => {
-                this.isMenuShow = false;
-              },
-            })
-            .onClick((): void => {
-              // 用 toggle 而非恒置 true：菜单已展开时再点按钮，系统会先关闭并触发 onDisappear，
-              // 若这里强行置 true 会立刻重开（表现为闪一下）
-              this.isMenuShow = !this.isMenuShow;
-            })
-        }
+        // 视图/筛选入口恒显示：没有任何标签时也能进入分组视图（全部归入「未分类」），
+        // 否则用户根本看不到这个功能入口
+        Button(this.filterLabel())
+          .type(ButtonType.Normal)
+          .height(36)
+          .padding({ left: 5, right: 5 })
+          .backgroundColor(Color.Transparent)
+          .fontColor(this.viewActive() ? $r('app.color.tag_text') : $r('sys.color.font_secondary'))
+          .fontSize($r('app.float.body_font_size'))
+          .bindMenu(this.isMenuShow, this.filterMenuContent, {
+            // 点菜单外区域由系统关闭；这里复位状态，否则下次点击会被当成「已展开」而打不开
+            onDisappear: (): void => {
+              this.isMenuShow = false;
+            },
+          })
+          .onClick((): void => {
+            // 用 toggle 而非恒置 true：菜单已展开时再点按钮，系统会先关闭并触发 onDisappear，
+            // 若这里强行置 true 会立刻重开（表现为闪一下）
+            this.isMenuShow = !this.isMenuShow;
+          })
 
         Button($r('app.string.index_index_page_sort'))
           .type(ButtonType.Normal)
@@ -210,10 +210,6 @@ export struct Toolbar {
     Divider()
       .strokeWidth(MENU_DIVIDER_STROKE)
       .margin({ top: MENU_PADDING_V, bottom: MENU_PADDING_V })
-  }
-
-  private hasMeta(): boolean {
-    return this.itemsRuntime.hasMeta();
   }
 
   private viewActive(): boolean {

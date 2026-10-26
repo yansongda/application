@@ -473,8 +473,9 @@ export struct Index {
 
       this.itemsRuntime.reload(items.values());
 
-      // 数据变了，已失效的筛选/分组（标签被删、置顶被取消）要一并回写，否则下次启动会再加载一遍
-      if (this.listState.syncView(this.itemsRuntime.snapshot(), this.itemsRuntime.hasMeta())) {
+      // 数据变了，已失效的筛选（标签被删、置顶被取消）要一并回写，否则下次启动会再加载一遍；
+      // 分组不再失效：没有标签时所有条目归入「未分类」
+      if (this.listState.syncView(this.itemsRuntime.snapshot())) {
         this.saveListState();
       }
 

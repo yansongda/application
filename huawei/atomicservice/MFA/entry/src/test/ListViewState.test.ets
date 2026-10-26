@@ -96,7 +96,7 @@ export default function listViewStateTest(): void {
 
       state.applyFilter(ItemFilterKind.TAG, '已删除');
 
-      const changed: boolean = state.syncView([view('1', ['工作'], false)], true);
+      const changed: boolean = state.syncView([view('1', ['工作'], false)]);
 
       expect(changed).assertTrue();
       expect(state.filterKind).assertEqual(ItemFilterKind.ALL);
@@ -109,7 +109,7 @@ export default function listViewStateTest(): void {
 
       state.applyFilter(ItemFilterKind.TAG, '工作');
 
-      const changed: boolean = state.syncView([view('1', ['工作'], false)], true);
+      const changed: boolean = state.syncView([view('1', ['工作'], false)]);
 
       expect(changed).assertFalse();
       expect(state.filterKind).assertEqual(ItemFilterKind.TAG);
@@ -122,10 +122,22 @@ export default function listViewStateTest(): void {
 
       state.applyFilter(ItemFilterKind.PINNED, '');
 
-      const changed: boolean = state.syncView([view('1', ['工作'], false)], true);
+      const changed: boolean = state.syncView([view('1', ['工作'], false)]);
 
       expect(changed).assertTrue();
       expect(state.filterKind).assertEqual(ItemFilterKind.ALL);
+    });
+
+    // 没有任何标签时分组视图也要保留：入口恒显示，条目归入「未分类」
+    it('sync_view_keeps_grouped_without_tags', 0, () => {
+      const state = new ListViewState();
+
+      state.applyGrouped(true);
+
+      const changed: boolean = state.syncView([view('1', [], false)]);
+
+      expect(changed).assertFalse();
+      expect(state.isGrouped).assertTrue();
     });
 
     // 账号被删空 → 清空搜索/筛选/分组
@@ -135,7 +147,7 @@ export default function listViewStateTest(): void {
       state.query = 'github';
       state.applyFilter(ItemFilterKind.TAG, '工作');
 
-      const changed: boolean = state.syncView([], false);
+      const changed: boolean = state.syncView([]);
 
       expect(changed).assertTrue();
       expect(state.query).assertEqual('');
