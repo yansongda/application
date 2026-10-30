@@ -19,8 +19,11 @@ env:
   GITHUB_IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_ACCESSTOKEN }}
   DOCKERHUB_IMAGE_REPOSITORY: ${{ github.repository }}
-  ALIYUN_IMAGE_TOKEN: ${{ secrets.ALIYUN_IMAGE_ACCESSTOKEN }}
+  ALIYUN_IMAGE_TOKEN: ${{ secrets.ALIYUN_ACCESSTOKEN }}
   ALIYUN_IMAGE_REPOSITORY: registry.cn-shenzhen.aliyuncs.com/yansongda-app/application
+  HUAWEICLOUD_IMAGE_TOKEN: ${{ secrets.HUAWEICLOUD_ACCESSTOKEN }}
+  HUAWEICLOUD_IMAGE_REPOSITORY: swr.cn-south-1.myhuaweicloud.com/yansongda-app/application
+  HUAWEICLOUD_IMAGE_USERNAME: cn-south-1@HPUAZ4UOBSRRPT9YMCBX
 
 jobs:
   build-application-api:
@@ -70,7 +73,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        registry: [aliyun, dockerhub, github]
+        registry: [aliyun, dockerhub, github, huaweicloud]
     steps:
       - name: Download the docker image
         uses: actions/download-artifact@v8
@@ -103,6 +106,11 @@ jobs:
                 docker tag app $GITHUB_IMAGE_REPOSITORY:$TAG
                 echo $GITHUB_TOKEN | docker login --username=${{ github.actor }} ghcr.io --password-stdin
                 docker push $GITHUB_IMAGE_REPOSITORY:$TAG
+                ;;
+              huaweicloud)
+                docker tag app $HUAWEICLOUD_IMAGE_REPOSITORY:$TAG
+                echo $HUAWEICLOUD_IMAGE_TOKEN | docker login --username=$HUAWEICLOUD_IMAGE_USERNAME swr.cn-south-1.myhuaweicloud.com --password-stdin
+                docker push $HUAWEICLOUD_IMAGE_REPOSITORY:$TAG
                 ;;
             esac
             docker logout
