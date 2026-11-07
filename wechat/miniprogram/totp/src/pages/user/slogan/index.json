@@ -1,1 +1,8 @@
-{ "usingComponents": {} }
+{
+  "navigationBarTitleText": "修改 Slogan",
+  "usingComponents": {
+    "t-button": "tdesign-miniprogram/button/button",
+    "t-message": "tdesign-miniprogram/message/message",
+    "t-toast": "tdesign-miniprogram/toast/toast"
+  }
+}

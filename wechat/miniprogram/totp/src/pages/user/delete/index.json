@@ -1,1 +1,10 @@
-{ "usingComponents": {} }
+{
+  "navigationBarTitleText": "注销账号",
+  "usingComponents": {
+    "t-button": "tdesign-miniprogram/button/button",
+    "t-checkbox": "tdesign-miniprogram/checkbox/checkbox",
+    "t-dialog": "tdesign-miniprogram/dialog/dialog",
+    "t-message": "tdesign-miniprogram/message/message",
+    "t-toast": "tdesign-miniprogram/toast/toast"
+  }
+}

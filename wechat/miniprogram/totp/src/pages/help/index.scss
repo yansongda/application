@@ -1,1 +1,40 @@
-/* placeholder */
+.page {
+  min-height: 100vh;
+  padding: 24rpx;
+  background-color: #f5f5f5;
+}
+
+.section {
+  display: flex;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  background-color: #ffffff;
+  border-radius: 18rpx;
+}
+
+.section-icon {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 60rpx;
+  padding-top: 6rpx;
+  flex-shrink: 0;
+}
+
+.section-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333333;
+}
+
+.section-item {
+  margin-top: 12rpx;
+  font-size: 28rpx;
+  color: #666666;
+  line-height: 1.6;
+}
