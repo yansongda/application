@@ -34,5 +34,6 @@
       "types/*": ["src/types/*"],
     },
   },
-  "exclude": ["node_modules", "build/**/*"],
+  // tests/ 由 bun test 直接执行（运行时转译），不进主 tsc，避免 bun:test 类型与小程序全局类型冲突
+  "exclude": ["node_modules", "build/**/*", "tests"],
 }

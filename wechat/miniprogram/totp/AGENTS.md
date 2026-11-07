@@ -75,5 +75,7 @@ bun run typecheck               # TypeScript 类型检查（tsc --noEmit）
 ## NOTES
 
 - 与 `yansongda` 主小程序共享 `utils/error.ts`、`utils/logger.ts`、`utils/string.ts`、`models/error.ts`、`types/http.d.ts` 等代码，但当前无正式共享包，分别独立维护。
-- 当前 CI 已接入 `bun run biome:check` 与 `bun run typecheck`。
-- `src/vendor/` 内为 otpauth 官方 dist 产物质样拷贝（实际加载源），与 `package.json` 中固定精确版本号（无 caret）必须同步升级，升级步骤见 `src/vendor/README.md`；禁止改用包 main 入口（node:crypto 依赖）。
+- 当前 CI 已接入 `bun run biome:check`、`bun run typecheck`、`bun run test`（`tests/otp/`）与 `bun run check:otp-invariants`（不变量静态守卫）。
+- `src/otp/` 为自研零依赖 OTP 库（对照 ohos-otp / 华为 `@yansongda/otp` 的分层与契约），`utils/totp.ts` 是唯一业务调用点；API、不变量、错误码与覆盖边界见 `src/otp/README.md`。
+- 不要重新引入 `otpauth` 或任何运行时密码学依赖；哈希原语在 `src/otp/internal/sha{1,256,512}.ts`，SHA-512 必须用 hi/lo 半字（禁止 BigInt，老设备兼容）。
+- `src/otp` 关键不变量：全库无日志、`Secret.toJSON()` 脱敏、`verify` 扫满窗口、取模只在 `digits.format`、`internal/*` 不进 barrel（测试经深路径 import）。

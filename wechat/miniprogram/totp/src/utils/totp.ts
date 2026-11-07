@@ -1,5 +1,6 @@
 import type { TotpAlgorithm } from "types/totp";
-import { TOTP } from "../vendor/otpauth.esm.min.js";
+// 微信运行时不做目录 index 解析（"../otp" 会被当成 otp.js），必须显式指向 barrel 文件
+import { TOTP } from "../otp/index";
 
 const DEFAULT_DIGITS = 6;
 const DEFAULT_ALGORITHM: TotpAlgorithm = "SHA1";
@@ -60,9 +61,7 @@ const computeCode = (
   algorithm: string | undefined,
   timestamp: number,
 ): string => {
-  return getTotpInstance(secret, period, digits, algorithm).generate({
-    timestamp,
-  });
+  return getTotpInstance(secret, period, digits, algorithm).generate(timestamp);
 };
 
 export { computeCode };
