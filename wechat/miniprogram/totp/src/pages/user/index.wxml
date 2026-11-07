@@ -1,0 +1,76 @@
+<app-lock-screen wx:if="{{locked}}" bind:unlocked="onUnlocked" />
+<t-message id="t-message" />
+<t-toast id="t-toast" />
+
+<view class="page">
+  <view class="header">
+    <button class="avatar-button" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
+      <image
+        wx:if="{{avatar}}"
+        class="avatar-image"
+        src="{{avatar}}"
+        mode="aspectFill"
+        binderror="onAvatarError"
+      />
+      <t-icon wx:else class="avatar-fallback" name="user" size="56rpx" color="#ffffff" />
+    </button>
+    <view class="header-meta">
+      <view class="header-nickname">{{nickname || '微信用户'}}</view>
+      <view class="header-count">已保护 {{protectedCount}} 个账号</view>
+    </view>
+  </view>
+
+  <canvas type="2d" id="avatar-canvas" class="avatar-canvas"></canvas>
+
+  <view class="section">
+    <view class="section-title">资料</view>
+    <t-cell-group theme="card">
+      <t-cell title="昵称" note="{{nickname || '微信用户'}}" hover arrow bind:tap="gotoNickname" />
+      <t-cell title="Slogan" note="{{slogan || '未设置'}}" hover arrow bind:tap="gotoSlogan" />
+      <t-cell title="手机号" note="敬请期待" />
+    </t-cell-group>
+  </view>
+
+  <view class="section">
+    <view class="section-title">安全</view>
+    <view class="security-card">
+      <view class="switch-row" wx:if="{{securityRevision % 2 === 0}}">
+        <view class="switch-meta">
+          <view class="switch-title">防截屏</view>
+          <view class="switch-desc">截屏与录屏时，应用内容将被系统遮挡</view>
+        </view>
+        <t-switch value="{{privacyWindow}}" bind:change="onPrivacyChange" />
+      </view>
+      <view class="switch-row" wx:else>
+        <view class="switch-meta">
+          <view class="switch-title">防截屏</view>
+          <view class="switch-desc">截屏与录屏时，应用内容将被系统遮挡</view>
+        </view>
+        <t-switch value="{{privacyWindow}}" bind:change="onPrivacyChange" />
+      </view>
+      <view class="switch-row" wx:if="{{securityRevision % 2 === 0}}">
+        <view class="switch-meta">
+          <view class="switch-title">应用锁</view>
+          <view class="switch-desc">重新打开或离开 1 分钟后需验证身份</view>
+        </view>
+        <t-switch value="{{appLock}}" bind:change="onAppLockChange" />
+      </view>
+      <view class="switch-row" wx:else>
+        <view class="switch-meta">
+          <view class="switch-title">应用锁</view>
+          <view class="switch-desc">重新打开或离开 1 分钟后需验证身份</view>
+        </view>
+        <t-switch value="{{appLock}}" bind:change="onAppLockChange" />
+      </view>
+    </view>
+  </view>
+
+  <view class="section">
+    <view class="section-title">更多</view>
+    <t-cell-group theme="card">
+      <t-cell title="帮助" left-icon="help-circle" hover arrow bind:tap="gotoHelp" />
+      <t-cell title="关于" left-icon="info-circle" note="{{versionText}}" />
+      <t-cell title="注销账号" left-icon="delete" hover arrow bind:tap="gotoDelete" />
+    </t-cell-group>
+  </view>
+</view>

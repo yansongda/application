@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- 搜索 / 标签 / 置顶 / 分组：缓存与接口契约扩展（`EditTagsRequest` / `EditPinnedRequest`），新增标签编辑页与列表筛选面板
+- 新增创建入口页（扫码 / 手动输入）、个人中心页、昵称 / Slogan 编辑页、注销页与使用帮助页（占位注册）
+- 新增防截屏（`setVisualEffectOnCapture`）与应用锁（SOTER 指纹）能力及安全设置独立存储键
+- 用户信息接口契约（`/users/detail`、头像 / 昵称 / Slogan / 安全设置编辑）与端云同步基础（用户缓存、视图状态存储键）
+
 ### Changed
 
 - 端内算码移除 vendored `otpauth@9.5.2`，改用自研零依赖 OTP 库 `src/otp/`（与华为 `@yansongda/otp` 同构），算法与码值零变化；新增 242 项 Bun 测试覆盖 RFC 4226 / 6238 / 4648 向量

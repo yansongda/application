@@ -1,0 +1,35 @@
+.page {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.form-card {
+  margin: 24rpx;
+  padding: 32rpx;
+  background-color: #ffffff;
+  border-radius: 18rpx;
+}
+
+.field-label {
+  margin-bottom: 16rpx;
+  font-size: 26rpx;
+  color: #999999;
+}
+
+.field-textarea {
+  width: 100%;
+  min-height: 160rpx;
+  font-size: 32rpx;
+  color: #333333;
+}
+
+.field-count {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #999999;
+  text-align: right;
+}
+
+.footer {
+  margin: 32rpx 24rpx;
+}

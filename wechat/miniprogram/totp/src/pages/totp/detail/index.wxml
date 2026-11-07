@@ -1,3 +1,5 @@
+<app-lock-screen wx:if="{{locked}}" bind:unlocked="onUnlocked" />
+<t-toast id="t-toast" />
 <t-message id="t-message" />
 <t-dialog
   visible="{{dialogVisible}}"
@@ -10,11 +12,32 @@
 />
 
 <view class="page">
+  <view class="code-section">
+    <progress
+      class="code-progress"
+      percent="{{progressPercent}}"
+      stroke-width="3"
+      active-color="#5bb43b"
+      background-color="#e8e8e8"
+    />
+    <view class="code-value {{config.digits >= 8 ? 'code-8' : config.digits === 7 ? 'code-7' : ''}}">{{code || '------'}}</view>
+    <view class="code-remaining">剩余 {{remaining}} 秒</view>
+    <t-button theme="primary" size="small" block bind:tap="copyCode">复制验证码</t-button>
+  </view>
+
   <view class="section">
-    <view class="section-title">基本信息</view>
+    <view class="section-title">基础信息</view>
     <t-cell-group theme="card">
-      <t-cell title="提供商" note="{{issuer || '-'}}" bind:tap="gotoEdit" data-type="issuer" hover arrow></t-cell>
-      <t-cell title="账号" note="{{username || '-'}}" bind:tap="gotoEdit" data-type="username" hover arrow></t-cell>
+      <t-cell title="发行方" note="{{issuer || '-'}}" bind:tap="gotoEdit" data-type="issuer" hover arrow></t-cell>
+      <t-cell title="用户名" note="{{username || '-'}}" bind:tap="gotoEdit" data-type="username" hover arrow></t-cell>
+    </t-cell-group>
+  </view>
+
+  <view class="section">
+    <view class="section-title">组织</view>
+    <t-cell-group theme="card">
+      <t-cell title="标签" note="{{tagDisplay}}" bind:tap="gotoTag" hover arrow></t-cell>
+      <t-cell title="置顶" note="{{pinnedDisplay}}" bind:tap="togglePinned" hover arrow></t-cell>
     </t-cell-group>
   </view>
 
@@ -24,6 +47,12 @@
       <t-cell title="更新周期" note="{{config.period}}s" hover></t-cell>
       <t-cell title="验证码位数" note="{{config.digits}} 位" hover></t-cell>
       <t-cell title="摘要算法" note="{{config.algorithm}}" hover></t-cell>
+    </t-cell-group>
+  </view>
+
+  <view class="section">
+    <t-cell-group theme="card">
+      <t-cell title="使用帮助" hover arrow bind:tap="gotoHelp"></t-cell>
     </t-cell-group>
   </view>
 </view>

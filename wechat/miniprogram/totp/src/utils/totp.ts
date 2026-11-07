@@ -64,4 +64,21 @@ const computeCode = (
   return getTotpInstance(secret, period, digits, algorithm).generate(timestamp);
 };
 
-export { computeCode };
+// 一次构建实例，同时产出验证码、倒计时与环形进度，供列表/详情页展示
+const computeSnapshot = (
+  secret: string,
+  period: number,
+  digits: number | undefined,
+  algorithm: string | undefined,
+  timestamp: number,
+): { code: string; remaining: number; progress: number } => {
+  const instance = getTotpInstance(secret, period, digits, algorithm);
+
+  return {
+    code: instance.generate(timestamp),
+    remaining: instance.remaining(timestamp),
+    progress: instance.progress(timestamp),
+  };
+};
+
+export { computeCode, computeSnapshot };

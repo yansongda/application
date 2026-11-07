@@ -68,8 +68,8 @@ totp.generate(Date.now()); // "287082"（示例时间）
 ## 测试
 
 ```bash
-bun run test                # tests/otp/，242 项
+bun run test                 # 全部 Bun 测试（tests/，含本目录 242 项）
 bun run check:otp-invariants # 不变量静态守卫（无 BigInt / 无日志 / internal 不进 barrel 等）
-bun run typecheck           # 主 tsc（tests 不在其中）
+bun run typecheck            # 主 tsc（tests 不在其中）
 bun run biome:check
 ```

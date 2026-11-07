@@ -1,4 +1,5 @@
-import { computeCode } from "@utils/totp";
+import { copyText } from "@utils/clipboard";
+import { computeSnapshot } from "@utils/totp";
 
 Component({
   properties: {
@@ -7,6 +8,15 @@ Component({
     username: String,
     issuer: String,
     secret: String,
+    // 标签与置顶状态：由页面从缓存透传（后端 config.tags / config.pinned 投影）
+    tags: {
+      type: Array,
+      value: [],
+    },
+    pinned: {
+      type: Boolean,
+      value: false,
+    },
     period: {
       type: Number,
       value: 30,
@@ -60,14 +70,18 @@ Component({
       }
 
       try {
+        // 一次构建实例同时拿到验证码与剩余秒数，进度条按 remaining / period 计算
+        const snapshot = computeSnapshot(
+          secret,
+          this.data.period,
+          this.data.digits,
+          this.data.algorithm,
+          Date.now(),
+        );
+
         this.setData({
-          code: computeCode(
-            secret,
-            this.data.period,
-            this.data.digits,
-            this.data.algorithm,
-            Date.now(),
-          ),
+          code: snapshot.code,
+          remainSeconds: snapshot.remaining,
         });
       } catch (_e: unknown) {
         this.setData({ code: "------" });
@@ -98,11 +112,35 @@ Component({
         this.setData({ remainSeconds: countdown });
       }, 1000);
     },
+    // 卡片主体点击 → 详情页（验证码区域 catchtap 复制，不会触发本事件）
     detail() {
       this.triggerEvent("detail", this.data.itemId);
     },
+    // 左滑删除
     delete() {
       this.triggerEvent("delete", this.data.itemId);
+    },
+    // 左滑置顶/取消置顶：事件携带目标值（页面按此值请求服务端并更新缓存，
+    // 避免页面在组件内查询当前 pinned 的时序问题）
+    pin() {
+      this.triggerEvent("pin", {
+        id: this.data.itemId,
+        pinned: !this.data.pinned,
+      });
+    },
+    // 验证码即复制入口：点击右侧验证码区域直接复制
+    async copy() {
+      const code = this.data.code;
+
+      if (!code || code === "------") {
+        return;
+      }
+
+      const ok = await copyText(code);
+
+      if (!ok) {
+        wx.showToast({ title: "复制失败", icon: "none" });
+      }
     },
     clear() {
       clearTimeout(this.data.refreshCodeTimeoutIdentity);

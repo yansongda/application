@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "修改昵称",
+  "usingComponents": {
+    "app-lock-screen": "/components/lock-screen/index",
+    "t-button": "tdesign-miniprogram/button/button",
+    "t-message": "tdesign-miniprogram/message/message",
+    "t-toast": "tdesign-miniprogram/toast/toast"
+  }
+}

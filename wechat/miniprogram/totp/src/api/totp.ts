@@ -10,6 +10,8 @@ import type {
   DeleteRequest,
   DetailRequest,
   EditIssuerRequest,
+  EditPinnedRequest,
+  EditTagsRequest,
   EditUsernameRequest,
   Item,
 } from "types/totp";
@@ -77,6 +79,29 @@ const editUsername = async (data: EditUsernameRequest) => {
   }
 };
 
+const editTags = async (data: EditTagsRequest) => {
+  try {
+    return await http.post<null>(PATH.EDIT_TAGS, data);
+  } catch (e: unknown) {
+    logger.error("更新 TOTP 的标签失败", e);
+
+    throw new HttpError(CODE.HTTP_API_TOTP_EDIT_TAGS, error.getErrorMessage(e));
+  }
+};
+
+const editPinned = async (data: EditPinnedRequest) => {
+  try {
+    return await http.post<null>(PATH.EDIT_PINNED, data);
+  } catch (e: unknown) {
+    logger.error("更新 TOTP 的置顶状态失败", e);
+
+    throw new HttpError(
+      CODE.HTTP_API_TOTP_EDIT_PINNED,
+      error.getErrorMessage(e),
+    );
+  }
+};
+
 const deleteTotp = async (id: string) => {
   try {
     return await http.post<null>(PATH.DELETE, { id } as DeleteRequest);
@@ -103,6 +128,8 @@ export default {
   create,
   editIssuer,
   editUsername,
+  editTags,
+  editPinned,
   deleteTotp,
   sort,
 };

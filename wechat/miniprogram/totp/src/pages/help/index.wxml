@@ -1,0 +1,14 @@
+<app-lock-screen wx:if="{{locked}}" bind:unlocked="onUnlocked" />
+<view class="page">
+  <view class="section" wx:for="{{sections}}" wx:key="title">
+    <view class="section-icon">
+      <t-icon name="{{item.icon}}" size="40rpx" color="#5bb43b" />
+    </view>
+    <view class="section-body">
+      <view class="section-title">{{item.title}}</view>
+      <view class="section-item" wx:for="{{item.items}}" wx:for-item="text" wx:key="*this">
+        {{text}}
+      </view>
+    </view>
+  </view>
+</view>

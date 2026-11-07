@@ -1,3 +1,4 @@
+<app-lock-screen wx:if="{{locked}}" bind:unlocked="onUnlocked" />
 <t-toast id="t-toast" />
 <t-message id="t-message" />
 
@@ -6,7 +7,7 @@
     <view class="section">
       <view class="section-label">账号名称</view>
       <view class="input-card">
-        <t-input name="username" placeholder="请填写账号" value="{{username}}" maxlength="64" align="left" borderless />
+        <t-input name="username" placeholder="请填写账号" value="{{username}}" maxlength="120" align="left" borderless />
       </view>
       <view class="section-hint">例如：user@example.com、手机号等</view>
     </view>

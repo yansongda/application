@@ -2,8 +2,15 @@
   "pages": [
     "pages/totp/index",
     "pages/totp/detail/index",
+    "pages/totp/create/index",
+    "pages/totp/tag/index",
     "pages/totp/edit/issuer",
-    "pages/totp/edit/username"
+    "pages/totp/edit/username",
+    "pages/user/index",
+    "pages/user/nickname/index",
+    "pages/user/slogan/index",
+    "pages/user/delete/index",
+    "pages/help/index"
   ],
   "window": {
     "backgroundTextStyle": "light",

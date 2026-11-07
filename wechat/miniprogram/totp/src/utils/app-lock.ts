@@ -1,0 +1,247 @@
+import { shouldLock } from "./lock-policy";
+import logger from "./logger";
+import { clearDirty, markDirty, readSettings, writeSettings } from "./security";
+
+// 应用锁：本地设置（appLock）持久化；locked / verifying / generation 等运行态绝不落盘。
+export enum VerifyOutcome {
+  SUCCESS = "SUCCESS",
+  FAILED = "FAILED",
+  CANCELED = "CANCELED",
+  NO_CREDENTIAL = "NO_CREDENTIAL",
+  SKIPPED = "SKIPPED",
+}
+
+type SoterAuthMode = "fingerPrint" | "facial";
+
+// --- 运行态（绝不落盘）---
+let locked = false;
+let coldStart = false;
+let pendingCheck = false;
+let lastHideAt: number | undefined;
+let verifying = false;
+let generation = 0;
+let lastFinishedAt: number | undefined;
+
+// 3 秒防抖：验证结束后短时间内重复触发直接跳过，避免系统认证控件闪烁
+const VERIFY_DEBOUNCE_MS = 3_000;
+
+const onLaunch = (): void => {
+  coldStart = true;
+  pendingCheck = false;
+  locked = false;
+};
+
+const onShow = (): void => {
+  pendingCheck = true;
+};
+
+const onHide = (): void => {
+  lastHideAt = Date.now();
+  pendingCheck = false;
+  generation++;
+  verifying = false;
+};
+
+const syncOnPageShow = (): boolean => {
+  if (!readSettings().appLock) {
+    locked = false;
+    pendingCheck = false;
+
+    return false;
+  }
+
+  if (locked) {
+    pendingCheck = false;
+
+    return true;
+  }
+
+  const should = shouldLock({
+    enabled: true,
+    coldStart,
+    pendingCheck,
+    lastHideAt,
+    now: Date.now(),
+  });
+
+  pendingCheck = false;
+
+  if (should) {
+    locked = true;
+  }
+
+  return locked;
+};
+
+const isLocked = (): boolean => locked;
+
+const unlock = (): void => {
+  locked = false;
+  coldStart = false;
+  lastHideAt = undefined;
+  verifying = false;
+  generation++;
+};
+
+const setEnabled = (on: boolean): boolean => {
+  if (!writeSettings({ ...readSettings(), appLock: on })) {
+    return false;
+  }
+
+  markDirty();
+
+  if (on) {
+    // 复位运行态：否则下一次页面 onShow 仍按「冷启动」立刻上锁
+    coldStart = false;
+    pendingCheck = false;
+    locked = false;
+  } else {
+    unlock();
+  }
+
+  return true;
+};
+
+// 设备确无凭据降级：只改本机并清 dirty（不回写云端，避免把华为端同字段一起关掉），同时解锁防锁死。
+// 不得走 setEnabled(false)——它会 markDirty 导致回写云端。
+const disableLocallyNoCredential = (): void => {
+  if (!writeSettings({ ...readSettings(), appLock: false })) {
+    logger.warning("应用锁本地降级写入失败");
+  }
+
+  clearDirty();
+  unlock();
+};
+
+// 用服务端保存的用户意愿值恢复开关：只改持久化设置，绝不碰 locked（否则登录后会在页面中途凭空弹出遮罩）；
+// 不置 dirty。
+const applyRemote = async (on: boolean): Promise<void> => {
+  if (on && !(await hasCredential())) {
+    logger.warning("远端开启应用锁但设备无生物凭据，不落地");
+
+    return;
+  }
+
+  writeSettings({ ...readSettings(), appLock: on });
+};
+
+// 探测设备可用的已录入生物凭据（fingerPrint/facial）；任何异常都视为无凭据（不抛）。
+const probeCredential = async (): Promise<SoterAuthMode | null> => {
+  try {
+    const res = await wx.checkIsSupportSoterAuthentication();
+    const modes = res.supportMode.filter(
+      (m): m is SoterAuthMode => m === "fingerPrint" || m === "facial",
+    );
+
+    for (const mode of modes) {
+      const enrolled = await wx.checkIsSoterEnrolledInDevice({
+        checkAuthMode: mode,
+      });
+
+      if (enrolled.isEnrolled) {
+        return mode;
+      }
+    }
+
+    return null;
+  } catch (e: unknown) {
+    logger.warning("探测生物认证凭据失败", e);
+
+    return null;
+  }
+};
+
+const hasCredential = async (): Promise<boolean> => {
+  return (await probeCredential()) !== null;
+};
+
+// 随机 challenge：优先 wx.getRandomValues（密码学安全随机数），异常回退非安全随机
+const randomChallenge = async (): Promise<string> => {
+  try {
+    const res = await wx.getRandomValues({ length: 16 });
+
+    return Array.from(new Uint8Array(res.randomValues))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+};
+
+// 发起身份认证。不检查 enabled——「开启应用锁」流程需要先验证成功再 setEnabled(true)。
+// 单飞 + 3 秒防抖；退后台（generation++）作废旧请求；不做 resultJSONSignature 签名校验（计划明确，UI 门禁非密码学证明）。
+const verify = async (): Promise<VerifyOutcome> => {
+  if (verifying) {
+    return VerifyOutcome.SKIPPED;
+  }
+
+  if (
+    lastFinishedAt !== undefined &&
+    Date.now() - lastFinishedAt < VERIFY_DEBOUNCE_MS
+  ) {
+    return VerifyOutcome.SKIPPED;
+  }
+
+  const gen = generation;
+  verifying = true;
+
+  try {
+    const mode = await probeCredential();
+
+    if (mode === null) {
+      // 设备确无凭据：自动解锁 + 本地关闭应用锁（唯一可接受的防锁死路径）
+      disableLocallyNoCredential();
+
+      return VerifyOutcome.NO_CREDENTIAL;
+    }
+
+    if (gen !== generation) {
+      return VerifyOutcome.SKIPPED;
+    }
+
+    await wx.startSoterAuthentication({
+      requestAuthModes: [mode],
+      challenge: await randomChallenge(),
+      authContent: "验证身份以解锁",
+    });
+
+    if (gen !== generation) {
+      return VerifyOutcome.SKIPPED;
+    }
+
+    return VerifyOutcome.SUCCESS;
+  } catch (e: unknown) {
+    if (gen !== generation) {
+      return VerifyOutcome.SKIPPED;
+    }
+
+    // 用户取消判定：官方 startSoterAuthentication 文档未给出 fail 的 errCode 表，
+    // 采用微信 API 通用取消约定（errMsg 含 "cancel"，社区实测 "startSoterAuthentication:fail cancel"）；
+    // 其余一律按普通失败处理——CANCELED/FAILED 对状态机影响相同（保持锁定、可重试），仅 UI 文案差异。
+    const err = e as { errMsg?: string };
+
+    if ((err.errMsg ?? "").toLowerCase().includes("cancel")) {
+      return VerifyOutcome.CANCELED;
+    }
+
+    return VerifyOutcome.FAILED;
+  } finally {
+    // 出口统一复位：任一漏复位会让用户点解锁永远 SKIPPED = 锁死
+    verifying = false;
+    lastFinishedAt = Date.now();
+  }
+};
+
+export {
+  applyRemote,
+  disableLocallyNoCredential,
+  hasCredential,
+  isLocked,
+  onHide,
+  onLaunch,
+  onShow,
+  setEnabled,
+  syncOnPageShow,
+  unlock,
+  verify,
+};

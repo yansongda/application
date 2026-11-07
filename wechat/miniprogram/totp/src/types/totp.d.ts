@@ -7,6 +7,9 @@ export interface Item {
   username: string;
   code: string;
   config: ItemConfig;
+  // 后端 config.tags / config.pinned 投影；旧后端缺省
+  tags?: string[];
+  pinned?: boolean;
 }
 
 export type TotpAlgorithm = "SHA1" | "SHA256" | "SHA512";
@@ -32,6 +35,16 @@ export interface EditIssuerRequest extends RequestData {
 export interface EditUsernameRequest extends RequestData {
   id: string;
   username: string;
+}
+
+export interface EditTagsRequest extends RequestData {
+  id: string;
+  tags: string[];
+}
+
+export interface EditPinnedRequest extends RequestData {
+  id: string;
+  pinned: boolean;
 }
 
 export interface CreateRequest extends RequestData {
@@ -63,6 +76,9 @@ export interface CacheItem {
   // 旧版本缓存（PR #176 之前）没有这两个字段：缺省 6 / SHA1 与当时后端强制值一致，无需清缓存
   digits?: number;
   algorithm?: string;
+  // 旧版本缓存没有这两个字段：读取时归一化补 [] / false
+  tags?: string[];
+  pinned?: boolean;
 }
 
 export interface TotpCache {

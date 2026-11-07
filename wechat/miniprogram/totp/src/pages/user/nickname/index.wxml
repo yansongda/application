@@ -1,0 +1,20 @@
+<app-lock-screen wx:if="{{locked}}" bind:unlocked="onUnlocked" />
+<t-message id="t-message" />
+<t-toast id="t-toast" />
+
+<view class="page">
+  <view class="form-card">
+    <view class="field-label">昵称</view>
+    <input
+      class="field-input"
+      type="nickname"
+      value="{{nickname}}"
+      placeholder="请输入昵称（最多 16 字）"
+      maxlength="16"
+      bindinput="onInput"
+    />
+  </view>
+  <view class="footer">
+    <t-button theme="primary" block size="large" bind:tap="onSave">保存</t-button>
+  </view>
+</view>

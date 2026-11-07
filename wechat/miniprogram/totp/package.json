@@ -8,7 +8,7 @@
     "biome:fix": "biome check --fix",
     "biome:fix-unsafe": "biome check --fix --unsafe",
     "check:otp-invariants": "bun scripts/check-otp-invariants.mjs",
-    "test": "bun test tests/otp",
+    "test": "bun test tests",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

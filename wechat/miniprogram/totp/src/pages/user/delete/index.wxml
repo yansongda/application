@@ -1,0 +1,40 @@
+<app-lock-screen wx:if="{{locked}}" bind:unlocked="onUnlocked" />
+<t-message id="t-message" />
+<t-toast id="t-toast" />
+<t-dialog
+  visible="{{dialogVisible}}"
+  title="确认注销"
+  content="注销后将永久删除个人资料与 MFA 云端数据，且无法恢复"
+  confirm-btn="{{ { content: '确认注销', theme: 'danger' } }}"
+  cancel-btn="{{ { content: '取消', variant: 'text' } }}"
+  bind:confirm="onDialogConfirm"
+  bind:cancel="onDialogCancel"
+/>
+
+<view class="page">
+  <view class="notice-card">
+    <view class="notice-title">为了保证您的数据和财产安全，请仔细阅读以下内容。</view>
+    <view class="notice-body">
+      <view class="notice-item">· 永久删除您所有个人资料信息，且无法恢复</view>
+      <view class="notice-item">· 永久删除您当前账户关联的 MFA 云端数据，且无法恢复</view>
+    </view>
+  </view>
+
+  <view class="confirm-row">
+    <t-checkbox checked="{{checked}}" bind:change="onCheckChange">
+      我已知晓注销后将永久删除我的数据
+    </t-checkbox>
+  </view>
+
+  <view class="footer">
+    <t-button
+      theme="danger"
+      block
+      size="large"
+      disabled="{{!checked || submitting}}"
+      bind:tap="onDeleteTap"
+    >
+      确认注销
+    </t-button>
+  </view>
+</view>

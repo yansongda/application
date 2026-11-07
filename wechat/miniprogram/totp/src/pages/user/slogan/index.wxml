@@ -1,0 +1,21 @@
+<app-lock-screen wx:if="{{locked}}" bind:unlocked="onUnlocked" />
+<t-message id="t-message" />
+<t-toast id="t-toast" />
+
+<view class="page">
+  <view class="form-card">
+    <view class="field-label">Slogan</view>
+    <textarea
+      class="field-textarea"
+      value="{{slogan}}"
+      placeholder="一句话介绍自己（4-128 字）"
+      maxlength="128"
+      bindinput="onInput"
+      auto-height
+    />
+    <view class="field-count">{{slogan.length}} / 128</view>
+  </view>
+  <view class="footer">
+    <t-button theme="primary" block size="large" bind:tap="onSave">保存</t-button>
+  </view>
+</view>
