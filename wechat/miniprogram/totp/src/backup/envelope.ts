@@ -184,11 +184,8 @@ export const parseEnvelope = (text: string): ParseEnvelopeResult => {
 
   const createdAt = raw.meta.createdAt;
 
-  if (
-    typeof createdAt !== "string" ||
-    !CREATED_AT_PATTERN.test(createdAt) ||
-    Number.isNaN(Date.parse(createdAt))
-  ) {
+  // 与华为端逐字一致：只校验规范 §7 的 UTC 格式（Date.parse 会引入两端不同的额外拒绝面）
+  if (typeof createdAt !== "string" || !CREATED_AT_PATTERN.test(createdAt)) {
     return fail(BackupErrorCode.E_STRUCTURE, "meta.createdAt 非 UTC ISO 串");
   }
 
