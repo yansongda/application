@@ -27,6 +27,20 @@ Page({
     });
   },
   async submit(e: FormSubmit<FormData>) {
+    const username = e.detail.value.username.trim();
+
+    // 空值不提交：提示后返回，不发请求。
+    if (username.length === 0) {
+      Toast({
+        message: "账号名称不能为空",
+        theme: "error",
+        duration: 1500,
+        direction: "column",
+      });
+
+      return;
+    }
+
     Toast({
       message: "更新中...",
       theme: "loading",
@@ -38,10 +52,10 @@ Page({
     try {
       await api.editUsername({
         id: this.data.id,
-        username: e.detail.value.username,
+        username,
       } as EditUsernameRequest);
 
-      updateItemFields(this.data.id, { username: e.detail.value.username });
+      updateItemFields(this.data.id, { username });
 
       Toast({
         message: "修改成功",

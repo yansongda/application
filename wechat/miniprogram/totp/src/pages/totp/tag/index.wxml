@@ -1,1 +1,26 @@
-<view></view>
+<t-toast id="t-toast" />
+<t-message id="t-message" />
+
+<view class="page">
+  <view class="input-card">
+    <t-input value="{{tag}}" placeholder="请输入标签（最多 12 字）" maxlength="12" align="left" borderless bind:change="onTagChange" />
+  </view>
+
+  <view class="section">
+    <view class="section-title">常用标签</view>
+    <view class="chips">
+      <view
+        wx:for="{{chips}}"
+        wx:key="*this"
+        class="chip {{tag === item ? 'chip-active' : ''}}"
+        bind:tap="selectChip"
+        data-tag="{{item}}"
+      >{{item}}</view>
+    </view>
+  </view>
+
+  <view class="actions">
+    <t-button theme="primary" size="large" block bind:tap="save">保存</t-button>
+    <t-button size="large" variant="outline" block bind:tap="cancel">取消</t-button>
+  </view>
+</view>

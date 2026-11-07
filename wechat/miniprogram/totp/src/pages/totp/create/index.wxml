@@ -1,1 +1,55 @@
-<view></view>
+<t-toast id="t-toast" />
+<t-message id="t-message" />
+
+<view class="page">
+  <form bindsubmit="submit">
+    <view class="section">
+      <view class="section-label">基础信息</view>
+      <view class="input-card">
+        <t-input name="issuer" label="发行方" placeholder="例如：Google" value="{{issuer}}" maxlength="120" align="left" borderless bind:change="onIssuerChange" />
+        <t-input name="account" label="用户名" placeholder="例如：user@example.com" value="{{account}}" maxlength="120" align="left" borderless bind:change="onAccountChange" />
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-label">配置信息</view>
+      <view class="input-card">
+        <t-input name="period" label="周期（秒）" type="number" placeholder="例如：30" value="{{period}}" align="left" borderless bind:change="onPeriodChange" />
+        <t-cell title="位数" note="{{digits}} 位" hover arrow bind:tap="openDigitsPicker"></t-cell>
+        <t-cell title="算法" note="{{algorithm}}" hover arrow bind:tap="openAlgorithmPicker"></t-cell>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-label">密钥</view>
+      <view class="input-card">
+        <t-textarea name="secret" class="secret-textarea" placeholder="Base32 密钥（A-Z 与 2-7）" value="{{secret}}" maxlength="128" borderless bind:change="onSecretChange" />
+      </view>
+      <view class="section-hint">仅支持 Base32 字符（A-Z、2-7），输入自动转为大写并过滤非法字符</view>
+    </view>
+
+    <view class="actions">
+      <t-button theme="primary" size="large" type="submit" block>创建</t-button>
+      <t-button size="large" variant="outline" bind:tap="cancel" block>取消</t-button>
+    </view>
+  </form>
+
+  <t-picker
+    visible="{{digitsVisible}}"
+    value="{{digitsValue}}"
+    title="选择位数"
+    bind:confirm="onDigitsConfirm"
+    bind:cancel="onPickerCancel"
+  >
+    <t-picker-item options="{{digitsOptions}}" />
+  </t-picker>
+  <t-picker
+    visible="{{algorithmVisible}}"
+    value="{{algorithmValue}}"
+    title="选择算法"
+    bind:confirm="onAlgorithmConfirm"
+    bind:cancel="onPickerCancel"
+  >
+    <t-picker-item options="{{algorithmOptions}}" />
+  </t-picker>
+</view>

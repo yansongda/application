@@ -27,6 +27,20 @@ Page({
     });
   },
   async submit(e: FormSubmit<FormData>) {
+    const issuer = e.detail.value.issuer.trim();
+
+    // 空值不提交：提示后返回，不发请求。
+    if (issuer.length === 0) {
+      Toast({
+        message: "提供商名称不能为空",
+        theme: "error",
+        duration: 1500,
+        direction: "column",
+      });
+
+      return;
+    }
+
     Toast({
       message: "更新中...",
       theme: "loading",
@@ -38,10 +52,10 @@ Page({
     try {
       await api.editIssuer({
         id: this.data.id,
-        issuer: e.detail.value.issuer,
+        issuer,
       } as EditIssuerRequest);
 
-      updateItemFields(this.data.id, { issuer: e.detail.value.issuer });
+      updateItemFields(this.data.id, { issuer });
 
       Toast({
         message: "修改成功",
