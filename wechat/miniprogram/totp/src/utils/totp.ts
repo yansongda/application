@@ -1,5 +1,5 @@
 import type { TotpAlgorithm } from "types/totp";
-import { TOTP } from "../vendor/otpauth.esm.min.js";
+import { TOTP } from "../otp";
 
 const DEFAULT_DIGITS = 6;
 const DEFAULT_ALGORITHM: TotpAlgorithm = "SHA1";
@@ -60,9 +60,7 @@ const computeCode = (
   algorithm: string | undefined,
   timestamp: number,
 ): string => {
-  return getTotpInstance(secret, period, digits, algorithm).generate({
-    timestamp,
-  });
+  return getTotpInstance(secret, period, digits, algorithm).generate(timestamp);
 };
 
 export { computeCode };

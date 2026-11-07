@@ -2,6 +2,16 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Changed
+
+- 端内算码移除 vendored `otpauth@9.5.2`，改用自研零依赖 OTP 库 `src/otp/`（与华为 `@yansongda/otp` 同构），算法与码值零变化；新增 242 项 Bun 测试覆盖 RFC 4226 / 6238 / 4648 向量
+
+### Removed
+
+- 删除 `src/vendor/`（otpauth ESM 产物）与 `otpauth` 运行时依赖
+
 ## [1.1.0] - 2026-09-07
 
 ### Added

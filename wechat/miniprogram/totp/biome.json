@@ -6,7 +6,7 @@
     "useIgnoreFile": false
   },
   "files": {
-    "includes": ["src/**/*", "!src/miniprogram_npm/**/*", "!src/vendor"],
+    "includes": ["src/**/*", "tests/**/*", "!src/miniprogram_npm/**/*"],
     "ignoreUnknown": false
   },
   "formatter": {
@@ -39,6 +39,16 @@
         "rules": {
           "correctness": {
             "noUnknownTypeSelector": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/otp/otpauth-uri.ts"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noStaticOnlyClass": "off"
           }
         }
       }

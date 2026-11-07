@@ -141,3 +141,9 @@ jobs:
       - name: Run type check
         run: |
           bun run typecheck
+      - name: Run unit tests
+        run: |
+          bun run test
+      - name: Check OTP invariants
+        run: |
+          bun run check:otp-invariants
