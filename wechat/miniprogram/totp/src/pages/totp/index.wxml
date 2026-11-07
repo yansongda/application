@@ -17,37 +17,69 @@
   </view>
 
   <block wx:else>
-    <view class="header" wx:if="{{items.length > 0}}">
-      <view class="header-title">总计 {{items.length}} 个账号</view>
-      <view class="header-action">
-        <t-button wx:if="{{!isSortMode}}" size="small" theme="primary" variant="text" bind:tap="enterSortMode">编辑</t-button>
-        <t-button wx:else size="small" theme="primary" variant="text" bind:tap="saveSort">完成</t-button>
+    <view class="header" bind:tap="goProfile">
+      <view class="header-left">
+        <image wx:if="{{user.avatar}}" class="header-avatar" src="{{user.avatar}}" mode="aspectFill" />
+        <view wx:else class="header-avatar header-avatar-default">
+          <t-icon name="user" size="36rpx" color="#ffffff" />
+        </view>
+        <text class="header-title">MFA</text>
       </view>
+      <view class="header-sub">已保护 {{items.length}} 个账号</view>
     </view>
 
-    <view class="empty-state" wx:if="{{items.length <= 0}}">
-      <t-empty icon="info-circle-filled" description="暂无数据" />
-    </view>
+    <block wx:if="{{items.length > 0}}">
+      <view class="toolbar">
+        <block wx:if="{{isSortMode}}">
+          <text class="toolbar-sort-hint">长按拖动可调整顺序</text>
+          <view class="toolbar-btn toolbar-btn-active" bind:tap="saveSort">完成</view>
+        </block>
+        <block wx:else>
+          <view class="toolbar-search">
+            <t-icon name="search" size="34rpx" color="#999999" />
+            <input class="toolbar-search-input" value="{{query}}" placeholder="搜索账号" placeholder-class="toolbar-search-placeholder" confirm-type="search" bindinput="onQueryInput" />
+          </view>
+          <view class="toolbar-btn {{viewActive ? 'toolbar-btn-active' : ''}}" bind:tap="openFilterMenu">{{ filterLabel }}</view>
+          <view class="toolbar-btn" bind:tap="enterSortMode">排序</view>
+        </block>
+      </view>
 
-    <view class="sort-tip" wx:if="{{isSortMode && items.length > 0}}">
-      <text class="sort-tip-text">长按并拖动可调整顺序</text>
-    </view>
+      <view class="no-match" wx:if="{{!isSortMode && visibleItems.length === 0 && groups.length === 0}}">
+        <text class="no-match-text">没有匹配的账号</text>
+        <view class="no-match-clear" bind:tap="clearFilter">清除筛选</view>
+      </view>
 
-    <view class="items items-sort" wx:if="{{isSortMode && items.length > 0}}">
-      <view
-        wx:for="{{ dragItems }}"
-        wx:key="id"
-        class="sort-row"
-      >
-        <view
-          class="sort-item {{draggingIndex === index ? 'sort-item-dragging' : ''}}"
-          style="transform: translateY({{item.translateY}}px); z-index: {{draggingIndex === index ? 99 : 1}};"
-          bindtouchstart="onTouchStart"
-          bindtouchmove="onTouchMove"
-          bindtouchend="onTouchEnd"
-          data-index="{{index}}"
-        >
+      <view class="items" wx:if="{{!isSortMode && !grouped && visibleItems.length > 0}}">
+        <app-totp-item
+          wx:for="{{ visibleItems }}"
+          wx:key="id"
+          class="item-card"
+          itemId="{{ item.id }}"
+          period="{{ item.period }}"
+          digits="{{ item.digits }}"
+          algorithm="{{ item.algorithm }}"
+          issuer="{{ item.issuer }}"
+          username="{{ item.username }}"
+          secret="{{ item.secret }}"
+          tags="{{ item.tags }}"
+          pinned="{{ item.pinned }}"
+          bind:pin="togglePin"
+          bind:message="itemMessage"
+          bind:detail="itemDetail"
+          bind:delete="itemDelete"
+        />
+      </view>
+
+      <view class="items" wx:if="{{!isSortMode && grouped}}">
+        <view class="group" wx:for="{{ groups }}" wx:key="title" wx:for-item="group">
+          <view class="group-header">
+            <text class="group-title">{{ group.title }}</text>
+            <text class="group-count">{{ group.ids.length }}</text>
+          </view>
           <app-totp-item
+            wx:for="{{ group.items }}"
+            wx:key="id"
+            class="item-card"
             itemId="{{ item.id }}"
             period="{{ item.period }}"
             digits="{{ item.digits }}"
@@ -55,31 +87,117 @@
             issuer="{{ item.issuer }}"
             username="{{ item.username }}"
             secret="{{ item.secret }}"
+            tags="{{ item.tags }}"
+            pinned="{{ item.pinned }}"
+            bind:pin="togglePin"
+            bind:message="itemMessage"
+            bind:detail="itemDetail"
+            bind:delete="itemDelete"
           />
-          <view class="sort-mask" />
         </view>
       </view>
+
+      <view class="items items-sort" wx:if="{{isSortMode}}">
+        <view
+          wx:for="{{ dragItems }}"
+          wx:key="id"
+          class="sort-row"
+        >
+          <view
+            class="sort-item {{draggingIndex === index ? 'sort-item-dragging' : ''}}"
+            style="transform: translateY({{item.translateY}}px); z-index: {{draggingIndex === index ? 99 : 1}};"
+            bindtouchstart="onTouchStart"
+            bindtouchmove="onTouchMove"
+            bindtouchend="onTouchEnd"
+            data-index="{{index}}"
+          >
+            <app-totp-item
+              itemId="{{ item.id }}"
+              period="{{ item.period }}"
+              digits="{{ item.digits }}"
+              algorithm="{{ item.algorithm }}"
+              issuer="{{ item.issuer }}"
+              username="{{ item.username }}"
+              secret="{{ item.secret }}"
+              tags="{{ item.tags }}"
+              pinned="{{ item.pinned }}"
+            />
+            <view class="sort-mask" />
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <view class="empty-state" wx:if="{{items.length <= 0}}">
+      <t-icon name="lock-checked" size="96rpx" color="#5bb43b" />
+      <view class="empty-title">保护您的每一个账号</view>
+      <view class="empty-tip">添加账号后，即可离线生成动态验证码</view>
+      <view class="empty-guide">
+        <view class="empty-guide-row"><text class="empty-guide-icon">✓</text><text>多设备云端同步，换机不丢失</text></view>
+        <view class="empty-guide-row"><text class="empty-guide-icon">✓</text><text>本地离线算码，无网络也能用</text></view>
+        <view class="empty-guide-row"><text class="empty-guide-icon">✓</text><text>扫码或手动输入，一分钟添加</text></view>
+      </view>
+      <view class="empty-actions">
+        <t-button theme="primary" size="medium" bind:tap="addByScan">扫码添加</t-button>
+        <t-button theme="primary" size="medium" variant="outline" bind:tap="goCreate">手动输入</t-button>
+      </view>
+      <view class="empty-help" bind:tap="goHelp">查看帮助</view>
     </view>
 
-    <view class="items" wx:if="{{!isSortMode && items.length > 0}}">
-      <app-totp-item
-        wx:for="{{ items }}"
-        wx:key="id"
-        wx:for-index="index"
-        wx:for-item="item"
-        itemId="{{ item.id }}"
-        period="{{ item.period }}"
-        digits="{{ item.digits }}"
-        algorithm="{{ item.algorithm }}"
-        issuer="{{ item.issuer }}"
-        username="{{ item.username }}"
-        secret="{{ item.secret }}"
-        bind:message="itemMessage"
-        bind:detail="itemDetail"
-        bind:delete="itemDelete" 
-      />
-    </view>
-
-    <t-fab wx:if="{{!isSortMode}}" icon="add" bind:click="create" aria-label="增加" text="增加"></t-fab>
+    <t-fab wx:if="{{!isSortMode && items.length > 0}}" icon="add" bind:click="onFabClick" aria-label="添加账号"></t-fab>
   </block>
 </view>
+
+<t-popup
+  visible="{{menuVisible}}"
+  placement="bottom"
+  close-on-overlay-click="{{true}}"
+  bind:visible-change="onMenuVisibleChange"
+>
+  <view class="menu">
+    <view class="menu-section">视图</view>
+    <view class="menu-row {{!grouped ? 'menu-row-active' : ''}}" bind:tap="onGroupedTap" data-grouped="{{false}}">
+      <view class="menu-check {{!grouped ? 'menu-check-active' : ''}}">
+        <t-icon name="check" size="32rpx" color="{{!grouped ? '#3e8e2a' : 'transparent'}}" />
+      </view>
+      <text class="menu-label">平铺列表</text>
+    </view>
+    <view class="menu-row {{grouped ? 'menu-row-active' : ''}}" bind:tap="onGroupedTap" data-grouped="{{true}}">
+      <view class="menu-check {{grouped ? 'menu-check-active' : ''}}">
+        <t-icon name="check" size="32rpx" color="{{grouped ? '#3e8e2a' : 'transparent'}}" />
+      </view>
+      <text class="menu-label">按标签分组</text>
+    </view>
+    <view class="menu-divider" />
+    <view class="menu-section">筛选</view>
+    <view class="menu-row {{filterKind === 'all' && !grouped ? 'menu-row-active' : ''}}" bind:tap="onFilterTap" data-kind="all">
+      <view class="menu-check {{filterKind === 'all' && !grouped ? 'menu-check-active' : ''}}">
+        <t-icon name="check" size="32rpx" color="{{filterKind === 'all' && !grouped ? '#3e8e2a' : 'transparent'}}" />
+      </view>
+      <text class="menu-label">全部账号</text>
+      <text class="menu-count">{{menuStats.total}}</text>
+    </view>
+    <view class="menu-row {{filterKind === 'pinned' ? 'menu-row-active' : ''}} {{menuStats.pinned > 0 ? '' : 'menu-row-disabled'}}" bind:tap="onFilterTap" data-kind="pinned">
+      <view class="menu-check {{filterKind === 'pinned' ? 'menu-check-active' : ''}}">
+        <t-icon name="check" size="32rpx" color="{{filterKind === 'pinned' ? '#3e8e2a' : 'transparent'}}" />
+      </view>
+      <text class="menu-label">只看置顶</text>
+      <text class="menu-count">{{menuStats.pinned}}</text>
+    </view>
+    <view
+      class="menu-row {{filterKind === 'tag' && filterTag === item.tag ? 'menu-row-active' : ''}}"
+      wx:for="{{menuStats.tags}}"
+      wx:key="tag"
+      wx:for-item="item"
+      bind:tap="onFilterTap"
+      data-kind="tag"
+      data-tag="{{item.tag}}"
+    >
+      <view class="menu-check {{filterKind === 'tag' && filterTag === item.tag ? 'menu-check-active' : ''}}">
+        <t-icon name="check" size="32rpx" color="{{filterKind === 'tag' && filterTag === item.tag ? '#3e8e2a' : 'transparent'}}" />
+      </view>
+      <text class="menu-label">{{item.tag}}</text>
+      <text class="menu-count">{{item.count}}</text>
+    </view>
+  </view>
+</t-popup>

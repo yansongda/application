@@ -1,6 +1,8 @@
 .item {
   height: 100px;
   background-color: white;
+  border-radius: 8px;
+  position: relative;
 
   .item-body {
     height: 98px;
@@ -48,6 +50,38 @@
     }
   }
 
+  // 右上角标签胶囊 + 置顶角标：绝对定位，不参与左右 4:6 布局，不拦截卡片点击
+  .item-tags {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+
+    .item-tag {
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background-color: #1a5bb43b;
+      color: #3e8e2a;
+      font-size: 10px;
+      line-height: 16px;
+    }
+
+    .item-pin {
+      color: #3e8e2a;
+      font-size: 10px;
+      line-height: 16px;
+      font-weight: 500;
+    }
+  }
+
   .item-btn {
     height: 100%;
 
@@ -55,12 +89,13 @@
       display: inline-flex;
       justify-content: center;
       align-items: center;
-      width: 60px;
+      width: 64px;
       height: 100%;
       color: white;
+      font-size: 14px;
     }
 
-    .btn-detail {
+    .btn-pin {
       background-color: #5bb43b;
     }
 

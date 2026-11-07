@@ -2,12 +2,16 @@
   "usingComponents": {
     "t-message": "tdesign-miniprogram/message/message",
     "t-toast": "tdesign-miniprogram/toast/toast",
-    "t-empty": "tdesign-miniprogram/empty/empty",
-    "t-fab": "tdesign-miniprogram/fab/fab",
     "t-dialog": "tdesign-miniprogram/dialog/dialog",
     "t-button": "tdesign-miniprogram/button/button",
     "t-icon": "tdesign-miniprogram/icon/icon",
+    "t-fab": "tdesign-miniprogram/fab/fab",
+    "t-empty": "tdesign-miniprogram/empty/empty",
+    "t-popup": "tdesign-miniprogram/popup/popup",
     "app-totp-item": "/components/totp/item"
   },
-  "navigationBarTitleText": "TOTP安全码"
+  "navigationBarTitleText": "TOTP安全码",
+  "enablePullDownRefresh": true,
+  "backgroundColor": "#f5f5f5",
+  "backgroundTextStyle": "dark"
 }
