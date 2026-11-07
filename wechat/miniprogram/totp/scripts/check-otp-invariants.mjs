@@ -8,6 +8,7 @@
  *  4. Secret 不得实现 toString()（防密钥明文进入日志 / UI）
  *  5. 错误码必须恰好 18 个（v1 冻结）
  *  6. 业务代码不得引用 vendor / otpauth
+ *  7. src/backup（加密备份）同样禁止 BigInt / console / Math.random / require / 原生 crypto
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -53,6 +54,27 @@ for (const file of walk(otpDir)) {
   }
 }
 
+// 加密备份模块：与 src/otp 同样的零依赖 / 可移植约束（注释已剥离，避免文档误报）
+const backupDir = path.join(root, "src", "backup");
+for (const file of walk(backupDir)) {
+  const text = stripComments(fs.readFileSync(file, "utf8"));
+  if (/BigInt/.test(text)) {
+    report(file, "backup-no-bigint", "禁止 BigInt（老设备兼容）");
+  }
+  if (/console\./.test(text)) {
+    report(file, "backup-no-console", "备份模块禁止直接日志输出（统一走 utils/logger）");
+  }
+  if (/Math\.random/.test(text)) {
+    report(file, "backup-no-math-random", "salt/iv 必须来自 CSPRNG");
+  }
+  if (/require\(/.test(text)) {
+    report(file, "backup-no-require", "禁止 CommonJS require");
+  }
+  if (/from\s+"(node:)?crypto"/.test(text)) {
+    report(file, "backup-no-native-crypto", "禁止依赖平台 crypto 模块（须纯 JS 实现）");
+  }
+}
+
 const barrel = path.join(otpDir, "index.ts");
 const barrelText = fs.readFileSync(barrel, "utf8");
 if (/export\s*(type\s*)?\{?[^;]*from\s+"\.\/internal\/|export\s*\*\s*from\s+"\.\/internal\//.test(barrelText)) {
@@ -92,4 +114,6 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
-console.log(`OTP invariants OK (${walk(otpDir).length} files, 18 error codes).`);
+console.log(
+  `OTP invariants OK (${walk(otpDir).length} otp files / ${walk(backupDir).length} backup files, 18 error codes).`,
+);
