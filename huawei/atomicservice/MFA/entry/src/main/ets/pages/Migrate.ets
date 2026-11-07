@@ -666,10 +666,13 @@ struct Migrate {
     this.busy = true;
 
     try {
-      const existing: IItem[] = await Totp.all();
       const plan: ImportPlan = await Dialog.execute(
         () => this.loadingDialog(),
-        () => Importer.analyze(this.importText, this.importPassword, existing)
+        async (): Promise<ImportPlan> => {
+          const existing: IItem[] = await Totp.all();
+
+          return Importer.analyze(this.importText, this.importPassword, existing);
+        }
       );
 
       this.plan = plan;
