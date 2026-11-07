@@ -16,7 +16,8 @@
 ## 使用
 
 ```ts
-import { TOTP } from "../otp";
+// 微信运行时不做目录 index 解析：必须写 "../otp/index"，不能写 "../otp"
+import { TOTP } from "../otp/index";
 
 const totp = new TOTP({ secret: "JBSWY3DPEHPK3PXP", digits: 6, period: 30 });
 totp.generate(Date.now()); // "287082"（示例时间）
