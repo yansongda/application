@@ -120,6 +120,16 @@ MFA/
   grep -c "_lastFinishedAt = "     $F   # 3
   ```
 
+## 加密备份（`models/backup/`）
+
+- 分层：`Spec.ets`（常量/错误码/`planUriIssuer`）、`Envelope.ets`（信封解析 + 纯 JS base64）、`Payload.ets`（明文校验/归一/`dedupeKey`）、`Crypto.ets`（native PBKDF2/AES-GCM/HMAC）、`Exporter.ets` / `Importer.ets`（编排）、`ImportTypes.ets`（计划/报告结构，纯类型）。
+- 口令生命周期：只存在于 `pages/Migrate.ets` 的 `@Local` 内存，`onHidden` 清空；**禁止**写入 `Prefs` / `PersistenceV2` / 日志（日志一律 `%{private}s`，且不打印内容）。
+- IO 唯一入口：`utils/FileTransfer.ets`（picker + fileIo）；页面不得直接调用 `DocumentViewPicker` / `fs`。
+- 剪贴板读取只能发生在 `PasteButton.onClick` 返回 `SUCCESS` 之后（`Clipboard.read()` 注释已标注），不申请受限权限 `READ_PASTEBOARD`。
+- 门禁：导出前 `AppLock.verify`，仅 `SUCCESS` / `NO_CREDENTIAL` 放行，`SKIPPED` 拒绝（规范 S4）。
+- 测试：纯函数（Envelope/Payload/ImportPlan）放 `entry/src/test`（Local Test）；真 crypto（共享向量）放 `entry/src/ohosTest`（需真机/模拟器），向量由 `bun docs/specs/gen-mfa-backup-vectors.mjs --emit-ets <path>` 生成，禁止手工转录。
+- 构建校验：`default@UnitTestArkTS` 可编译本地测试；`assembleHap` 在本机因签名证书缺失会止于 `SignHap`，`CompileArkTS` 成功即视为编译通过（环境限制，非代码缺陷）。
+
 ## 服务卡片（`pages/form/`）
 
 - 卡片使用**状态管理 V2**（`@Entry @ComponentV2`）：`updateForm` 注入的数据按**变量名**匹配卡片内的 `@Local` 变量，入口组件用裸 `@Entry`、**不传** LocalStorage 实例；`@LocalStorageProp` 等 V1 组件内装饰器在 `@ComponentV2` 中**编译报错**，两套不可混用。

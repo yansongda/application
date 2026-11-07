@@ -307,3 +307,20 @@ P4 跨端互测 + 文档收尾：4 组合矩阵 → Help / AGENTS / CHANGELOG
 |---|---|
 | 2026-11-07 | 初版；含 `.mfa` 后缀与空态入口两项调整 |
 | 2026-11-07 | 第二轮（独立审查）：修正 exampleEnvelope 指向、`SKIPPED` 门禁、冒号重建策略、PBKDF2 分片异步、docs/specs 入库与 evidence 口径 |
+
+## 9. 实现记录与偏差回填（2026-11-07）
+
+实现按本文件与 `docs/implementation/2026-11-07-huawei-wechat-mfa-backup.md` 的 Wave 顺序落地；以下为与设计稿的**机械性偏差**（均不改变规范语义）：
+
+| # | 偏差 | 原因 |
+|---|---|---|
+| 1 | 微信新增 `src/backup/base64.ts`（严格 base64 编解码） | 避免 `src/backup` 依赖 `wx.arrayBufferToBase64`（不可单测），并统一两端「拒绝空白/非标准字母表/缺失 padding」的判定 |
+| 2 | 微信随机源改为异步注入（`RandomBytes = (n) => Promise<Uint8Array>`） | `wx.getRandomValues` 在 typings/运行时为 Promise 风格（`app-lock.ts` 亦 `await`），`encryptEnvelope` 相应 `await` |
+| 3 | 华为 base64 编解码为纯 JS 实现（未用 `util.Base64Helper`） | Local Test 不依赖系统 API，且与微信端严格性逐字一致；`Envelope.ets` 内置 `encodeBase64/decodeBase64Strict` |
+| 4 | 华为新增 `models/backup/ImportTypes.ets` | 把 `ImportPlan/ImportReport` 等纯结构从 `Importer.ets`（依赖 cryptoFramework）拆出，使 Local Test 可加载 |
+| 5 | `BackupErrorCode` 增加 `E_NORMALIZE` | 规范 §5 要求 `normalize` 不可用时 fail-closed；该码只在运行时出现，不参与 §8 解析顺序 |
+| 6 | `gen-mfa-backup-vectors.mjs` 增加 `--emit-ets` | ohosTest 禁止手工转录向量；生成物 `entry/src/ohosTest/ets/test/BackupVectors.ets` 只保留大用例的 `payloadSha256` |
+| 7 | 华为 `planUriIssuer`/`dedupeKey` 下沉到 `Spec.ets`/`Payload.ets` | 纯函数可被 Local Test 直接断言（§6.2 与 §6.1 的契约测试） |
+| 8 | 实现期补装 `@yansongda/otp@1.1.0`（`ohpm install`） | 仓库锁文件已声明 1.1.0，但本机 `oh_modules` 仍是 1.0.2（缺 `options.strict` 重载），基线 `assembleHap` 本就编译失败；属恢复锁文件状态，未新增依赖 |
+
+验证环境说明：本机缺少 `build-profile.json5` 引用的调试证书/Profile（`/Users/yansongda/200-HarmonyOS/元服务-MFA-Debug.p7b`），`assembleHap` 会止于 `SignHap`；`CompileArkTS` 与 `default@UnitTestArkTS`（本地测试编译）均通过。ohosTest 与真机互测需在具备证书/设备的机器上执行。
