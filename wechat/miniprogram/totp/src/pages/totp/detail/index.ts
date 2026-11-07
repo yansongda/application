@@ -2,6 +2,7 @@ import api from "@api/totp";
 import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import { copyText } from "@utils/clipboard";
 import error from "@utils/error";
+import { withLoading } from "@utils/loading";
 import { substr } from "@utils/string";
 import { computeSnapshot } from "@utils/totp";
 import { readCache, syncFromRemote, updateItemFields } from "@utils/totp-cache";
@@ -18,6 +19,12 @@ interface Dataset {
   type: string;
 }
 
+interface Snapshot {
+  code: string;
+  remaining: number;
+  progressPercent: number;
+}
+
 Page({
   data: {
     locked: false,
@@ -25,7 +32,7 @@ Page({
     id: "0",
     code: "",
     remaining: 0,
-    progress: 0,
+    progressPercent: 0,
     issuer: "",
     username: "",
     tagDisplay: "未设置",
@@ -37,6 +44,7 @@ Page({
   // 计时所需的密钥/周期等字段不参与渲染，挂在实例上避免 setData 无谓重渲染。
   item: null as CacheItem | null,
   timer: null as number | null,
+  pinning: false,
   onLoad(query: Query) {
     this.data.id = query.id || "0";
   },
@@ -52,42 +60,19 @@ Page({
       return;
     }
 
-    Toast({
-      message: "加载中...",
-      theme: "loading",
-      duration: 5000,
-      direction: "column",
-      preventScrollThrough: true,
-    });
-
     const item = readCache()?.items.find(
       (cacheItem) => cacheItem.id === this.data.id,
     );
 
     if (typeof item !== "undefined") {
+      // 列表页展示前已同步远端，缓存即最新：直接渲染，不发请求也不出 loading
       this.applyItem(item);
 
       return;
     }
 
-    // 本地缓存未命中（首次使用或缓存异常）：同步远端后重查。
-    syncFromRemote()
-      .then(() => {
-        const fresh = readCache()?.items.find(
-          (cacheItem) => cacheItem.id === this.data.id,
-        );
-
-        if (typeof fresh === "undefined") {
-          this.showLoadError();
-
-          return;
-        }
-
-        this.applyItem(fresh);
-      })
-      .catch(() => {
-        this.showLoadError();
-      });
+    // 本地缓存未命中（首次使用或缓存异常）：同步远端后重查
+    this.loadFromRemote();
   },
   // 解锁成功：重新执行 onShow（重读缓存并重启计时）
   onUnlocked() {
@@ -101,6 +86,26 @@ Page({
   onUnload() {
     this.stopTimer();
   },
+  // 仅在缓存未命中、确实要发请求时出 loading；命中缓存路径不会走到这里
+  async loadFromRemote() {
+    try {
+      await withLoading("加载中...", () => syncFromRemote());
+
+      const fresh = readCache()?.items.find(
+        (cacheItem) => cacheItem.id === this.data.id,
+      );
+
+      if (typeof fresh === "undefined") {
+        this.showLoadError();
+
+        return;
+      }
+
+      this.applyItem(fresh);
+    } catch {
+      this.showLoadError();
+    }
+  },
   applyItem(item: CacheItem) {
     this.stopTimer();
     this.item = item;
@@ -111,7 +116,7 @@ Page({
       id: item.id,
       code: "",
       remaining: 0,
-      progress: 0,
+      progressPercent: 0,
       issuer: substr(item.issuer),
       username: substr(item.username),
       tagDisplay: tags.length > 0 ? `#${tags[0]}` : "未设置",
@@ -125,19 +130,14 @@ Page({
 
     // 先立即算一次再起表，避免首秒空白。
     this.tick();
-    this.timer = setInterval(() => this.tick(), 1000);
+    this.scheduleTick();
   },
-  stopTimer() {
-    if (this.timer !== null) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
-  },
-  tick() {
+  // 一次算出验证码、剩余秒数与进度条百分比
+  computeCurrentSnapshot(): Snapshot | null {
     const item = this.item;
 
     if (item === null) {
-      return;
+      return null;
     }
 
     const snapshot = computeSnapshot(
@@ -147,14 +147,51 @@ Page({
       item.algorithm,
       Date.now(),
     );
-    const patch: { code?: string; remaining: number; progress: number } = {
+
+    return {
+      code: snapshot.code,
       remaining: snapshot.remaining,
-      progress: snapshot.progress,
+      // 进度条按剩余时间收缩（与列表卡片 remainSeconds / period 同语义），
+      // 不用 otp 库 progress() 的「已走过比例」，否则方向相反
+      progressPercent: (snapshot.remaining / item.period) * 100,
+    };
+  },
+  scheduleTick() {
+    this.stopTimer();
+
+    // 对齐整秒边界刷新（与列表卡片同策略），避免验证码在周期边界最多滞后 1 秒
+    const delay = 1000 - (Date.now() % 1000);
+
+    this.timer = setTimeout(() => {
+      this.tick();
+      this.scheduleTick();
+    }, delay);
+  },
+  stopTimer() {
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+  },
+  tick() {
+    const current = this.computeCurrentSnapshot();
+
+    if (current === null) {
+      return;
+    }
+
+    const patch: {
+      code?: string;
+      remaining: number;
+      progressPercent: number;
+    } = {
+      remaining: current.remaining,
+      progressPercent: current.progressPercent,
     };
 
     // 验证码仅在周期边界变化，code 不变时跳过该字段，减少无谓重渲染。
-    if (snapshot.code !== this.data.code) {
-      patch.code = snapshot.code;
+    if (current.code !== this.data.code) {
+      patch.code = current.code;
     }
 
     this.setData(patch);
@@ -185,17 +222,21 @@ Page({
   async togglePinned() {
     const item = this.item;
 
-    if (item === null) {
+    if (item === null || this.pinning) {
       return;
     }
 
     const next = item.pinned !== true;
 
+    this.pinning = true;
+
     try {
-      await api.editPinned({
-        id: this.data.id,
-        pinned: next,
-      } as EditPinnedRequest);
+      await withLoading("处理中...", () =>
+        api.editPinned({
+          id: this.data.id,
+          pinned: next,
+        } as EditPinnedRequest),
+      );
       updateItemFields(this.data.id, { pinned: next });
       this.item = { ...item, pinned: next };
       this.setData({ pinnedDisplay: next ? "已置顶" : "未置顶" });
@@ -213,6 +254,8 @@ Page({
         offset: [20, 32],
         context: this,
       });
+    } finally {
+      this.pinning = false;
     }
   },
   gotoHelp() {

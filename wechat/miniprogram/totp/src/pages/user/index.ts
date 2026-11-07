@@ -1,4 +1,5 @@
 import userApi from "@api/user";
+import { HttpError } from "@models/error";
 import { ensureAuthenticated } from "@utils/app";
 import {
   syncOnPageShow as appLockSyncOnPageShow,
@@ -7,6 +8,7 @@ import {
   verify as verifyAppLock,
 } from "@utils/app-lock";
 import error from "@utils/error";
+import { withLoading } from "@utils/loading";
 import logger from "@utils/logger";
 import {
   isSupported as isPrivacySupported,
@@ -88,6 +90,7 @@ Page({
     securityRevision: 0,
     versionText: "",
   },
+  uploadingAvatar: false,
   async onShow() {
     // 应用锁守卫：锁定时不发请求，直接渲染遮罩
     const locked = appLockSyncOnPageShow();
@@ -147,36 +150,48 @@ Page({
       return;
     }
 
+    if (this.uploadingAvatar) {
+      return;
+    }
+
+    this.uploadingAvatar = true;
+
     let dataUri: string;
 
     try {
-      dataUri = await this.avatarToJpegDataUri(tempPath);
-    } catch (err) {
-      logger.warning("头像读取失败", err);
-      Message.error({
-        content: "头像读取失败，请重试",
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
+      // 转码 + 上传整体出「处理中」，避免 PNG 大图转码期间无反馈
+      dataUri = await withLoading("处理中...", async () => {
+        const converted = await this.avatarToJpegDataUri(tempPath);
+
+        await userApi.editAvatar(converted);
+
+        return converted;
       });
+    } catch (err) {
+      this.uploadingAvatar = false;
+
+      if (err instanceof HttpError) {
+        // 失败保持原头像
+        Message.error({
+          content: `头像更新失败：${error.getErrorMessage(err)}`,
+          duration: 5000,
+          offset: [20, 32],
+          context: this,
+        });
+      } else {
+        logger.warning("头像读取失败", err);
+        Message.error({
+          content: "头像读取失败，请重试",
+          duration: 5000,
+          offset: [20, 32],
+          context: this,
+        });
+      }
 
       return;
     }
 
-    try {
-      await userApi.editAvatar(dataUri);
-    } catch (err) {
-      // 失败保持原头像
-      Message.error({
-        content: `头像更新失败：${error.getErrorMessage(err)}`,
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
-
-      return;
-    }
-
+    this.uploadingAvatar = false;
     updateUserCache({ config: { avatar: dataUri } });
     this.setData({ avatar: dataUri });
 

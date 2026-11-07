@@ -2,6 +2,7 @@ import api from "@api/totp";
 import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
 import { collectTags, type ItemView } from "@utils/item-filter";
+import { withLoading } from "@utils/loading";
 import { readCache, updateItemFields } from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
@@ -95,16 +96,10 @@ Page({
 
     this.saving = true;
 
-    Toast({
-      message: "保存中...",
-      theme: "loading",
-      duration: 5000,
-      direction: "column",
-      preventScrollThrough: true,
-    });
-
     try {
-      await api.editTags({ id: this.data.id, tags } as EditTagsRequest);
+      await withLoading("保存中...", () =>
+        api.editTags({ id: this.data.id, tags } as EditTagsRequest),
+      );
       updateItemFields(this.data.id, { tags });
 
       Toast({

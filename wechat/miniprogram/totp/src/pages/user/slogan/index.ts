@@ -1,6 +1,7 @@
 import userApi from "@api/user";
 import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
+import { withLoading } from "@utils/loading";
 import { readUserCache, updateUserCache } from "@utils/user-cache";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
@@ -14,6 +15,7 @@ Page({
     locked: false,
     slogan: "",
   },
+  saving: false,
   onShow() {
     // 应用锁守卫：锁定时不发请求，直接渲染遮罩
     const locked = appLockSyncOnPageShow();
@@ -61,9 +63,16 @@ Page({
       return;
     }
 
+    if (this.saving) {
+      return;
+    }
+
+    this.saving = true;
+
     try {
-      await userApi.editSlogan(slogan);
+      await withLoading("保存中...", () => userApi.editSlogan(slogan));
     } catch (e) {
+      this.saving = false;
       Message.error({
         content: `保存失败：${error.getErrorMessage(e)}`,
         duration: 5000,

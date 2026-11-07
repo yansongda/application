@@ -1,6 +1,7 @@
 import api from "@api/totp";
 import { HttpError } from "@models/error";
 import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
+import { withLoading } from "@utils/loading";
 import { upsertItem } from "@utils/totp-cache";
 import { buildTotpUri, describeOtpError } from "@utils/totp-uri";
 import Message from "tdesign-miniprogram/message/index";
@@ -152,14 +153,6 @@ Page({
 
     this.submitting = true;
 
-    Toast({
-      message: "创建中...",
-      theme: "loading",
-      duration: 5000,
-      direction: "column",
-      preventScrollThrough: true,
-    });
-
     try {
       // strict 校验 Base32（GGG / MZXW6YT 等非规范密钥在此被拒），
       // 与后端 from_url_unchecked 的宽松解码行为对齐前先本地拦截。
@@ -171,7 +164,7 @@ Page({
         digits,
         algorithm: this.data.algorithm,
       });
-      const item = await api.create(uri);
+      const item = await withLoading("创建中...", () => api.create(uri));
 
       // 直接用 create 响应（服务端入库值）写缓存，避免前端二次解析 URI。
       upsertItem({

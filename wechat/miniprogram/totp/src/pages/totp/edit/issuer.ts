@@ -1,6 +1,7 @@
 import api from "@api/totp";
 import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
+import { withLoading } from "@utils/loading";
 import { updateItemFields } from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
@@ -59,19 +60,13 @@ Page({
       return;
     }
 
-    Toast({
-      message: "更新中...",
-      theme: "loading",
-      duration: 5000,
-      direction: "column",
-      preventScrollThrough: true,
-    });
-
     try {
-      await api.editIssuer({
-        id: this.data.id,
-        issuer,
-      } as EditIssuerRequest);
+      await withLoading("更新中...", () =>
+        api.editIssuer({
+          id: this.data.id,
+          issuer,
+        } as EditIssuerRequest),
+      );
 
       updateItemFields(this.data.id, { issuer });
 

@@ -1,6 +1,5 @@
 import api from "@api/totp";
-import type { HttpError } from "@models/error";
-import { ensureAuthenticated } from "@utils/app";
+import { ensureAuthenticated, isAccessTokenFresh } from "@utils/app";
 import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
 import {
@@ -14,6 +13,7 @@ import {
   sortPinnedFirst,
   type TagStat,
 } from "@utils/item-filter";
+import { withLoading } from "@utils/loading";
 import logger from "@utils/logger";
 import { substr } from "@utils/string";
 import {
@@ -42,7 +42,7 @@ import {
   type ViewFilterKind,
 } from "@utils/view-state";
 import Message from "tdesign-miniprogram/message/index";
-import Toast, { hideToast } from "tdesign-miniprogram/toast/index";
+import Toast from "tdesign-miniprogram/toast/index";
 import type {
   CacheItem,
   EditPinnedRequest,
@@ -126,6 +126,9 @@ Page({
   // 视图状态（筛选/分组）：页面级属性，不参与 setData
   viewState: { ...DEFAULT_VIEW_STATE },
   snapshotIds: [] as string[],
+  // 写接口防重入：loading 期间忽略重复点击
+  pinning: false,
+  deleting: false,
   async onShow() {
     // 应用锁守卫：锁定时不发请求、不启动计时，直接渲染遮罩
     const locked = appLockSyncOnPageShow();
@@ -143,18 +146,14 @@ Page({
     }
     this.setData({ isError: false });
 
-    Toast({
-      message: "登录中...",
-      theme: "loading",
-      duration: 5000,
-      direction: "column",
-      preventScrollThrough: true,
-    });
-
     try {
-      await ensureAuthenticated();
+      if (isAccessTokenFresh()) {
+        // token 仍新鲜：ensureAuthenticated 直接返回，不产生请求，因此不出 loading
+        await ensureAuthenticated();
+      } else {
+        await withLoading("登录中...", () => ensureAuthenticated());
+      }
     } catch {
-      hideToast();
       Toast({
         message: "登录失败",
         theme: "error",
@@ -217,23 +216,12 @@ Page({
       this.renderItems(cache.items);
     }
 
-    Toast({
-      message: "加载中...",
-      theme: "loading",
-      duration: 5000,
-      direction: "column",
-      preventScrollThrough: true,
-    });
-
-    return syncFromRemote()
+    return withLoading("加载中...", () => syncFromRemote())
       .then((fresh) => {
-        hideToast();
         this.renderItems(fresh.items);
         this.recompute();
       })
       .catch((e: unknown) => {
-        hideToast();
-
         if (cache === null) {
           // 无本地缓存兜底：显示错误态与重试按钮
           this.setData({ isError: true });
@@ -457,7 +445,7 @@ Page({
     }
 
     try {
-      const item = await api.create(uri);
+      const item = await withLoading("创建中...", () => api.create(uri));
 
       // 直接用 create 响应（即服务端入库值）乐观写入缓存，
       // 避免前端二次解析 URI 与后端 from_url_unchecked 的语义差异。
@@ -491,10 +479,18 @@ Page({
     }
   },
   async togglePin(e: ItemPinEvent) {
+    if (this.pinning) {
+      return;
+    }
+
     const { id, pinned } = e.detail;
 
+    this.pinning = true;
+
     try {
-      await api.editPinned({ id, pinned } as EditPinnedRequest);
+      await withLoading("处理中...", () =>
+        api.editPinned({ id, pinned } as EditPinnedRequest),
+      );
       updateItemFields(id, { pinned });
 
       Toast({
@@ -512,6 +508,8 @@ Page({
         offset: [20, 32],
         context: this,
       });
+    } finally {
+      this.pinning = false;
     }
   },
   async itemDetail(e: ItemDetailEvent) {
@@ -522,6 +520,11 @@ Page({
     });
   },
   itemDelete(e: ItemDeleteEvent) {
+    // 删除请求进行中不响应新的删除入口，避免 currentItemId 被覆盖
+    if (this.deleting) {
+      return;
+    }
+
     const currentItemId = e.detail;
 
     this.setData({ dialogVisible: true, currentItemId });
@@ -534,26 +537,39 @@ Page({
       context: this,
     });
   },
-  dialogConfirm() {
-    api
-      .deleteTotp(this.data.currentItemId)
-      .then(() => {
-        removeItem(this.data.currentItemId);
-        this.recompute();
-      })
-      .catch((e: HttpError) =>
-        Message.error({
-          content: `删除失败：${e.message}`,
-          duration: 5000,
-          offset: [20, 32],
-          context: this,
-        }),
-      )
-      .finally(() => {
-        this.dialogCancel();
+  async dialogConfirm() {
+    if (this.deleting) {
+      return;
+    }
+
+    const id = this.data.currentItemId;
+
+    this.deleting = true;
+    // 先关闭确认弹框（弹框 zIndex 高于 Toast 遮罩层），再出「处理中」提示
+    this.setData({ dialogVisible: false });
+
+    try {
+      await withLoading("处理中...", () => api.deleteTotp(id));
+      removeItem(id);
+      this.recompute();
+    } catch (e: unknown) {
+      Message.error({
+        content: `删除失败：${error.getErrorMessage(e)}`,
+        duration: 5000,
+        offset: [20, 32],
+        context: this,
       });
+    } finally {
+      this.deleting = false;
+      this.setData({ currentItemId: "0" });
+    }
   },
   dialogCancel() {
+    // 删除请求进行中不允许关弹框（弹框此时已关闭），避免语义歧义
+    if (this.deleting) {
+      return;
+    }
+
     this.setData({ dialogVisible: false, currentItemId: "0" });
   },
   // ---- 拖拽排序（沿用现有实现：100px 行高、350ms 长按、y/translateY 拖拽）----
@@ -650,7 +666,7 @@ Page({
     }));
 
     try {
-      await api.sort(sortItems);
+      await withLoading("保存中...", () => api.sort(sortItems));
       // 服务端成功后才覆盖缓存顺序
       applySort(reorderedItems.map((item) => item.id));
       this.snapshotIds = [];

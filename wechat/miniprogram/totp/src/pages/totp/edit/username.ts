@@ -1,6 +1,7 @@
 import api from "@api/totp";
 import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
+import { withLoading } from "@utils/loading";
 import { updateItemFields } from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
@@ -59,19 +60,13 @@ Page({
       return;
     }
 
-    Toast({
-      message: "更新中...",
-      theme: "loading",
-      duration: 5000,
-      direction: "column",
-      preventScrollThrough: true,
-    });
-
     try {
-      await api.editUsername({
-        id: this.data.id,
-        username,
-      } as EditUsernameRequest);
+      await withLoading("更新中...", () =>
+        api.editUsername({
+          id: this.data.id,
+          username,
+        } as EditUsernameRequest),
+      );
 
       updateItemFields(this.data.id, { username });
 
