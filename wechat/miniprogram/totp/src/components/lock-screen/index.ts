@@ -2,8 +2,7 @@ import { unlock, VerifyOutcome, verify } from "@utils/app-lock";
 import Toast from "tdesign-miniprogram/toast/index";
 
 // 锁屏遮罩：由页面在 locked 时条件渲染，不占路由、不碰导航栈。
-// attached 自动发起身份验证；组件内不得直接调用 wx.startSoterAuthentication
-// （统一走 AppLock.verify，见技术设计 §3.5.3）。
+// attached 自动发起身份验证；组件内不得直接调用 SOTER 认证 API（统一走 AppLock.verify，见技术设计 §3.5.3）。
 Component({
   data: {
     hint: "",
