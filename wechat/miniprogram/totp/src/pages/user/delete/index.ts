@@ -1,5 +1,6 @@
 import userApi from "@api/user";
 import { clearTokenBundle } from "@utils/app";
+import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
 import { clearDirty } from "@utils/security-sync";
 import { clearCache } from "@utils/totp-cache";
@@ -14,9 +15,26 @@ interface CheckboxChangeEvent {
 
 Page({
   data: {
+    locked: false,
     checked: false,
     dialogVisible: false,
     submitting: false,
+  },
+  onShow() {
+    // 应用锁守卫：锁定时不发请求，直接渲染遮罩
+    const locked = appLockSyncOnPageShow();
+
+    if (locked !== this.data.locked) {
+      this.setData({ locked });
+    }
+
+    if (locked) {
+      return;
+    }
+  },
+  // 解锁成功：页面无取数/计时，仅解除锁定
+  onUnlocked() {
+    this.setData({ locked: false });
   },
   onCheckChange(e: CheckboxChangeEvent) {
     this.setData({ checked: e.detail.checked === true });

@@ -1,4 +1,5 @@
 import api from "@api/totp";
+import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
 import { collectTags, type ItemView } from "@utils/item-filter";
 import { readCache, updateItemFields } from "@utils/totp-cache";
@@ -30,11 +31,28 @@ const PRESET_TAGS = ["工作", "个人", "财务", "开发", "其他"];
 
 Page({
   data: {
+    locked: false,
     id: "0",
     tag: "",
     chips: [] as string[],
   },
   saving: false,
+  onShow() {
+    // 应用锁守卫：锁定时不发请求，直接渲染遮罩
+    const locked = appLockSyncOnPageShow();
+
+    if (locked !== this.data.locked) {
+      this.setData({ locked });
+    }
+
+    if (locked) {
+      return;
+    }
+  },
+  // 解锁成功：页面无取数/计时，仅解除锁定
+  onUnlocked() {
+    this.setData({ locked: false });
+  },
   onLoad(query: Query) {
     const tag = query.tag ? decodeURIComponent(query.tag) : "";
     const cacheItems = readCache()?.items ?? [];

@@ -1,3 +1,4 @@
+<app-lock-screen wx:if="{{locked}}" bind:unlocked="onUnlocked" />
 <t-toast id="t-toast" />
 <t-message id="t-message" />
 <t-dialog

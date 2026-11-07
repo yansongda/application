@@ -1,6 +1,7 @@
 import userApi from "@api/user";
 import { ensureAuthenticated } from "@utils/app";
 import {
+  syncOnPageShow as appLockSyncOnPageShow,
   setEnabled as setAppLockEnabled,
   VerifyOutcome,
   verify as verifyAppLock,
@@ -77,6 +78,7 @@ const readBase64 = (filePath: string): Promise<string> => {
 
 Page({
   data: {
+    locked: false,
     avatar: "",
     nickname: "",
     slogan: "",
@@ -87,6 +89,17 @@ Page({
     versionText: "",
   },
   async onShow() {
+    // 应用锁守卫：锁定时不发请求，直接渲染遮罩
+    const locked = appLockSyncOnPageShow();
+
+    if (locked !== this.data.locked) {
+      this.setData({ locked });
+    }
+
+    if (locked) {
+      return;
+    }
+
     await ensureAuthenticated().catch(() => undefined);
 
     // refreshUser 内部已捕获异常，失败静默；资料以本地缓存兜底展示
@@ -105,6 +118,11 @@ Page({
       slogan: user?.config.slogan ?? "",
       versionText: buildVersionText(),
     });
+  },
+  // 解锁成功：解除锁定并重新执行 onShow（重新拉取资料与安全设置）
+  onUnlocked() {
+    this.setData({ locked: false });
+    this.onShow();
   },
   async gotoNickname() {
     await wx.navigateTo({ url: "/pages/user/nickname/index" });

@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "设置提供商",
   "usingComponents": {
+    "app-lock-screen": "/components/lock-screen/index",
     "t-message": "tdesign-miniprogram/message/message",
     "t-toast": "tdesign-miniprogram/toast/toast",
     "t-button": "tdesign-miniprogram/button/button",

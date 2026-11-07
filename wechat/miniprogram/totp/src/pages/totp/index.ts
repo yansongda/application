@@ -1,6 +1,7 @@
 import api from "@api/totp";
 import type { HttpError } from "@models/error";
 import { ensureAuthenticated } from "@utils/app";
+import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
 import {
   collectTagStats,
@@ -89,6 +90,7 @@ const ROW_HEIGHT = 100;
 
 Page({
   data: {
+    locked: false,
     items: [] as CacheItem[],
     groups: [] as RenderGroup[],
     visibleItems: [] as RenderItem[],
@@ -125,6 +127,17 @@ Page({
   viewState: { ...DEFAULT_VIEW_STATE },
   snapshotIds: [] as string[],
   async onShow() {
+    // 应用锁守卫：锁定时不发请求、不启动计时，直接渲染遮罩
+    const locked = appLockSyncOnPageShow();
+
+    if (locked !== this.data.locked) {
+      this.setData({ locked });
+    }
+
+    if (locked) {
+      return;
+    }
+
     if (this.data.isCreating) {
       return;
     }
@@ -187,6 +200,11 @@ Page({
     // 冷启动恢复筛选/分组视图，并在数据刷新后清理失效状态
     this.viewState = readViewState();
     this.recompute();
+  },
+  // 解锁成功：解除锁定并重新执行 onShow（恢复取数与计时）
+  onUnlocked() {
+    this.setData({ locked: false });
+    this.onShow();
   },
   retry() {
     this.onShow();

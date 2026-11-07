@@ -1,5 +1,6 @@
 import api from "@api/totp";
 import { HttpError } from "@models/error";
+import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import { upsertItem } from "@utils/totp-cache";
 import { buildTotpUri, describeOtpError } from "@utils/totp-uri";
 import Message from "tdesign-miniprogram/message/index";
@@ -28,6 +29,7 @@ interface PickerConfirm {
 
 Page({
   data: {
+    locked: false,
     issuer: "",
     account: "",
     period: "30",
@@ -50,6 +52,22 @@ Page({
     algorithmVisible: false,
   },
   submitting: false,
+  onShow() {
+    // 应用锁守卫：锁定时不发请求，直接渲染遮罩
+    const locked = appLockSyncOnPageShow();
+
+    if (locked !== this.data.locked) {
+      this.setData({ locked });
+    }
+
+    if (locked) {
+      return;
+    }
+  },
+  // 解锁成功：页面无取数/计时，仅解除锁定
+  onUnlocked() {
+    this.setData({ locked: false });
+  },
   onIssuerChange(e: ChangeEvent) {
     this.setData({ issuer: e.detail.value });
   },

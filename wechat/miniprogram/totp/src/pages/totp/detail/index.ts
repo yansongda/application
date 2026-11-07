@@ -1,4 +1,5 @@
 import api from "@api/totp";
+import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import { copyText } from "@utils/clipboard";
 import error from "@utils/error";
 import { substr } from "@utils/string";
@@ -19,6 +20,7 @@ interface Dataset {
 
 Page({
   data: {
+    locked: false,
     dialogVisible: false,
     id: "0",
     code: "",
@@ -39,6 +41,17 @@ Page({
     this.data.id = query.id || "0";
   },
   onShow() {
+    // 应用锁守卫：锁定时不发请求、不启动计时，直接渲染遮罩
+    const locked = appLockSyncOnPageShow();
+
+    if (locked !== this.data.locked) {
+      this.setData({ locked });
+    }
+
+    if (locked) {
+      return;
+    }
+
     Toast({
       message: "加载中...",
       theme: "loading",
@@ -75,6 +88,11 @@ Page({
       .catch(() => {
         this.showLoadError();
       });
+  },
+  // 解锁成功：重新执行 onShow（重读缓存并重启计时）
+  onUnlocked() {
+    this.setData({ locked: false });
+    this.onShow();
   },
   // 页面隐藏/卸载时停表；onShow 会重新启动（从缓存重读）。
   onHide() {

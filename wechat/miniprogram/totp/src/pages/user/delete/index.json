@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "注销账号",
   "usingComponents": {
+    "app-lock-screen": "/components/lock-screen/index",
     "t-button": "tdesign-miniprogram/button/button",
     "t-checkbox": "tdesign-miniprogram/checkbox/checkbox",
     "t-dialog": "tdesign-miniprogram/dialog/dialog",

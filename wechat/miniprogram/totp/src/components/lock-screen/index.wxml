@@ -1,0 +1,10 @@
+<t-toast id="t-toast" />
+<view class="lock-screen" catchtouchmove="noop" catchtap="noop">
+  <view class="lock-content">
+    <t-icon name="lock-on" size="96rpx" color="#5bb43b" />
+    <view class="lock-title">已锁定</view>
+    <view class="lock-hint">验证身份后可查看验证码</view>
+    <view class="lock-error" wx:if="{{hint}}">{{hint}}</view>
+    <t-button theme="primary" size="medium" bind:tap="trigger">解锁</t-button>
+  </view>
+</view>

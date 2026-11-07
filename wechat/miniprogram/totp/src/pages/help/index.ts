@@ -1,5 +1,8 @@
+import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
+
 Page({
   data: {
+    locked: false,
     sections: [
       {
         icon: "scan",
@@ -38,5 +41,21 @@ Page({
         ],
       },
     ],
+  },
+  onShow() {
+    // 应用锁守卫：锁定时直接渲染遮罩（页面无取数/计时）
+    const locked = appLockSyncOnPageShow();
+
+    if (locked !== this.data.locked) {
+      this.setData({ locked });
+    }
+
+    if (locked) {
+      return;
+    }
+  },
+  // 解锁成功：页面无取数/计时，仅解除锁定
+  onUnlocked() {
+    this.setData({ locked: false });
   },
 });

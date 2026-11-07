@@ -1,3 +1,4 @@
+<app-lock-screen wx:if="{{locked}}" bind:unlocked="onUnlocked" />
 <view class="page">
   <view class="section" wx:for="{{sections}}" wx:key="title">
     <view class="section-icon">

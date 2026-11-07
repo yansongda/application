@@ -1,4 +1,5 @@
 import api from "@api/totp";
+import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
 import { updateItemFields } from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
@@ -17,8 +18,25 @@ interface FormData {
 
 Page({
   data: {
+    locked: false,
     id: "0",
     username: "",
+  },
+  onShow() {
+    // 应用锁守卫：锁定时不发请求，直接渲染遮罩
+    const locked = appLockSyncOnPageShow();
+
+    if (locked !== this.data.locked) {
+      this.setData({ locked });
+    }
+
+    if (locked) {
+      return;
+    }
+  },
+  // 解锁成功：页面无取数/计时，仅解除锁定
+  onUnlocked() {
+    this.setData({ locked: false });
   },
   onLoad(query: Query) {
     this.setData({

@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "帮助",
   "usingComponents": {
+    "app-lock-screen": "/components/lock-screen/index",
     "t-icon": "tdesign-miniprogram/icon/icon"
   }
 }

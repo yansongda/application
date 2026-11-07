@@ -1,0 +1,36 @@
+// 全屏遮罩：fixed 覆盖整个页面（z-index 高于 FAB），catchtouchmove/catchtap 阻断穿透
+.lock-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background-color: #f5f5f5;
+
+  .lock-content {
+    height: 100%;
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 24rpx;
+    padding: 0 48rpx;
+
+    .lock-title {
+      font-size: 40rpx;
+      font-weight: 600;
+      color: #333333;
+    }
+
+    .lock-hint {
+      font-size: 28rpx;
+      color: #999999;
+    }
+
+    .lock-error {
+      font-size: 24rpx;
+      color: #e34d59;
+    }
+  }
+}
