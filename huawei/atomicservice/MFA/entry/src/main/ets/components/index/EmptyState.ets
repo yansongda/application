@@ -6,6 +6,8 @@ export struct EmptyState {
   };
   @Event onInput: () => void = () => {
   };
+  @Event onImport: () => void = () => {
+  };
   @Event onHelp: () => void = () => {
   };
 
@@ -56,6 +58,17 @@ export struct EmptyState {
         }
         .width('100%')
         .margin({ top: $r('app.integer.column_space_biggest') })
+
+        // 次入口：从其它应用导入
+        Button($r('app.string.index_index_page_import_entry'))
+          .type(ButtonType.Normal)
+          .backgroundColor(Color.Transparent)
+          .fontColor($r('app.color.brand'))
+          .fontSize($r('app.float.body_font_size'))
+          .margin({ top: $r('app.integer.page_padding_smaller') })
+          .onClick(() => {
+            this.onImport();
+          })
 
         // 次入口：使用帮助
         Button($r('app.string.index_index_page_help_entry'))

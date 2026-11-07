@@ -40,6 +40,16 @@ struct Help {
           )
           this.section(
             $r('sys.symbol.lock_shield'),
+            $r('app.string.user_help_page_backup_title'),
+            [
+              $r('app.string.user_help_page_backup_file'),
+              $r('app.string.user_help_page_backup_password'),
+              $r('app.string.user_help_page_backup_cross'),
+              $r('app.string.user_help_page_backup_clipboard')
+            ]
+          )
+          this.section(
+            $r('sys.symbol.lock_shield'),
             $r('app.string.user_help_page_security_title'),
             [
               $r('app.string.user_help_page_security_offline'),

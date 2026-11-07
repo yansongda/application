@@ -51,6 +51,11 @@
       "buildFunction": "builder"
     },
     {
+      "name": "migrate",
+      "pageSourceFile": "src/main/ets/pages/Migrate.ets",
+      "buildFunction": "builder"
+    },
+    {
       "name": "help",
       "pageSourceFile": "src/main/ets/pages/Help.ets",
       "buildFunction": "builder"

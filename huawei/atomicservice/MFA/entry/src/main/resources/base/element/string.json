@@ -619,6 +619,202 @@
     {
       "name": "user_help_page_organize_pin",
       "value": "左滑或详情页可置顶；置顶账号排在最前，分组视图按置顶、标签、未分类排列"
+    },
+    {
+      "name": "backup_page_title",
+      "value": "导入 / 导出"
+    },
+    {
+      "name": "backup_export_title",
+      "value": "导出加密备份"
+    },
+    {
+      "name": "backup_export_desc",
+      "value": "当前共 %d 个账号。备份使用你设置的口令加密，忘记口令将无法恢复。"
+    },
+    {
+      "name": "backup_export_password_placeholder",
+      "value": "口令（至少 8 个字符）"
+    },
+    {
+      "name": "backup_export_password_confirm_placeholder",
+      "value": "再次输入口令"
+    },
+    {
+      "name": "backup_export_generate",
+      "value": "生成加密备份"
+    },
+    {
+      "name": "backup_export_save",
+      "value": "保存并发送文件"
+    },
+    {
+      "name": "backup_export_copy",
+      "value": "复制到剪贴板"
+    },
+    {
+      "name": "backup_export_warn",
+      "value": "备份文件中只有密文；发送或复制后请注意清理聊天记录与剪贴板。"
+    },
+    {
+      "name": "backup_export_confirm_title",
+      "value": "导出加密备份"
+    },
+    {
+      "name": "backup_export_confirm_content",
+      "value": "将导出 %d 个账号。请牢记口令：忘记口令将无法恢复备份。"
+    },
+    {
+      "name": "backup_export_continue",
+      "value": "继续"
+    },
+    {
+      "name": "backup_export_generated",
+      "value": "加密备份已生成"
+    },
+    {
+      "name": "backup_import_title",
+      "value": "导入备份"
+    },
+    {
+      "name": "backup_import_desc",
+      "value": "支持华为元服务与微信小程序导出的 .mfa 备份（按内容识别，不看后缀）。"
+    },
+    {
+      "name": "backup_import_file",
+      "value": "从文件导入"
+    },
+    {
+      "name": "backup_import_manual_placeholder",
+      "value": "也可长按粘贴备份文本（无法使用安全控件时的兜底）"
+    },
+    {
+      "name": "backup_import_manual_button",
+      "value": "使用粘贴内容"
+    },
+    {
+      "name": "backup_import_password_placeholder",
+      "value": "输入备份口令"
+    },
+    {
+      "name": "backup_import_analyze",
+      "value": "解析备份"
+    },
+    {
+      "name": "backup_import_start",
+      "value": "导入 %d 条"
+    },
+    {
+      "name": "backup_import_plan",
+      "value": "可导入 %d 条"
+    },
+    {
+      "name": "backup_import_duplicates",
+      "value": "已存在 %d 条（跳过）"
+    },
+    {
+      "name": "backup_import_invalid",
+      "value": "异常 %d 条（跳过）"
+    },
+    {
+      "name": "backup_import_canceling",
+      "value": "正在取消..."
+    },
+    {
+      "name": "backup_import_empty",
+      "value": "没有可导入的内容"
+    },
+    {
+      "name": "backup_import_clipboard_empty",
+      "value": "剪贴板没有内容"
+    },
+    {
+      "name": "backup_import_file_empty",
+      "value": "未选择文件"
+    },
+    {
+      "name": "backup_import_password_required",
+      "value": "请输入备份口令"
+    },
+    {
+      "name": "backup_no_items",
+      "value": "没有可导出的账号"
+    },
+    {
+      "name": "backup_no_plan",
+      "value": "没有需要导入的账号"
+    },
+    {
+      "name": "backup_auth_skipped",
+      "value": "身份验证未完成，请 3 秒后重试"
+    },
+    {
+      "name": "backup_auth_canceled",
+      "value": "已取消身份验证"
+    },
+    {
+      "name": "backup_auth_failed",
+      "value": "身份验证失败，请重试"
+    },
+    {
+      "name": "backup_password_mismatch",
+      "value": "两次输入的口令不一致"
+    },
+    {
+      "name": "backup_paste_denied",
+      "value": "未获得剪贴板授权，可改用文件或手动粘贴"
+    },
+    {
+      "name": "backup_source_huawei",
+      "value": "华为元服务"
+    },
+    {
+      "name": "backup_source_wechat",
+      "value": "微信小程序"
+    },
+    {
+      "name": "backup_saved",
+      "value": "已保存"
+    },
+    {
+      "name": "backup_save_failed",
+      "value": "发送文件失败，可尝试复制到剪贴板"
+    },
+    {
+      "name": "backup_copied",
+      "value": "加密备份已复制，导入完成后请清理剪贴板"
+    },
+    {
+      "name": "backup_cancel",
+      "value": "取消"
+    },
+    {
+      "name": "user_detail_page_backup",
+      "value": "导入 / 导出"
+    },
+    {
+      "name": "index_index_page_import_entry",
+      "value": "从其它应用导入"
+    },
+    {
+      "name": "user_help_page_backup_title",
+      "value": "加密备份"
+    },
+    {
+      "name": "user_help_page_backup_file",
+      "value": "「我的 → 导入 / 导出」可把账号导出为口令加密的 .mfa 文件；文件与剪贴板中只有密文"
+    },
+    {
+      "name": "user_help_page_backup_password",
+      "value": "口令不会被保存：忘记口令将无法恢复，也不提供重置或找回"
+    },
+    {
+      "name": "user_help_page_backup_cross",
+      "value": "华为元服务与微信小程序的备份可互相导入（同一口令），标签与置顶会一并保留"
+    },
+    {
+      "name": "user_help_page_backup_clipboard",
+      "value": "剪贴板通道导入完成后，请及时清理剪贴板；备份文件也请勿长期留在聊天记录中"
     }
   ]
 }

@@ -39,6 +39,7 @@ export enum AppPagesName {
   USER_DELETE = 'user/delete',
   USER_EDIT_SLOGAN = 'user/edit/slogan',
   HELP = 'help',
+  MIGRATE = 'migrate',
 }
 
 export class App {

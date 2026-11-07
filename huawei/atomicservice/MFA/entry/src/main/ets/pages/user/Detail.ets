@@ -123,6 +123,11 @@ struct Detail {
           title: $r('app.string.more'),
           items: [
             new InfoCardItem({
+              title: $r('app.string.user_detail_page_backup'),
+              value: '',
+              eventClick: { action: AppPagesName.MIGRATE },
+            }),
+            new InfoCardItem({
               title: $r('app.string.help_entry'),
               value: '',
               eventClick: { action: AppPagesName.HELP },

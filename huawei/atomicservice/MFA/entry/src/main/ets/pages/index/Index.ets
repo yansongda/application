@@ -86,6 +86,9 @@ export struct Index {
               onInput: (): void => {
                 this.openCreate();
               },
+              onImport: (): void => {
+                this.openMigrate();
+              },
               onHelp: (): void => {
                 this.openHelp();
               }
@@ -251,6 +254,10 @@ export struct Index {
   }
 
   // 使用帮助
+  private openMigrate(): void {
+    this.pages.pushPathByName(AppPagesName.MIGRATE, null);
+  }
+
   private openHelp(): void {
     this.pages.pushPathByName(AppPagesName.HELP, null);
   }
@@ -358,7 +365,7 @@ export struct Index {
       return;
     }
 
-    hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果: %{public}s', uri);
+    hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '扫码结果: %{private}s', uri);
 
     // strict 解析：非规范 Base32（尾长非法 / 填充位非 0）会抛 INVALID_BASE32_PADDING，
     // 避免后端把 secret 静默截断后入库；build 同时给出规范化 URI（secret 大写、无填充），
