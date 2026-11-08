@@ -68,6 +68,7 @@
   <view class="section">
     <view class="section-title">更多</view>
     <t-cell-group theme="card">
+      <t-cell title="导入 / 导出" left-icon="swap" hover arrow bind:tap="gotoBackup" />
       <t-cell title="帮助" left-icon="help-circle" hover arrow bind:tap="gotoHelp" />
       <t-cell title="关于" left-icon="info-circle" note="{{versionText}}" />
       <t-cell title="注销账号" left-icon="delete" hover arrow bind:tap="gotoDelete" />

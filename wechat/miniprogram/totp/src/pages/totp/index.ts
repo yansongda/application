@@ -399,6 +399,9 @@ Page({
   goHelp() {
     wx.navigateTo({ url: "/pages/help/index" });
   },
+  onImport() {
+    wx.navigateTo({ url: "/pages/backup/index?mode=import" });
+  },
   onFabClick() {
     wx.showActionSheet({
       itemList: ["扫码添加", "手动输入"],

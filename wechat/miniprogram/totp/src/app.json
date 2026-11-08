@@ -10,7 +10,8 @@
     "pages/user/nickname/index",
     "pages/user/slogan/index",
     "pages/user/delete/index",
-    "pages/help/index"
+    "pages/help/index",
+    "pages/backup/index"
   ],
   "window": {
     "backgroundTextStyle": "light",

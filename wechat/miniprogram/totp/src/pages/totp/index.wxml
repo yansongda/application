@@ -143,6 +143,7 @@
         <t-button theme="primary" size="medium" variant="outline" bind:tap="goCreate">手动输入</t-button>
       </view>
       <view class="empty-help" bind:tap="goHelp">查看帮助</view>
+      <view class="empty-help" bind:tap="onImport">从其它应用导入</view>
     </view>
 
     <t-fab wx:if="{{!isSortMode && items.length > 0}}" icon="add" bind:click="onFabClick" aria-label="添加账号"></t-fab>

@@ -1,0 +1,10 @@
+{
+  "navigationBarTitleText": "导入 / 导出",
+  "usingComponents": {
+    "app-lock-screen": "/components/lock-screen/index",
+    "t-toast": "tdesign-miniprogram/toast/toast",
+    "t-message": "tdesign-miniprogram/message/message",
+    "t-button": "tdesign-miniprogram/button/button",
+    "t-input": "tdesign-miniprogram/input/input"
+  }
+}

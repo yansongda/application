@@ -136,6 +136,9 @@ Page({
   async gotoHelp() {
     await wx.navigateTo({ url: "/pages/help/index" });
   },
+  async gotoBackup() {
+    await wx.navigateTo({ url: "/pages/backup/index" });
+  },
   async gotoDelete() {
     await wx.navigateTo({ url: "/pages/user/delete/index" });
   },
