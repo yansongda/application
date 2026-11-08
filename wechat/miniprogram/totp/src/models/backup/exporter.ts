@@ -2,10 +2,11 @@
  * 导出编排：本地缓存条目 → 校验/归一 → 加密信封文本。
  * 缺 secret 或无法归一（非法 Base32 / period）的条目跳过并计数，不阻塞整体导出。
  */
-import type { CacheItem } from "../types/totp";
-import { encryptEnvelope, type RandomBytes } from "./crypto";
-import { type BackupItem, sanitizeItem } from "./payload";
-import { BackupError, BackupErrorCode, MAX_ITEMS } from "./spec";
+
+import { encryptEnvelope, type RandomBytes } from "../../backup/crypto";
+import { type BackupItem, sanitizeItem } from "../../backup/payload";
+import { BackupError, BackupErrorCode, MAX_ITEMS } from "../../backup/spec";
+import type { CacheItem } from "../../types/totp";
 
 export interface ExportOptions {
   password: string;

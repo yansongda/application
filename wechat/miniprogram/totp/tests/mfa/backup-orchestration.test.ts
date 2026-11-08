@@ -4,15 +4,15 @@
  */
 import { describe, expect, it } from "bun:test";
 import { encryptEnvelope } from "../../src/backup/crypto";
-import { buildExport } from "../../src/backup/exporter";
+import type { BackupItem } from "../../src/backup/payload";
+import { BackupErrorCode } from "../../src/backup/spec";
+import { buildExport } from "../../src/models/backup/exporter";
 import {
   analyze,
   type ImportApi,
   planUriIssuer,
   run,
-} from "../../src/backup/importer";
-import type { BackupItem } from "../../src/backup/payload";
-import { BackupErrorCode } from "../../src/backup/spec";
+} from "../../src/models/backup/importer";
 import type { CacheItem, Item } from "../../src/types/totp";
 
 const SECRET = "JBSWY3DPEHPK3PXP";

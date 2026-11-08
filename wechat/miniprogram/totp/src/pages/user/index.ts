@@ -42,9 +42,10 @@ const buildVersionText = (): string => {
       : miniProgram.envVersion === "trial"
         ? "体验版"
         : "正式版";
-  const version = miniProgram.version || "0.0.0";
+  // 开发版（IDE / 真机调试）取不到上传版本号，只展示环境标签，避免出现 v0.0.0
+  const version = (miniProgram.version || "").trim();
 
-  return `v${version}（${envLabel}）`;
+  return version.length > 0 ? `v${version}（${envLabel}）` : envLabel;
 };
 
 const appLockOutcomeMessage = (outcome: VerifyOutcome): string => {

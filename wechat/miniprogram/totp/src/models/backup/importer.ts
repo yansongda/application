@@ -8,12 +8,13 @@
  *
  * 本模块不直接调用 wx：api 由页面注入，纯逻辑可单测。
  */
-import type { CacheItem, Item } from "../types/totp";
-import { buildTotpUri } from "../utils/totp-uri";
-import { type DecryptResult, decryptEnvelope } from "./crypto";
-import { type Envelope, parseEnvelope } from "./envelope";
-import type { BackupItem, InvalidItem } from "./payload";
-import { BackupError, BackupErrorCode } from "./spec";
+
+import { type DecryptResult, decryptEnvelope } from "../../backup/crypto";
+import { type Envelope, parseEnvelope } from "../../backup/envelope";
+import type { BackupItem, InvalidItem } from "../../backup/payload";
+import { BackupError, BackupErrorCode } from "../../backup/spec";
+import type { CacheItem, Item } from "../../types/totp";
+import { buildTotpUri } from "../../utils/totp-uri";
 
 export const URI_ISSUER_PLACEHOLDER = "__mfa__";
 

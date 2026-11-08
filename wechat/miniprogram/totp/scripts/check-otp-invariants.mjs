@@ -73,6 +73,15 @@ for (const file of walk(backupDir)) {
   if (/from\s+"(node:)?crypto"/.test(text)) {
     report(file, "backup-no-native-crypto", "禁止依赖平台 crypto 模块（须纯 JS 实现）");
   }
+
+  // 纯净边界：src/backup 只能依赖 ../otp，不得引入业务层（便于后续独立成库）
+  const imports = text.match(/from\s+"([^"]+)"/g) ?? [];
+  for (const statement of imports) {
+    const target = statement.slice(statement.indexOf('"') + 1, statement.lastIndexOf('"'));
+    if (/^\.\.\/(api|pages|utils|models|types)\//.test(target)) {
+      report(file, "backup-purity", `禁止依赖业务层：${target}`);
+    }
+  }
 }
 
 const barrel = path.join(otpDir, "index.ts");

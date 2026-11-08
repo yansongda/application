@@ -22,9 +22,14 @@ import { readCache, syncFromRemote, upsertItem } from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
 import { checkPasswordStrength } from "../../backup/crypto";
-import { buildExport } from "../../backup/exporter";
-import { analyze, type ImportPlan, precheck, run } from "../../backup/importer";
 import { BackupError, backupErrorMessage } from "../../backup/spec";
+import { buildExport } from "../../models/backup/exporter";
+import {
+  analyze,
+  type ImportPlan,
+  precheck,
+  run,
+} from "../../models/backup/importer";
 import type { CacheItem, Item } from "../../types/totp";
 
 interface InputEvent {
@@ -59,10 +64,12 @@ interface BackupPageData {
 const CLIPBOARD_MAX_ITEMS = 50;
 const CLIPBOARD_MAX_BYTES = 65536;
 
+// 备份 meta.app：开发版取不到上传版本号，回落到 envVersion（自由字符串，≤32 字符，仅用于排障）
 const appVersion = (): string => {
   const { miniProgram } = wx.getAccountInfoSync();
+  const version = (miniProgram.version || "").trim();
 
-  return miniProgram.version || "0.0.0";
+  return version.length > 0 ? version : miniProgram.envVersion;
 };
 
 const describeError = (e: unknown): string => {

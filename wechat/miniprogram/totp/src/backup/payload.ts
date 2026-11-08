@@ -1,13 +1,16 @@
 /**
  * 明文 payload：解析 / 校验 / 序列化（规范 §6）。
  *
- * secret 的严格 Base32 校验不在此处复刻：统一经 @utils/totp-uri 的 buildTotpUri
- * （内部 Secret.fromBase32 strict），符合「业务代码只经 totp-uri」的既有约束。
+ * secret 的严格 Base32 校验走 otp 库公开入口 Secret.fromBase32(strict)：
+ * 本目录（src/backup）禁止依赖业务层（utils/totp-uri / types/totp），便于后续独立成库。
  */
-import { OtpError } from "../otp/index";
-import type { TotpAlgorithm } from "../types/totp";
-import { buildTotpUri } from "../utils/totp-uri";
-import { BackupErrorCode, MAX_ITEMS, MAX_TAGS_PER_ITEM } from "./spec";
+import { OtpError, Secret } from "../otp/index";
+import {
+  type BackupAlgorithm,
+  BackupErrorCode,
+  MAX_ITEMS,
+  MAX_TAGS_PER_ITEM,
+} from "./spec";
 
 export interface BackupItem {
   issuer: string;
@@ -15,7 +18,7 @@ export interface BackupItem {
   secret: string;
   period: number;
   digits: number;
-  algorithm: TotpAlgorithm;
+  algorithm: BackupAlgorithm;
   tags: string[];
   pinned: boolean;
 }
@@ -37,13 +40,13 @@ export type ParsePayloadResult =
       detail: string;
     };
 
-const ALGORITHMS: ReadonlyArray<TotpAlgorithm> = ["SHA1", "SHA256", "SHA512"];
+const ALGORITHMS: ReadonlyArray<BackupAlgorithm> = ["SHA1", "SHA256", "SHA512"];
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 };
 
-const isTotpAlgorithm = (value: string): value is TotpAlgorithm => {
+const isBackupAlgorithm = (value: string): value is BackupAlgorithm => {
   return (ALGORITHMS as ReadonlyArray<string>).includes(value);
 };
 
@@ -127,8 +130,8 @@ export const sanitizeItem = (raw: unknown): SanitizeResult => {
   const algorithmRaw = raw.algorithm;
   const algorithm =
     typeof algorithmRaw === "string" &&
-    isTotpAlgorithm(algorithmRaw.toUpperCase())
-      ? (algorithmRaw.toUpperCase() as TotpAlgorithm)
+    isBackupAlgorithm(algorithmRaw.toUpperCase())
+      ? (algorithmRaw.toUpperCase() as BackupAlgorithm)
       : "SHA1";
 
   const secret = normalizeSecret(secretRaw);
@@ -138,20 +141,13 @@ export const sanitizeItem = (raw: unknown): SanitizeResult => {
   }
 
   try {
-    buildTotpUri({
-      issuer,
-      account: username,
-      secret,
-      period,
-      digits,
-      algorithm,
-    });
+    Secret.fromBase32(secret, { strict: true });
   } catch (e: unknown) {
     if (e instanceof OtpError) {
       return { ok: false, reason: "secret 不符合 Base32 规范" };
     }
 
-    return { ok: false, reason: "条目无法重建为 otpauth URI" };
+    return { ok: false, reason: "secret 校验失败" };
   }
 
   return {

@@ -63,12 +63,15 @@ bun run check:otp-invariants    # OTP 不变量静态守卫
 - 与后端 API 对接时，字段命名和含义应与后端保持一致，避免前端自行发明新语义
 - 修改公共常量、接口模型或页面交互时，尽量保持微信小程序现有用法一致，避免无关重构
 
-## 加密备份模块（`src/backup`）
+## 加密备份模块（`src/backup` + `src/models/backup`）
 
-- 结构：`spec.ts`（常量/错误码）、`base64.ts`（严格 base64）、`envelope.ts`（信封解析，顺序严格按规范 §8）、`payload.ts`（明文校验/归一）、`aes-gcm.ts`（手写 AES-256-GCM）、`pbkdf2.ts`（同步内核 + 分片异步）、`crypto.ts`（kcv/加解密编排）、`exporter.ts` / `importer.ts`（编排，api 由页面注入）。
+- 分层：
+  - `src/backup/` —— **纯库**（零业务依赖，可独立成库）：`spec.ts`（常量/错误码/`BackupAlgorithm`）、`base64.ts`（严格 base64）、`envelope.ts`（信封解析，顺序严格按规范 §8）、`payload.ts`（明文校验/归一）、`aes-gcm.ts`（手写 AES-256-GCM）、`pbkdf2.ts`（同步内核 + 分片异步）、`crypto.ts`（kcv/加解密编排）、`index.ts`（barrel）、`README.md`。
+  - `src/models/backup/` —— **业务编排**：`exporter.ts` / `importer.ts`（依赖缓存类型与后端 API，api 由页面注入）。
 - 不变量：
   - 禁 `BigInt` / `Math.random` / `console.*` / `require(` / 原生 crypto；由 `scripts/check-otp-invariants.mjs` 静态守卫（去注释后检查）。
-  - `src/backup` 只允许只读 import `src/otp/internal/{sha256,hmac}` 这一处内部原语例外；Base32 严格校验一律经 `@utils/totp-uri` 的 `buildTotpUri`（不新增例外）。
+  - `src/backup` 只允许依赖 `src/otp`（`internal/{sha256,hmac}` 原语 + 公开 `OtpError` / `Secret`）；**禁止** import `../api` / `../pages` / `../utils` / `../models` / `../types`（守卫规则 `backup-purity`）。
+  - Base32 严格校验走 otp 公开入口 `Secret.fromBase32(secret, { strict: true })`，不重复实现。
   - IO 与随机源只落 `src/utils/backup-file.ts`（`secureRandom` / `writeBackupFile` / `shareBackupFile` / `readBackupFileFromChat`）。
   - 口令/密钥/明文/密文不得进 logger / storage；口令只存在于页面内存，`onHide/onUnload` 清空。
   - 导出前应用锁门禁：仅 `SUCCESS` / `NO_CREDENTIAL` 放行，`SKIPPED` 必须拒绝（规范 S4）。

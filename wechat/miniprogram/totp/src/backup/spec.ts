@@ -24,6 +24,9 @@ export const MAX_CIPHERTEXT_BYTES = 1048576;
 export const MIN_PASSWORD_CODE_POINTS = 8;
 export const MAX_TAGS_PER_ITEM = 1;
 
+/** 明文 payload 的摘要算法（规范 §6）；库内自带，避免依赖业务层 types/totp。 */
+export type BackupAlgorithm = "SHA1" | "SHA256" | "SHA512";
+
 export enum BackupErrorCode {
   E_FORMAT = "E_FORMAT",
   E_VERSION = "E_VERSION",
