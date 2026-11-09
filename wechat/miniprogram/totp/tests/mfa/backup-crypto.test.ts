@@ -5,18 +5,26 @@
 import { describe, expect, it } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
+import { aesGcmEncrypt } from "../../src/backup/aes-gcm";
 import { decodeBase64Strict, encodeBase64 } from "../../src/backup/base64";
 import {
   checkPasswordStrength,
   decryptEnvelope,
   encryptEnvelope,
+  normalizePassword,
   utf8ToBytes,
 } from "../../src/backup/crypto";
 import type { Envelope } from "../../src/backup/envelope";
-import { parseEnvelope } from "../../src/backup/envelope";
+import { buildAad, parseEnvelope } from "../../src/backup/envelope";
 import type { BackupItem } from "../../src/backup/payload";
+import { stringifyPayload } from "../../src/backup/payload";
 import { Pbkdf2AbortedError, pbkdf2Sha256Async } from "../../src/backup/pbkdf2";
-import { BackupErrorCode } from "../../src/backup/spec";
+import {
+  BackupErrorCode,
+  KEY_BYTES,
+  METHOD,
+  VERSION,
+} from "../../src/backup/spec";
 
 const VECTORS = JSON.parse(
   fs.readFileSync(
@@ -95,16 +103,50 @@ describe("backup crypto", () => {
       rng: deterministicRng(),
       iterations: 10000,
       now: () => new Date("2026-11-07T00:00:00.000Z"),
+      offsetMinutes: 480,
     });
 
     expect(result.envelope.meta.count).toBe(2);
     expect(result.envelope.meta.source).toBe("wechat");
-    expect(result.envelope.meta.createdAt).toBe("2026-11-07T00:00:00.000Z");
+    // 注入确定的时区偏移，结果不依赖 CI 机器本地时区
+    expect(result.envelope.meta.createdAt).toBe(
+      "2026-11-07T08:00:00.000+08:00",
+    );
+    expect(result.meta).toEqual(result.envelope.meta);
 
     const decrypted = await decryptEnvelope(result.envelope, PASSWORD);
 
     expect(decrypted.items.length).toBe(2);
     expect(decrypted.items[0]).toEqual(ITEM);
+  });
+
+  // meta 现在参与 AAD（规范 §4.2）：任一字段被改都会在 GCM 阶段失败
+  it("decrypt_tamperedMetaIsECorrupt", async () => {
+    const result = await encryptEnvelope([ITEM], PASSWORD, {
+      source: "wechat",
+      app: "1.2.0",
+      rng: deterministicRng(),
+      iterations: 10000,
+      offsetMinutes: 480,
+    });
+    const patches = [
+      { count: 2 },
+      { createdAt: "2026-11-07T08:00:00.001+08:00" },
+      { source: "huawei" as const },
+      { app: "1.2.1" },
+    ];
+
+    for (const patch of patches) {
+      const tampered: Envelope = {
+        ...result.envelope,
+        meta: { ...result.envelope.meta, ...patch },
+      };
+
+      await expectBackupError(
+        decryptEnvelope(tampered, PASSWORD),
+        BackupErrorCode.E_CORRUPT,
+      );
+    }
   });
 
   it("decrypt_wrongPasswordIsEPassword", async () => {
@@ -149,11 +191,28 @@ describe("backup crypto", () => {
       app: "1.2.0",
       rng: deterministicRng(),
       iterations: 10000,
+      offsetMinutes: 480,
     });
 
+    // 用「错误 count」重算 AAD 与 tag：GCM 认证通过，仅 payload/count 一致性校验失败
+    const key = await pbkdf2Sha256Async(
+      utf8ToBytes(normalizePassword(PASSWORD)),
+      decodeBase64Strict(result.envelope.key.salt),
+      result.envelope.key.iterations,
+      KEY_BYTES,
+    );
+    const meta = { ...result.envelope.meta, count: 2 };
+    const { ciphertext, tag } = aesGcmEncrypt(
+      key,
+      decodeBase64Strict(result.envelope.key.iv),
+      utf8ToBytes(buildAad(VERSION, METHOD, meta)),
+      utf8ToBytes(stringifyPayload([ITEM])),
+    );
     const tampered: Envelope = {
       ...result.envelope,
-      meta: { ...result.envelope.meta, count: 2 },
+      data: encodeBase64(ciphertext),
+      key: { ...result.envelope.key, tag: encodeBase64(tag) },
+      meta,
     };
 
     await expectBackupError(

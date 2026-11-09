@@ -8,6 +8,7 @@ import {
   FORMAT,
   IV_BYTES,
   KCV_BYTES,
+  MAX_APP_LENGTH,
   MAX_CIPHERTEXT_BYTES,
   MAX_ITEMS,
   MAX_ITERATIONS,
@@ -17,6 +18,7 @@ import {
   TAG_BYTES,
   VERSION,
 } from "./spec";
+import { parseCreatedAt } from "./time";
 
 export type EnvelopeSource = "huawei" | "wechat";
 
@@ -52,7 +54,49 @@ export interface ParseError {
 
 export type ParseEnvelopeResult = { ok: true; envelope: Envelope } | ParseError;
 
-const CREATED_AT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+/**
+ * meta 的规范序列化：字段顺序固定、紧凑 JSON（规范 §4.2 / §7）。
+ * 它同时是 AAD 的尾部与信封内 `meta` 的字面来源，保证两处字节一致。
+ * 要求 `count` 为整数、`createdAt` 为合法时间戳、`source` 为枚举、`app` 为可打印 ASCII，
+ * 因此此处不会产生 `\"` / `\\` / `\uXXXX` 转义 —— 跨端零转义差异。
+ */
+export const canonicalMetaJson = (meta: EnvelopeMeta): string => {
+  return JSON.stringify({
+    count: meta.count,
+    createdAt: meta.createdAt,
+    source: meta.source,
+    app: meta.app,
+  });
+};
+
+/**
+ * AAD = "mfa|" + version + "|" + method + "|" + canonicalMetaJson(meta)（规范 §4.2）。
+ * 加密传常量 VERSION/METHOD；解密传信封里的 version/method，做到真正绑定头部字段。
+ */
+export const buildAad = (
+  version: number,
+  method: string,
+  meta: EnvelopeMeta,
+): string => {
+  return `mfa|${version}|${method}|${canonicalMetaJson(meta)}`;
+};
+
+/** meta.app 只允许可打印 ASCII（0x20~0x7E）且不含引号/反斜杠（规范 §3.1）。 */
+export const isValidApp = (value: unknown): value is string => {
+  if (typeof value !== "string" || value.length > MAX_APP_LENGTH) {
+    return false;
+  }
+
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+
+    if (code < 0x20 || code > 0x7e || code === 0x22 || code === 0x5c) {
+      return false;
+    }
+  }
+
+  return true;
+};
 
 const fail = (code: BackupErrorCode, detail: string): ParseEnvelopeResult => {
   return { ok: false, code, detail };
@@ -184,9 +228,16 @@ export const parseEnvelope = (text: string): ParseEnvelopeResult => {
 
   const createdAt = raw.meta.createdAt;
 
-  // 与华为端逐字一致：只校验规范 §7 的 UTC 格式（Date.parse 会引入两端不同的额外拒绝面）
-  if (typeof createdAt !== "string" || !CREATED_AT_PATTERN.test(createdAt)) {
-    return fail(BackupErrorCode.E_STRUCTURE, "meta.createdAt 非 UTC ISO 串");
+  // 严格解析（含日历合法性）：createdAt 参与 AAD，格式必须两端一致；
+  // 允许 Z / ±HH:mm 与 0~3 位毫秒，导出端只写 ±HH:mm 且固定 3 位（规范 §4.1 / §7）。
+  if (
+    typeof createdAt !== "string" ||
+    parseCreatedAt(createdAt) === undefined
+  ) {
+    return fail(
+      BackupErrorCode.E_STRUCTURE,
+      "meta.createdAt 非带时区的 ISO 串",
+    );
   }
 
   const source = raw.meta.source;
@@ -197,7 +248,7 @@ export const parseEnvelope = (text: string): ParseEnvelopeResult => {
 
   const app = raw.meta.app;
 
-  if (typeof app !== "string" || app.length > 32) {
+  if (!isValidApp(app)) {
     return fail(BackupErrorCode.E_STRUCTURE, "meta.app 非法");
   }
 
@@ -226,25 +277,20 @@ export const parseEnvelope = (text: string): ParseEnvelopeResult => {
   };
 };
 
-/** 紧凑 JSON，字段顺序固定（规范 §7）。 */
+/** 紧凑 JSON，字段顺序固定（规范 §7）；meta 复用 canonicalMetaJson 与 AAD 字节一致。 */
 export const stringifyEnvelope = (envelope: Envelope): string => {
-  return JSON.stringify({
-    format: envelope.format,
-    version: envelope.version,
-    method: envelope.method,
-    key: {
-      iterations: envelope.key.iterations,
-      salt: envelope.key.salt,
-      iv: envelope.key.iv,
-      tag: envelope.key.tag,
-      kcv: envelope.key.kcv,
-    },
-    data: envelope.data,
-    meta: {
-      count: envelope.meta.count,
-      createdAt: envelope.meta.createdAt,
-      source: envelope.meta.source,
-      app: envelope.meta.app,
-    },
-  });
+  const key = envelope.key;
+
+  return (
+    `{"format":${JSON.stringify(envelope.format)},` +
+    `"version":${envelope.version},` +
+    `"method":${JSON.stringify(envelope.method)},` +
+    `"key":{"iterations":${key.iterations},` +
+    `"salt":${JSON.stringify(key.salt)},` +
+    `"iv":${JSON.stringify(key.iv)},` +
+    `"tag":${JSON.stringify(key.tag)},` +
+    `"kcv":${JSON.stringify(key.kcv)}},` +
+    `"data":${JSON.stringify(envelope.data)},` +
+    `"meta":${canonicalMetaJson(envelope.meta)}}`
+  );
 };

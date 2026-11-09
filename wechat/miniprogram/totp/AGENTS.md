@@ -66,7 +66,7 @@ bun run check:otp-invariants    # OTP 不变量静态守卫
 ## 加密备份模块（`src/backup` + `src/models/backup`）
 
 - 分层：
-  - `src/backup/` —— **纯库**（零业务依赖，可独立成库）：`spec.ts`（常量/错误码/`BackupAlgorithm`）、`base64.ts`（严格 base64）、`envelope.ts`（信封解析，顺序严格按规范 §8）、`payload.ts`（明文校验/归一）、`aes-gcm.ts`（手写 AES-256-GCM）、`pbkdf2.ts`（同步内核 + 分片异步）、`crypto.ts`（kcv/加解密编排）、`index.ts`（barrel）、`README.md`。
+  - `src/backup/` —— **纯库**（零业务依赖，可独立成库）：`spec.ts`（常量/错误码/`BackupAlgorithm`）、`base64.ts`（严格 base64）、`time.ts`（createdAt 带时区编解码）、`envelope.ts`（信封解析 + `canonicalMetaJson`/`buildAad`，顺序严格按规范 §8）、`payload.ts`（明文校验/归一）、`aes-gcm.ts`（手写 AES-256-GCM）、`pbkdf2.ts`（同步内核 + 分片异步）、`crypto.ts`（kcv/加解密编排）、`index.ts`（barrel）、`README.md`。
   - `src/models/backup/` —— **业务编排**：`exporter.ts` / `importer.ts`（依赖缓存类型与后端 API，api 由页面注入）。
 - 不变量：
   - 禁 `BigInt` / `Math.random` / `console.*` / `require(` / 原生 crypto；由 `scripts/check-otp-invariants.mjs` 静态守卫（去注释后检查）。

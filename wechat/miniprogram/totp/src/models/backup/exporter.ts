@@ -14,12 +14,15 @@ export interface ExportOptions {
   rng: RandomBytes;
   iterations?: number;
   now?: () => Date;
+  offsetMinutes?: number;
 }
 
 export interface ExportResult {
   text: string;
   count: number;
   skipped: number;
+  /** 信封 meta.createdAt（带时区偏移，规范 §4.1），供页面按本地时间显示。 */
+  createdAt: string;
 }
 
 const toRawItem = (item: CacheItem): Record<string, unknown> => {
@@ -71,7 +74,13 @@ export const buildExport = async (
     rng: options.rng,
     iterations: options.iterations,
     now: options.now,
+    offsetMinutes: options.offsetMinutes,
   });
 
-  return { text: encrypted.text, count: editable.length, skipped };
+  return {
+    text: encrypted.text,
+    count: editable.length,
+    skipped,
+    createdAt: encrypted.meta.createdAt,
+  };
 };

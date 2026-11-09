@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { decodeBase64Strict, encodeBase64 } from "../../src/backup/base64";
 import {
+  canonicalMetaJson,
   type Envelope,
   parseEnvelope,
   stringifyEnvelope,
@@ -71,6 +72,13 @@ describe("backup envelope", () => {
 
     expect(text.startsWith('{"format":"mfa","version":1,"method"')).toBe(true);
     expect(parseEnvelope(text).ok).toBe(true);
+  });
+
+  // meta 同时是 AAD 尾部（规范 §4.2）：序列化必须复用它，不能各写一份
+  it("stringify_metaMatchesCanonicalMetaJson", () => {
+    expect(stringifyEnvelope(EXAMPLE)).toContain(
+      `"meta":${canonicalMetaJson(EXAMPLE.meta)}`,
+    );
   });
 
   it("parse_base64WhitespaceIsRejected", () => {
@@ -189,19 +197,44 @@ describe("backup envelope", () => {
     );
   });
 
-  it("parse_createdAtMustEndWithZ", () => {
-    expectCode(
-      withEnvelope({
-        meta: { ...EXAMPLE.meta, createdAt: "2026-11-07T00:00:00+00:00" },
-      }),
-      BackupErrorCode.E_STRUCTURE,
-    );
-    expectCode(
-      withEnvelope({
-        meta: { ...EXAMPLE.meta, createdAt: "2026-11-07 00:00:00" },
-      }),
-      BackupErrorCode.E_STRUCTURE,
-    );
+  it("parse_createdAtAcceptsZoneOffsets", () => {
+    const accepted = [
+      "2026-11-07T08:00:00.000+08:00",
+      "2026-11-06T19:00:00.000-05:00",
+      "2026-11-07T12:15:00.000+05:45",
+      "2026-11-07T00:00:00.000+00:00",
+      "2026-11-07T00:00:00.000Z",
+      "2026-11-07T08:00:00.5+08:00",
+      "2026-11-07T08:00:00+08:00",
+    ];
+
+    for (const createdAt of accepted) {
+      const result = parseEnvelope(
+        withEnvelope({ meta: { ...EXAMPLE.meta, createdAt } }),
+      );
+
+      expect(result.ok).toBe(true);
+    }
+  });
+
+  it("parse_createdAtRejectsMalformedOrOutOfRange", () => {
+    const rejected = [
+      "2026-11-07T00:00:00+0800", // 偏移缺冒号
+      "2026-11-07T00:00:00+24:00", // 偏移越界
+      "2026-11-07T00:00:00+14:01", // 14 小时只允许 00 分
+      "2026-11-07 00:00:00", // 本地时间无时区
+      "2026-11-07T00:00:00", // 缺时区
+      "2026-02-30T00:00:00.000Z", // 日历非法
+      "2026-11-07T24:00:00.000Z", // 小时越界
+      "1969-12-31T23:59:59.000Z", // 年份下限
+    ];
+
+    for (const createdAt of rejected) {
+      expectCode(
+        withEnvelope({ meta: { ...EXAMPLE.meta, createdAt } }),
+        BackupErrorCode.E_STRUCTURE,
+      );
+    }
   });
 
   it("parse_sourceMustBeKnown", () => {
@@ -211,10 +244,21 @@ describe("backup envelope", () => {
     );
   });
 
-  it("parse_appLengthLimit", () => {
-    expectCode(
-      withEnvelope({ meta: { ...EXAMPLE.meta, app: "x".repeat(33) } }),
-      BackupErrorCode.E_STRUCTURE,
-    );
+  it("parse_appMustBePrintableAscii", () => {
+    for (const app of ["版本1", 'a"b', "a\\b", "a\nb", "x".repeat(33)]) {
+      expectCode(
+        withEnvelope({ meta: { ...EXAMPLE.meta, app } }),
+        BackupErrorCode.E_STRUCTURE,
+      );
+    }
+
+    // 空格（0x20）属于可打印 ASCII，允许
+    expect(
+      parseEnvelope(
+        withEnvelope({
+          meta: { ...EXAMPLE.meta, app: "1.9.0 (release)" },
+        }),
+      ).ok,
+    ).toBe(true);
   });
 });

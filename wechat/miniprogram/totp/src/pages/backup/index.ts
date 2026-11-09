@@ -17,6 +17,7 @@ import {
   writeBackupFile,
 } from "@utils/backup-file";
 import { copyText, readText } from "@utils/clipboard";
+import { formatLocalDateTime } from "@utils/datetime";
 import logger from "@utils/logger";
 import { readCache, syncFromRemote, upsertItem } from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
@@ -291,7 +292,7 @@ Page({
 
       this.setData({
         exportReady: true,
-        exportMeta: `已加密 ${result.count} 条（跳过 ${result.skipped} 条）`,
+        exportMeta: `已加密 ${result.count} 条（跳过 ${result.skipped} 条）· 备份时间 ${formatLocalDateTime(result.createdAt)}`,
         exportClipboardAllowed: clipboardAllowed,
       });
 
@@ -381,7 +382,7 @@ Page({
 
       this.setData({
         importReady: true,
-        importMeta: `来自${source}，含 ${envelope.meta.count} 条，导出于 ${envelope.meta.createdAt}`,
+        importMeta: `来自${source}，含 ${envelope.meta.count} 条，导出于 ${formatLocalDateTime(envelope.meta.createdAt)}（本地时间）`,
         planReady: false,
         planAccepted: 0,
         planDuplicates: 0,

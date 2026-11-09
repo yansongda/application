@@ -24,10 +24,13 @@ export {
   utf8ToBytes,
 } from "./crypto";
 export {
+  buildAad,
+  canonicalMetaJson,
   type Envelope,
   type EnvelopeKey,
   type EnvelopeMeta,
   type EnvelopeSource,
+  isValidApp,
   type ParseEnvelopeResult,
   parseEnvelope,
   stringifyEnvelope,
@@ -49,7 +52,7 @@ export {
   pbkdf2Sha256Async,
 } from "./pbkdf2";
 export {
-  AAD,
+  AAD_PREFIX,
   type BackupAlgorithm,
   BackupError,
   BackupErrorCode,
@@ -60,6 +63,7 @@ export {
   KCV_BYTES,
   KCV_LABEL,
   KEY_BYTES,
+  MAX_APP_LENGTH,
   MAX_CIPHERTEXT_BYTES,
   MAX_ITEMS,
   MAX_ITERATIONS,
@@ -72,3 +76,4 @@ export {
   VERSION,
   WEAK_PASSWORDS,
 } from "./spec";
+export { formatCreatedAt, type ParsedCreatedAt, parseCreatedAt } from "./time";

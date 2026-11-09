@@ -12,9 +12,16 @@ import {
   normalizePassword,
   utf8ToBytes,
 } from "../../src/backup/crypto";
+import { buildAad, type EnvelopeMeta } from "../../src/backup/envelope";
 import type { BackupItem } from "../../src/backup/payload";
 import { pbkdf2Sha256 } from "../../src/backup/pbkdf2";
-import { AAD, KEY_BYTES } from "../../src/backup/spec";
+import {
+  AAD_PREFIX,
+  KCV_LABEL,
+  KEY_BYTES,
+  METHOD,
+  VERSION,
+} from "../../src/backup/spec";
 
 interface VectorCase {
   id: string;
@@ -22,6 +29,8 @@ interface VectorCase {
   passwordRaw: string;
   passwordNormalized: string;
   iterations: number;
+  meta: EnvelopeMeta;
+  aad: string;
   saltB64: string;
   ivB64: string;
   keyB64: string;
@@ -33,7 +42,7 @@ interface VectorCase {
 }
 
 interface VectorFile {
-  aad: string;
+  aadPrefix: string;
   kcvLabel: string;
   exampleEnvelope: {
     format: string;
@@ -70,8 +79,17 @@ const plaintextOf = (c: VectorCase): Uint8Array => {
 
 describe("backup vectors", () => {
   it("spec_aadAndKcvLabelMatch", () => {
-    expect(VECTORS.aad).toBe(AAD);
+    expect(VECTORS.aadPrefix).toBe(AAD_PREFIX);
+    expect(VECTORS.kcvLabel).toBe(KCV_LABEL);
     expect(VECTORS.cases.length).toBe(15);
+  });
+
+  // AAD 现在含 meta（规范 §4.2）：生成器与实现必须拼出逐字节相同的串
+  it("cases_aadMatchesCanonicalMeta", () => {
+    for (const c of VECTORS.cases) {
+      expect(c.aad).toBe(buildAad(VERSION, METHOD, c.meta));
+      expect(c.aad.startsWith(VECTORS.aadPrefix)).toBe(true);
+    }
   });
 
   it("cases_areUnique", () => {
@@ -101,7 +119,7 @@ describe("backup vectors", () => {
       const result = aesGcmEncrypt(
         key,
         decodeBase64Strict(c.ivB64),
-        utf8ToBytes(VECTORS.aad),
+        utf8ToBytes(c.aad),
         plaintextOf(c),
       );
 
@@ -119,7 +137,7 @@ describe("backup vectors", () => {
       const plaintext = aesGcmDecrypt(
         decodeBase64Strict(c.keyB64),
         decodeBase64Strict(c.ivB64),
-        utf8ToBytes(VECTORS.aad),
+        utf8ToBytes(c.aad),
         decodeBase64Strict(c.ciphertextB64),
         decodeBase64Strict(c.tagB64),
       );
@@ -146,6 +164,7 @@ describe("backup vectors", () => {
     expect(VECTORS.exampleEnvelope.key.tag).toBe(c.tagB64);
     expect(VECTORS.exampleEnvelope.key.kcv).toBe(c.kcvB64);
     expect(VECTORS.exampleEnvelope.data).toBe(c.ciphertextB64);
+    expect(VECTORS.exampleEnvelope.meta).toEqual(c.meta);
     expect(VECTORS.exampleEnvelope.meta.count).toBe(
       (JSON.parse(c.payloadJson) as { items: BackupItem[] }).items.length,
     );

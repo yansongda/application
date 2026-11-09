@@ -3,9 +3,11 @@
  * 本模块为纯常量，不依赖 wx / logger。
  */
 export const FORMAT = "mfa";
+// v1 尚未正式发布：AAD 纳入 meta（规范 §4.2 / §10.1 的预发布修订），不升 version。
 export const VERSION = 1;
 export const METHOD = "PBKDF2-SHA256/AES-256-GCM";
-export const AAD = "mfa|1|PBKDF2-SHA256/AES-256-GCM";
+/** AAD 前缀；完整 AAD = AAD_PREFIX + canonicalMetaJson(meta)（见 envelope.ts buildAad）。 */
+export const AAD_PREFIX = `mfa|${VERSION}|${METHOD}|`;
 export const KCV_LABEL = "mfa-kcv|1";
 
 export const SALT_BYTES = 16;
@@ -23,6 +25,9 @@ export const MAX_CIPHERTEXT_BYTES = 1048576;
 
 export const MIN_PASSWORD_CODE_POINTS = 8;
 export const MAX_TAGS_PER_ITEM = 1;
+
+/** meta.app 长度上限（字符集另见 envelope.ts：可打印 ASCII 且不含引号/反斜杠）。 */
+export const MAX_APP_LENGTH = 32;
 
 /** 明文 payload 的摘要算法（规范 §6）；库内自带，避免依赖业务层 types/totp。 */
 export type BackupAlgorithm = "SHA1" | "SHA256" | "SHA512";

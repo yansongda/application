@@ -7,7 +7,13 @@ import { hmac } from "../otp/internal/hmac";
 import { sha256 } from "../otp/internal/sha256";
 import { aesGcmDecrypt, aesGcmEncrypt } from "./aes-gcm";
 import { decodeBase64Strict, encodeBase64 } from "./base64";
-import { type Envelope, stringifyEnvelope } from "./envelope";
+import {
+  buildAad,
+  type Envelope,
+  type EnvelopeMeta,
+  isValidApp,
+  stringifyEnvelope,
+} from "./envelope";
 import {
   type BackupItem,
   type InvalidItem,
@@ -16,7 +22,6 @@ import {
 } from "./payload";
 import { type Pbkdf2Hooks, pbkdf2Sha256Async } from "./pbkdf2";
 import {
-  AAD,
   BackupError,
   BackupErrorCode,
   DEFAULT_ITERATIONS,
@@ -25,11 +30,13 @@ import {
   KCV_LABEL,
   KEY_BYTES,
   MAX_ITEMS,
+  METHOD,
   MIN_PASSWORD_CODE_POINTS,
   SALT_BYTES,
   VERSION,
   WEAK_PASSWORDS,
 } from "./spec";
+import { formatCreatedAt } from "./time";
 
 const BLOCK_SIZE = 64;
 
@@ -41,11 +48,14 @@ export interface EncryptContext {
   rng: RandomBytes;
   iterations?: number;
   now?: () => Date;
+  /** 时区偏移（分钟，东区为正）；默认取 `now()` 所在环境的本地偏移。 */
+  offsetMinutes?: number;
 }
 
 export interface EncryptResult {
   text: string;
   envelope: Envelope;
+  meta: EnvelopeMeta;
 }
 
 export type PasswordStrength = { ok: true } | { ok: false; reason: string };
@@ -200,14 +210,35 @@ export const encryptEnvelope = async (
   const key = await deriveKey(password, salt, iterations, hooks);
   const kcv = computeKcv(key);
   const body = utf8ToBytes(stringifyPayload(items));
-  const { ciphertext, tag } = aesGcmEncrypt(key, iv, utf8ToBytes(AAD), body);
 
-  const createdAt = (context.now?.() ?? new Date()).toISOString();
+  const nowDate = context.now?.() ?? new Date();
+  const offsetMinutes = context.offsetMinutes ?? -nowDate.getTimezoneOffset();
+  const meta: EnvelopeMeta = {
+    count: items.length,
+    createdAt: formatCreatedAt(nowDate, offsetMinutes),
+    source: context.source,
+    app: context.app,
+  };
+
+  // 导出端 fail-fast：非法 app 会让产出文件自己都导不进来
+  if (!isValidApp(meta.app)) {
+    throw new BackupError({
+      code: BackupErrorCode.E_STRUCTURE,
+      detail: "meta.app 必须是可打印 ASCII（≤32 字符，不含引号与反斜杠）",
+    });
+  }
+
+  const { ciphertext, tag } = aesGcmEncrypt(
+    key,
+    iv,
+    utf8ToBytes(buildAad(VERSION, METHOD, meta)),
+    body,
+  );
 
   const envelope: Envelope = {
     format: "mfa",
     version: VERSION,
-    method: "PBKDF2-SHA256/AES-256-GCM",
+    method: METHOD,
     key: {
       iterations,
       salt: encodeBase64(salt),
@@ -216,15 +247,10 @@ export const encryptEnvelope = async (
       kcv: encodeBase64(kcv),
     },
     data: encodeBase64(ciphertext),
-    meta: {
-      count: items.length,
-      createdAt,
-      source: context.source,
-      app: context.app,
-    },
+    meta,
   };
 
-  return { text: stringifyEnvelope(envelope), envelope };
+  return { text: stringifyEnvelope(envelope), envelope, meta };
 };
 
 export interface DecryptResult {
@@ -256,7 +282,7 @@ export const decryptEnvelope = async (
   const plaintext = aesGcmDecrypt(
     key,
     iv,
-    utf8ToBytes(AAD),
+    utf8ToBytes(buildAad(envelope.version, envelope.method, envelope.meta)),
     decodeBase64Strict(envelope.data),
     tag,
   );

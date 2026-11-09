@@ -14,12 +14,13 @@
 
 | 模块 | 职责 |
 |---|---|
-| `spec.ts` | 规范常量（AAD / KCV 标签 / 尺寸 / 迭代范围）、8 个错误码、`BackupAlgorithm` |
+| `spec.ts` | 规范常量（`AAD_PREFIX` / KCV 标签 / 尺寸 / 迭代范围 / `MAX_APP_LENGTH`）、8 个错误码、`BackupAlgorithm` |
+| `time.ts` | `createdAt` 编解码（带时区偏移、手写解析与日历校验、本地时间显示辅助） |
 | `base64.ts` | 标准字母表 + 规范 padding；**严格解码**拒绝空白 / base64url / padding 异常 |
 | `pbkdf2.ts` | PBKDF2-HMAC-SHA256（同步内核仅供单测；运行期走分片异步，可进度/可取消） |
 | `aes-gcm.ts` | AES-256-GCM（手写，`Uint32` 分肢 GHASH，**不使用 BigInt**） |
 | `crypto.ts` | 口令规范化（trim → NFC）→ 派生 → kcv → 加解密编排 |
-| `envelope.ts` | 信封结构 / 严格解析（判定顺序 = 规范 §8）/ 紧凑序列化 |
+| `envelope.ts` | 信封结构 / 严格解析（判定顺序 = 规范 §8）/ 紧凑序列化 / `canonicalMetaJson` + `buildAad`（meta 参与 AAD） |
 | `payload.ts` | 明文校验 / 归一 / 序列化（单条非法只记 `invalid`，不阻塞整包） |
 | `index.ts` | barrel：唯一对外入口 |
 
