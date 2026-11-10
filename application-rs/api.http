@@ -91,21 +91,23 @@ Authorization: Bearer {{access_token}}
   "id": 1
 }
 
-### TOTP - 导出加密备份（格式见 docs/totp-backup-format.md）
-POST {{domain}}/api/v1/totp/backup/export
+### 备份 - 导出加密备份（格式见 docs/backup-format.md）
+POST {{domain}}/api/v1/backup/export
 Content-Type: application/json
 Authorization: Bearer {{access_token}}
 
 {
+  "kind": "totp",
   "password": "YOUR_PASSPHRASE_HERE"
 }
 
-### TOTP - 导入加密备份（backup 粘贴导出接口返回的 data 对象）
-POST {{domain}}/api/v1/totp/backup/import
+### 备份 - 导入加密备份（backup 粘贴导出接口返回的 data 对象）
+POST {{domain}}/api/v1/backup/import
 Content-Type: application/json
 Authorization: Bearer {{access_token}}
 
 {
+  "kind": "totp",
   "password": "YOUR_PASSPHRASE_HERE",
   "backup": {
     "format": "application",

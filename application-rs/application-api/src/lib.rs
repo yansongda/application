@@ -10,7 +10,6 @@ use salvo::{Router, Service};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
-pub mod backup;
 pub mod middleware;
 pub mod request;
 pub mod response;
