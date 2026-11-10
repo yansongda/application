@@ -225,22 +225,13 @@ impl Item for TotpBackupItem {
             .parse::<Algorithm>()
             .map_err(|_| ErrorCode::ParamsBackupFormatInvalid)?;
 
-        if secret.is_empty() {
-            return Err(ErrorCode::ParamsBackupFormatInvalid);
-        }
-
-        // 先剔除空格/连字符并转大写再解码：兼容其他平台导出的分组格式，
-        // 同时把 secret 归一化为大写、无填充
-        let raw_secret: String = secret
-            .chars()
-            .filter(|c| !c.is_whitespace() && *c != '-')
-            .collect::<String>()
-            .to_ascii_uppercase();
-        let secret = Secret::try_from_base32(&raw_secret)
+        // 仅接受 RFC4648 大写 base32（导出端固定输出该形态）；解码后再编码可
+        // 顺带去掉尾部 padding，保证入库形态统一
+        let secret = Secret::try_from_base32(&secret)
             .map_err(|_| ErrorCode::ParamsBackupFormatInvalid)?
             .to_base32();
 
-        if secret.len() > 128 {
+        if secret.is_empty() || secret.len() > 128 {
             return Err(ErrorCode::ParamsBackupFormatInvalid);
         }
 
@@ -365,11 +356,10 @@ mod tests {
         }
     }
 
-    /// 测试场景：secret 小写、标签带空白、issuer 为空串 → 验证归一化 → 预期大写/去空白/None
+    /// 测试场景：标签带空白、issuer 为空串 → 验证归一化 → 预期去空白/None
     #[test]
-    fn validate_normalizes_fields() {
+    fn validate_normalizes_tags_and_issuer() {
         let mut item = sample_item();
-        item.secret = "jbswy3dpehpk3pxp".to_string();
         item.issuer = Some(String::new());
         item.tags = vec!["  工作  ".to_string()];
 
@@ -380,16 +370,19 @@ mod tests {
         assert_eq!(validated.tags, vec!["工作".to_string()]);
     }
 
-    /// 测试场景：非法 base32 → 预期格式错误
+    /// 测试场景：非法 base32（含空白、小写）→ 预期格式错误
     #[test]
     fn validate_rejects_invalid_secret() {
-        let mut item = sample_item();
-        item.secret = "not-base32!".to_string();
+        for secret in ["not-base32!", "   ", "jbswy3dpehpk3pxp"] {
+            let mut item = sample_item();
+            item.secret = secret.to_string();
 
-        assert_eq!(
-            item.validate().unwrap_err(),
-            ErrorCode::ParamsBackupFormatInvalid
-        );
+            assert_eq!(
+                item.validate().unwrap_err(),
+                ErrorCode::ParamsBackupFormatInvalid,
+                "secret = {secret}"
+            );
+        }
     }
 
     /// 测试场景：digits 越界 / period 为 0 / username 过长 → 预期格式错误

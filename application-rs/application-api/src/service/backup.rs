@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::Sha256;
 use tracing::{error, warn};
-use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 /// 备份文件的格式标识，任何变更都需要提升 [`VERSION`]。
 const FORMAT: &str = "application";
@@ -154,22 +154,14 @@ pub fn seal<P: Item>(password: &str, items: &[P]) -> Result<Envelope> {
         return Err(ErrorCode::ParamsBackupLimitExceeded);
     }
 
-    let plaintext = serde_json::to_vec(items).map_err(|e| {
+    let plaintext = Zeroizing::new(serde_json::to_vec(items).map_err(|e| {
         error!("序列化备份条目失败: {:?}", e);
 
         ErrorCode::InternalCryptoFailed
-    })?;
+    })?);
     let count = u32::try_from(items.len()).map_err(|_| ErrorCode::ParamsBackupLimitExceeded)?;
-    let created_at = Local::now().to_rfc3339_opts(SecondsFormat::Secs, false);
 
-    seal_raw(
-        password,
-        P::KIND,
-        &plaintext,
-        count,
-        &created_at,
-        KDF_ITERATIONS,
-    )
+    seal_with::<P>(password, plaintext.as_slice(), count, KDF_ITERATIONS)
 }
 
 /// 校验信封头并解密为条目数组；`kind` 必须与 [`Item::KIND`] 一致。
@@ -214,7 +206,7 @@ fn validate_envelope(envelope: &Envelope) -> Result<()> {
     decode_fixed::<NONCE_LEN>(&envelope.cipher.nonce)?;
 
     if envelope.data.len() > MAX_DATA_LEN {
-        return Err(ErrorCode::ParamsBackupLimitExceeded);
+        return Err(ErrorCode::ParamsBackupFormatInvalid);
     }
 
     Ok(())
@@ -225,7 +217,7 @@ fn open_payload<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> 
     let salt = decode_fixed::<SALT_LEN>(&envelope.kdf.salt)?;
     let nonce_bytes = decode_fixed::<NONCE_LEN>(&envelope.cipher.nonce)?;
 
-    let mut ciphertext = STANDARD
+    let ciphertext = STANDARD
         .decode(envelope.data.as_bytes())
         .map_err(|_| ErrorCode::ParamsBackupFormatInvalid)?;
 
@@ -233,9 +225,10 @@ fn open_payload<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> 
         return Err(ErrorCode::ParamsBackupFormatInvalid);
     }
 
-    let mut key = derive_key(password, &salt, envelope.kdf.iterations);
+    let key = Zeroizing::new(derive_key(password, &salt, envelope.kdf.iterations));
     let aad = envelope.aad();
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| ErrorCode::InternalCryptoFailed)?;
+    let cipher =
+        Aes256Gcm::new_from_slice(&key[..]).map_err(|_| ErrorCode::InternalCryptoFailed)?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let result = cipher.decrypt(
         nonce,
@@ -245,22 +238,17 @@ fn open_payload<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> 
         },
     );
 
-    key.zeroize();
-    ciphertext.zeroize();
-
-    let mut plaintext = result.map_err(|e| {
+    let plaintext = Zeroizing::new(result.map_err(|e| {
         warn!("备份解密失败（密码错误或数据损坏）: {:?}", e);
 
         ErrorCode::ParamsBackupPasswordInvalid
-    })?;
+    })?);
 
-    let items: Vec<P> = serde_json::from_slice(&plaintext).map_err(|e| {
+    let items: Vec<P> = serde_json::from_slice(plaintext.as_slice()).map_err(|e| {
         warn!("备份明文 payload 解析失败: {:?}", e);
 
         ErrorCode::ParamsBackupFormatInvalid
     })?;
-
-    plaintext.zeroize();
 
     let expected =
         usize::try_from(envelope.meta.count).map_err(|_| ErrorCode::ParamsBackupFormatInvalid)?;
@@ -269,20 +257,15 @@ fn open_payload<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> 
         return Err(ErrorCode::ParamsBackupFormatInvalid);
     }
 
-    if items.len() > MAX_ITEMS {
-        return Err(ErrorCode::ParamsBackupLimitExceeded);
-    }
-
     items.into_iter().map(Item::validate).collect()
 }
 
-/// 生成信封并用 AES-256-GCM 封装给定明文（`kind` 由调用方给出，测试可构造不匹配场景）。
-fn seal_raw(
+/// 生成信封并用 AES-256-GCM 封装给定明文；`kind` 取 `P::KIND`。
+/// `iterations` 仅供测试使用低迭代参数，生产入口 [`seal`] 固定传 [`KDF_ITERATIONS`]。
+fn seal_with<P: Item>(
     password: &str,
-    kind: &str,
     plaintext: &[u8],
     count: u32,
-    created_at: &str,
     iterations: u32,
 ) -> Result<Envelope> {
     let mut salt = [0u8; SALT_LEN];
@@ -301,10 +284,10 @@ fn seal_raw(
 
     let mut envelope = Envelope {
         format: FORMAT.to_string(),
-        kind: kind.to_string(),
+        kind: P::KIND.to_string(),
         version: VERSION,
         meta: Meta {
-            created_at: created_at.to_string(),
+            created_at: Local::now().to_rfc3339_opts(SecondsFormat::Secs, false),
             count,
         },
         kdf: Kdf {
@@ -320,8 +303,9 @@ fn seal_raw(
     };
     let aad = envelope.aad();
 
-    let mut key = derive_key(password, &salt, iterations);
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| ErrorCode::InternalCryptoFailed)?;
+    let key = Zeroizing::new(derive_key(password, &salt, iterations));
+    let cipher =
+        Aes256Gcm::new_from_slice(&key[..]).map_err(|_| ErrorCode::InternalCryptoFailed)?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ciphertext = cipher
         .encrypt(
@@ -332,9 +316,6 @@ fn seal_raw(
             },
         )
         .map_err(|_| ErrorCode::InternalCryptoFailed)?;
-
-    key.zeroize();
-    salt.zeroize();
 
     envelope.data = STANDARD.encode(ciphertext);
 
@@ -411,12 +392,10 @@ mod tests {
         let plaintext = serde_json::to_vec(&items).unwrap();
         let count = u32::try_from(items.len()).unwrap();
 
-        seal_raw(
+        seal_with::<TestItem>(
             "correct horse battery staple",
-            TestItem::KIND,
-            &plaintext,
+            plaintext.as_slice(),
             count,
-            TEST_CREATED_AT,
             TEST_ITERATIONS,
         )
         .unwrap()
@@ -466,7 +445,7 @@ mod tests {
         assert_eq!(json["format"], "application");
         assert_eq!(json["kind"], "test");
         assert_eq!(json["version"], 1);
-        assert_eq!(json["meta"]["created_at"], TEST_CREATED_AT);
+        assert!(json["meta"]["created_at"].is_string());
         assert_eq!(json["meta"]["count"], 2);
         assert_eq!(json["kdf"]["alg"], "pbkdf2-sha256");
         assert_eq!(json["cipher"]["alg"], "aes-256-gcm");
@@ -540,15 +519,8 @@ mod tests {
     /// 测试场景：信封 `kind` 与条目类型不一致 → 预期格式错误（不进入派生）
     #[test]
     fn kind_mismatch_is_rejected() {
-        let envelope = seal_raw(
-            "password",
-            "other",
-            b"[]",
-            0,
-            TEST_CREATED_AT,
-            TEST_ITERATIONS,
-        )
-        .unwrap();
+        let mut envelope = sample_envelope();
+        envelope.kind = "other".to_string();
 
         let err = open::<TestItem>("password", &envelope).unwrap_err();
 
@@ -600,15 +572,8 @@ mod tests {
     /// 测试场景：明文 payload 不是数组（对象）→ 预期格式错误
     #[test]
     fn payload_must_be_array() {
-        let envelope = seal_raw(
-            "password",
-            TestItem::KIND,
-            br#"{"items":[]}"#,
-            0,
-            TEST_CREATED_AT,
-            TEST_ITERATIONS,
-        )
-        .unwrap();
+        let envelope =
+            seal_with::<TestItem>("password", br#"{"items":[]}"#, 0, TEST_ITERATIONS).unwrap();
 
         let err = open_payload::<TestItem>("password", &envelope).unwrap_err();
 
@@ -618,15 +583,7 @@ mod tests {
     /// 测试场景：`meta.count` 与明文数组长度不一致 → 预期格式错误
     #[test]
     fn payload_count_must_match_meta() {
-        let envelope = seal_raw(
-            "password",
-            TestItem::KIND,
-            b"[]",
-            1,
-            TEST_CREATED_AT,
-            TEST_ITERATIONS,
-        )
-        .unwrap();
+        let envelope = seal_with::<TestItem>("password", b"[]", 1, TEST_ITERATIONS).unwrap();
 
         let err = open_payload::<TestItem>("password", &envelope).unwrap_err();
 
@@ -640,15 +597,8 @@ mod tests {
             name: String::new(),
         }];
         let plaintext = serde_json::to_vec(&items).unwrap();
-        let envelope = seal_raw(
-            "password",
-            TestItem::KIND,
-            &plaintext,
-            1,
-            TEST_CREATED_AT,
-            TEST_ITERATIONS,
-        )
-        .unwrap();
+        let envelope =
+            seal_with::<TestItem>("password", plaintext.as_slice(), 1, TEST_ITERATIONS).unwrap();
 
         let err = open_payload::<TestItem>("password", &envelope).unwrap_err();
 
