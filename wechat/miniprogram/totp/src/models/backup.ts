@@ -1,7 +1,9 @@
 /**
- * 备份信封预检：只校验不消耗口令就能判定的事实
- * （格式、类型、版本、条数上限、时间、文本规模）。
- * 深层的 KDF / 密文 / 条目字段全部交给服务端，避免前端与后端校验规则漂移。
+ * 加密备份模型：信封预检 → 口令策略 → 导出编排。
+ *
+ * 契约见 `application-rs/docs/backup-format.md`：加解密全部由服务端完成，
+ * 本模块不持有明文条目；口令只存在于页面内存与请求体，绝不写 storage / 日志。
+ * 预检错误对齐 `src/otp/errors.ts`（`as const` 字符串码 + `setPrototypeOf` 保 `instanceof`）。
  */
 import {
   FORMAT,
@@ -12,7 +14,9 @@ import {
   VERSION,
 } from "@constant/backup";
 import { parseCreatedAt } from "@utils/datetime";
-import type { BackupEnvelope } from "types/backup";
+import type { BackupApi, BackupEnvelope } from "types/backup";
+
+// --- 预检错误 ---
 
 /**
  * 预检失败分类：仅用于前端提示、日志与测试断言；服务端错误码在 `api/backup.ts` 映射。
@@ -47,6 +51,8 @@ export class BackupParseError extends Error {
     this.code = code;
   }
 }
+
+// --- 信封预检（只校验不消耗口令就能判定的事实：格式 / 类型 / 版本 / 条数上限 / 时间 / 文本规模）---
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -143,4 +149,110 @@ export const parseEnvelope = (text: string): BackupEnvelope => {
   }
 
   return validateEnvelope(value);
+};
+
+// --- 口令策略（导出强度 / 导入可用性）---
+// 与服务端语义一致：口令按 UTF-8 原字节参与 PBKDF2，**不 trim、不做 Unicode 归一化**；
+// 导出时显式拒绝首尾空格，避免用户导出后无法再次输入相同口令。
+
+const MIN_EXPORT_CODE_POINTS = 8;
+const MAX_CODE_POINTS = 128;
+
+/** 与服务端一致的弱口令黑名单（仅导出端提示，服务端不强制），按小写比较。 */
+const WEAK_PASSWORDS: ReadonlySet<string> = new Set([
+  "12345678",
+  "123456789",
+  "1234567890",
+  "password",
+  "password1",
+  "qwertyui",
+  "abc12345",
+  "11111111",
+  "88888888",
+  "iloveyou",
+]);
+
+export type PasswordStrength = { ok: true } | { ok: false; reason: string };
+
+const codePointCount = (text: string): number => {
+  return Array.from(text).length;
+};
+
+/** 上限检查（导出/导入共用）；未超限返回 `undefined`。 */
+const tooLong = (count: number): PasswordStrength | undefined => {
+  return count > MAX_CODE_POINTS
+    ? { ok: false, reason: `口令最多 ${MAX_CODE_POINTS} 个字符` }
+    : undefined;
+};
+
+/**
+ * 导出端：两次输入一致 → 无首尾空格 → 8–128 个 Unicode 字符 → 非弱口令。
+ * `confirm` 省略时跳过一致性校验（供单独校验强度的场景使用）。
+ */
+export const checkExportPassword = (
+  password: string,
+  confirm?: string,
+): PasswordStrength => {
+  if (confirm !== undefined && password !== confirm) {
+    return { ok: false, reason: "两次输入的口令不一致" };
+  }
+
+  if (password.trim() !== password) {
+    return { ok: false, reason: "口令首尾不能包含空格" };
+  }
+
+  const count = codePointCount(password);
+
+  if (count < MIN_EXPORT_CODE_POINTS) {
+    return { ok: false, reason: `口令至少 ${MIN_EXPORT_CODE_POINTS} 个字符` };
+  }
+
+  const max = tooLong(count);
+
+  if (max !== undefined) {
+    return max;
+  }
+
+  if (WEAK_PASSWORDS.has(password.toLowerCase())) {
+    return { ok: false, reason: "口令过弱，请换一个" };
+  }
+
+  return { ok: true };
+};
+
+/** 导入端：只校验非空与上限（旧备份可能用短口令，保证兼容）。 */
+export const checkImportPassword = (password: string): PasswordStrength => {
+  const count = codePointCount(password);
+
+  if (count === 0) {
+    return { ok: false, reason: "请输入备份口令" };
+  }
+
+  return tooLong(count) ?? { ok: true };
+};
+
+// --- 导出编排 ---
+// 条目读取、校验与加密全部在服务端完成；前端不再持有明文打包结果。
+// 导入无编排层：服务端一次请求完成解密与批量写入，页面直接调用 `backupApi.importBackup`。
+
+export interface ExportResult {
+  /** 可直接写文件 / 复制到剪贴板的 JSON 文本。 */
+  text: string;
+  count: number;
+  /** 信封 meta.created_at（带时区偏移），页面按本地时间显示。 */
+  createdAt: string;
+}
+
+export const buildExport = async (
+  api: Pick<BackupApi, "exportBackup">,
+  password: string,
+): Promise<ExportResult> => {
+  // 服务端响应也走一次预检：避免后端升级 / 代理篡改后把异常信封落成文件
+  const envelope = validateEnvelope(await api.exportBackup(password));
+
+  return {
+    text: JSON.stringify(envelope, null, 2),
+    count: envelope.meta.count,
+    createdAt: envelope.meta.created_at,
+  };
 };

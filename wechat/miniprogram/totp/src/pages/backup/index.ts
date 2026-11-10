@@ -11,7 +11,7 @@ import {
   checkExportPassword,
   checkImportPassword,
   parseEnvelope,
-} from "@models/backup/index";
+} from "@models/backup";
 import { EE } from "@models/error";
 import { ensureAuthenticated } from "@utils/app";
 import {

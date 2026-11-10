@@ -5,7 +5,7 @@ import { describe, expect, it } from "bun:test";
 import {
   checkExportPassword,
   checkImportPassword,
-} from "../../src/models/backup/password";
+} from "../../src/models/backup";
 
 describe("export password", () => {
   it("requires_at_least_eight_code_points", () => {

@@ -12,7 +12,7 @@ import {
   BackupParseErrorCode,
   parseEnvelope,
   validateEnvelope,
-} from "../../src/models/backup/envelope";
+} from "../../src/models/backup";
 
 const rawEnvelope = (
   overrides: Record<string, unknown> = {},

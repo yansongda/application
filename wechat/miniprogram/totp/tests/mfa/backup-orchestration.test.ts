@@ -3,7 +3,7 @@
  * 导入无编排层，页面直接调用 `backupApi.importBackup`，因此这里不再覆盖。
  */
 import { describe, expect, it } from "bun:test";
-import { buildExport } from "../../src/models/backup/exporter";
+import { buildExport } from "../../src/models/backup";
 import type { BackupEnvelope } from "../../src/types/backup";
 
 const envelope = (count: number): BackupEnvelope => ({

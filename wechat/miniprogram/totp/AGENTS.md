@@ -70,16 +70,16 @@ bun run check:otp-invariants    # OTP 不变量静态守卫
   - `src/constant/backup.ts` —— 全部契约常量（信封标识 / 版本 / 条数上限 / `data` 上限 / 请求体文本上限 / 剪贴板上限），与后端 `service/backup.rs`、`lib.rs` 一一对应。
   - `src/types/backup.d.ts` —— 信封与 `BackupApi` 类型；`format` / `kind` / `version` 由常量推导，常量漂移会在编译期报错。
   - `src/api/backup.ts` —— 两个接口封装与后端错误码（2023~2028 / 9903 / 9908）文案映射，实现按 `BackupApi` 约束；备份请求超时 15s。
-  - `src/models/backup/` —— 业务编排：`index.ts`（门面，页面唯一入口）、`envelope.ts`（无口令结构预检 + `BackupParseError`）、`password.ts`（导出强度 / 导入可用性，**不 trim、不做 NFC**）、`exporter.ts`（导出编排，api 由调用方注入，便于单测）。
+  - `src/models/backup.ts` —— 单文件模型（与 `models/error.ts` 同形态），按分区注释组织：`BackupParseError`（无口令结构预检错误）、`validateEnvelope` / `parseEnvelope`（无口令结构预检）、口令策略（导出强度 / 导入可用性，**不 trim、不做 NFC**）、`buildExport`（导出编排，api 由调用方注入，便于单测）。
   - 导入无编排层：页面直接调用 `backupApi.importBackup(envelope, password)`，服务端一次请求完成解密与批量写入。
-  - `src/models/backup/` 的跨目录 import 必须显式写 `@models/backup/index`（微信运行时不做目录 index 解析）；模块内部用相对路径。
+  - 跨目录 import 写 `@models/backup`（文件路径，微信运行时支持；目录 index 不解析）。模型内部分区不强拆文件，除非新增导入编排 / 多 `kind` / 改密等真需求。
   - 预检错误 `BackupParseError` 与 `src/otp/errors.ts` 同构（`as const` 字符串码 + `Object.setPrototypeOf` 保 `instanceof`）；**禁止**改用 `models/error.ts` 的 `EE` / 数值码。
 - 不变量：
   - 口令/密文不得进 logger / storage；口令只存在于页面内存与请求体，`onHide/onUnload` 清空。
   - 导出前应用锁门禁：仅 `SUCCESS` / `NO_CREDENTIAL` 放行，`SKIPPED` 必须拒绝。
   - 服务端上限 50 条；信封文本总长 ≤ 512 KiB（后端 `max_size` 限整个请求体，不只是 `data` 字段）；导入**不去重**、非事务（失败可能已写入部分条目，以 `syncFromRemote` 结果为准）。
   - 文件通道只落 `src/utils/backup-file.ts`（`writeBackupFile` / `shareBackupFile` / `readBackupFileFromChat`），文件名后缀沿用 `.mfa`。
-  - 备份模块单测直接在 `tests/mfa/` 按文件 import（`envelope` / `password` / `exporter`），不依赖目录 index 解析。
+  - 备份模块单测直接在 `tests/mfa/` 从 `../../src/models/backup` 导入，不依赖目录 index 解析。
 
 ## CI 与提交流程
 
