@@ -2,11 +2,39 @@ use crate::request::Validator;
 use application_database::tool::totp::Totp;
 use application_kernel::result::ErrorCode;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// 当前标签上限：UI 仍为单标签，数组结构为后续多标签预留。
-const MAX_TAGS: usize = 1;
+pub(crate) const MAX_TAGS: usize = 1;
 /// 单个标签的最大字符数（按 Unicode 标量计），数据库列为 64 字符。
-const MAX_TAG_CHARS: usize = 32;
+pub(crate) const MAX_TAG_CHARS: usize = 32;
+/// 导出备份的密码最小长度（导入只校验上限，保证旧备份兼容）。
+const MIN_BACKUP_PASSWORD_CHARS: usize = 8;
+/// 备份密码的最大字符数。
+const MAX_BACKUP_PASSWORD_CHARS: usize = 128;
+
+/// 规范化标签：去前后空白、去重，并校验数量与单标签长度；非法返回 `None`。
+pub(crate) fn normalize_tags(raw_tags: &[String]) -> Option<Vec<String>> {
+    if raw_tags.len() > MAX_TAGS {
+        return None;
+    }
+
+    let mut tags = Vec::with_capacity(raw_tags.len());
+
+    for raw in raw_tags {
+        let tag = raw.trim();
+
+        if tag.is_empty() || tag.chars().count() > MAX_TAG_CHARS {
+            return None;
+        }
+
+        if !tags.iter().any(|existing| existing == tag) {
+            tags.push(tag.to_string());
+        }
+    }
+
+    Some(tags)
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DetailRequest {
@@ -162,23 +190,7 @@ impl Validator for EditTagsRequest {
             .parse::<u64>()
             .map_err(|_| ErrorCode::ParamsTotpIdEmpty)?;
 
-        if self.tags.len() > MAX_TAGS {
-            return Err(ErrorCode::ParamsTotpTagsInvalid);
-        }
-
-        let mut tags = Vec::with_capacity(self.tags.len());
-
-        for raw in &self.tags {
-            let tag = raw.trim();
-
-            if tag.is_empty() || tag.chars().count() > MAX_TAG_CHARS {
-                return Err(ErrorCode::ParamsTotpTagsInvalid);
-            }
-
-            if !tags.iter().any(|existing| existing == tag) {
-                tags.push(tag.to_string());
-            }
-        }
+        let tags = normalize_tags(&self.tags).ok_or(ErrorCode::ParamsTotpTagsInvalid)?;
 
         Ok(Self::Data { id, tags })
     }
@@ -301,6 +313,77 @@ impl Validator for SortRequest {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct BackupExportRequest {
+    pub password: Option<String>,
+}
+
+impl Validator for BackupExportRequest {
+    type Data = String;
+
+    fn validate(&self) -> application_kernel::result::Result<Self::Data> {
+        let password = self
+            .password
+            .as_deref()
+            .ok_or(ErrorCode::ParamsTotpBackupPasswordFormatInvalid)?;
+
+        let count = password.chars().count();
+
+        if !(MIN_BACKUP_PASSWORD_CHARS..=MAX_BACKUP_PASSWORD_CHARS).contains(&count) {
+            return Err(ErrorCode::ParamsTotpBackupPasswordFormatInvalid);
+        }
+
+        Ok(password.to_string())
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BackupImportRequest {
+    pub password: Option<String>,
+    pub backup: Option<Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BackupImportRequestParams {
+    pub password: String,
+    pub backup: Value,
+}
+
+impl Validator for BackupImportRequest {
+    type Data = BackupImportRequestParams;
+
+    fn validate(&self) -> application_kernel::result::Result<Self::Data> {
+        let password = self
+            .password
+            .as_deref()
+            .ok_or(ErrorCode::ParamsTotpBackupPasswordFormatInvalid)?;
+
+        // 导入只校验上限：未来提高导出门槛后，旧备份仍能导入
+        if password.is_empty() || password.chars().count() > MAX_BACKUP_PASSWORD_CHARS {
+            return Err(ErrorCode::ParamsTotpBackupPasswordFormatInvalid);
+        }
+
+        let backup = self
+            .backup
+            .as_ref()
+            .ok_or(ErrorCode::ParamsTotpBackupFormatInvalid)?;
+
+        if !backup.is_object() {
+            return Err(ErrorCode::ParamsTotpBackupFormatInvalid);
+        }
+
+        Ok(Self::Data {
+            password: password.to_string(),
+            backup: backup.clone(),
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct BackupImportResponse {
+    pub imported: u32,
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::all)]
@@ -389,5 +472,73 @@ mod tests {
 
         assert_eq!(params.id, 1);
         assert!(params.pinned);
+    }
+
+    /// 测试场景：备份密码少于 8 位 → 预期密码格式错误
+    #[test]
+    fn backup_export_rejects_short_password() {
+        let request = BackupExportRequest {
+            password: Some("1234567".to_string()),
+        };
+
+        assert_eq!(
+            request.validate().unwrap_err(),
+            ErrorCode::ParamsTotpBackupPasswordFormatInvalid
+        );
+    }
+
+    /// 测试场景：备份密码 8 位 → 预期校验通过
+    #[test]
+    fn backup_export_accepts_min_length_password() {
+        let request = BackupExportRequest {
+            password: Some("12345678".to_string()),
+        };
+
+        assert_eq!(request.validate().unwrap(), "12345678");
+    }
+
+    /// 测试场景：导入密码只有 1 位（旧备份兼容）→ 预期校验通过
+    #[test]
+    fn backup_import_accepts_short_password() {
+        let request: BackupImportRequest =
+            serde_json::from_str(r#"{"password":"x","backup":{"format":"application"}}"#).unwrap();
+
+        assert!(request.validate().is_ok());
+    }
+
+    /// 测试场景：导入密码为空 → 预期密码格式错误
+    #[test]
+    fn backup_import_rejects_empty_password() {
+        let request: BackupImportRequest =
+            serde_json::from_str(r#"{"password":"","backup":{"format":"application"}}"#).unwrap();
+
+        assert_eq!(
+            request.validate().unwrap_err(),
+            ErrorCode::ParamsTotpBackupPasswordFormatInvalid
+        );
+    }
+
+    /// 测试场景：`backup` 缺失 → 预期备份格式错误
+    #[test]
+    fn backup_import_requires_backup() {
+        let request: BackupImportRequest =
+            serde_json::from_str(r#"{"password":"12345678"}"#).unwrap();
+
+        assert_eq!(
+            request.validate().unwrap_err(),
+            ErrorCode::ParamsTotpBackupFormatInvalid
+        );
+    }
+
+    /// 测试场景：`backup` 不是对象（字符串/数组）→ 预期备份格式错误
+    #[test]
+    fn backup_import_requires_backup_object() {
+        let request: BackupImportRequest =
+            serde_json::from_str(r#"{"password":"12345678","backup":"text"}"#).unwrap();
+
+        assert_eq!(
+            request.validate().unwrap_err(),
+            ErrorCode::ParamsTotpBackupFormatInvalid
+        );
     }
 }

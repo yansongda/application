@@ -182,6 +182,64 @@ pub async fn insert(totp: CreatedTotp) -> Result<Totp> {
     })
 }
 
+/// 批量插入（备份导入专用）：单事务写入，任一条失败则整体回滚。
+///
+/// 日志只记录条数与耗时，不记录 `config`（其中含 TOTP secret）。
+pub async fn insert_many(user_id: u64, items: &[CreatedTotp]) -> Result<u64> {
+    if items.is_empty() {
+        return Ok(0);
+    }
+
+    let sql =
+        "insert into tool.totp (user_id, username, issuer, config, sort) values (?, ?, ?, ?, ?)";
+    let pool_ref = Pool::mysql("tool")?;
+    let started_at = Instant::now();
+
+    let mut tx = pool_ref.pool.begin().await.map_err(|e| {
+        error!("备份导入事务开启失败: {:?}", e);
+
+        ErrorCode::InternalDatabaseInsert
+    })?;
+
+    let mut affected = 0u64;
+
+    for item in items {
+        let result = sqlx::query(sql)
+            .bind(user_id)
+            .bind(&item.username)
+            .bind(&item.issuer)
+            .bind(Json(&item.config))
+            .bind(item.sort.unwrap_or(0))
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                error!("备份导入写入失败: {:?}", e);
+
+                ErrorCode::InternalDatabaseInsert
+            })?;
+
+        affected += result.rows_affected();
+    }
+
+    tx.commit().await.map_err(|e| {
+        error!("备份导入事务提交失败: {:?}", e);
+
+        ErrorCode::InternalDatabaseInsert
+    })?;
+
+    let elapsed = started_at.elapsed().as_secs_f64();
+    info!(
+        elapsed,
+        sql,
+        user_id,
+        item_count = items.len(),
+        affected,
+        "[SQL]"
+    );
+
+    Ok(affected)
+}
+
 pub async fn update_issuer(id: u64, issuer: &str) -> Result<()> {
     let sql = "update tool.totp set issuer = ? where id = ?";
     let pool_ref = Pool::mysql("tool")?;

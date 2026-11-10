@@ -91,6 +91,43 @@ Authorization: Bearer {{access_token}}
   "id": 1
 }
 
+### TOTP - 导出加密备份（格式见 docs/totp-backup-format.md）
+POST {{domain}}/api/v1/totp/backup/export
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "password": "YOUR_PASSPHRASE_HERE"
+}
+
+### TOTP - 导入加密备份（backup 粘贴导出接口返回的 data 对象）
+POST {{domain}}/api/v1/totp/backup/import
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "password": "YOUR_PASSPHRASE_HERE",
+  "backup": {
+    "format": "application",
+    "kind": "totp",
+    "version": 1,
+    "meta": {
+      "created_at": "2026-06-28T14:30:00+08:00",
+      "count": 1
+    },
+    "kdf": {
+      "alg": "pbkdf2-sha256",
+      "iterations": 600000,
+      "salt": "REPLACE_WITH_BASE64_SALT"
+    },
+    "cipher": {
+      "alg": "aes-256-gcm",
+      "nonce": "REPLACE_WITH_BASE64_NONCE"
+    },
+    "data": "REPLACE_WITH_BASE64_CIPHERTEXT"
+  }
+}
+
 ### 短链 - 创建
 POST {{domain}}/api/v1/short-url/create
 Content-Type: application/json

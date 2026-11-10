@@ -1,9 +1,11 @@
 use salvo::{Depot, Request, handler};
 
+use crate::backup::BackupEnvelope;
 use crate::request::Validator;
 use crate::request::totp::{
-    CreateRequest, DeleteRequest, DetailRequest, DetailResponse, EditIssuerRequest,
-    EditPinnedRequest, EditTagsRequest, EditUsernameRequest, SortRequest,
+    BackupExportRequest, BackupImportRequest, BackupImportResponse, CreateRequest, DeleteRequest,
+    DetailRequest, DetailResponse, EditIssuerRequest, EditPinnedRequest, EditTagsRequest,
+    EditUsernameRequest, SortRequest,
 };
 use crate::response::Resp;
 use crate::response::Response;
@@ -123,4 +125,30 @@ pub async fn delete(request: &mut Request, depot: &mut Depot) -> Resp<()> {
     service::totp::delete(access_token, params.validate()?).await?;
 
     Ok(Response::success(()))
+}
+
+#[handler]
+pub async fn backup_export(request: &mut Request, depot: &mut Depot) -> Resp<BackupEnvelope> {
+    let access_token = depot
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
+
+    let params = request.parse_json::<BackupExportRequest>().await?;
+
+    Ok(Response::success(
+        service::totp::backup_export(access_token, params.validate()?).await?,
+    ))
+}
+
+#[handler]
+pub async fn backup_import(request: &mut Request, depot: &mut Depot) -> Resp<BackupImportResponse> {
+    let access_token = depot
+        .get_typed::<AccessToken>()
+        .map_err(|_| ErrorCode::AuthorizationAccessTokenInvalid)?;
+
+    let params = request.parse_json::<BackupImportRequest>().await?;
+
+    Ok(Response::success(
+        service::totp::backup_import(access_token, params.validate()?).await?,
+    ))
 }

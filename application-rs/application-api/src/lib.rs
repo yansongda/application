@@ -4,11 +4,13 @@ use salvo::catcher::Catcher;
 use salvo::compression::{Compression, CompressionLevel};
 use salvo::cors::{AllowOrigin, Cors};
 use salvo::http::Method;
+use salvo::http::request::set_global_secure_max_size;
 use salvo::timeout::Timeout;
 use salvo::{Router, Service};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
+pub mod backup;
 pub mod middleware;
 pub mod request;
 pub mod response;
@@ -25,6 +27,10 @@ impl App {
     }
 
     pub fn router() -> Service {
+        // 备份导入的请求体包含整份加密备份（50 条上限最坏约 75 KB），Salvo 默认 64 KiB 不足；
+        // 该上限对进程内所有读取 body 的接口生效（原 64 KiB 全局限值随之放宽）。
+        set_global_secure_max_size(512 * 1024);
+
         let router = Router::new()
             .push(routes::health())
             .push(routes::metrics())

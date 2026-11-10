@@ -1,12 +1,14 @@
+use crate::backup::{self, BackupEnvelope, BackupItem, MAX_ITEMS};
 use crate::request::totp::{
-    DetailResponse, EditIssuerRequestParams, EditPinnedRequestParams, EditTagsRequestParams,
-    EditUsernameRequestParams, SortItemParams,
+    BackupImportRequestParams, BackupImportResponse, DetailResponse, EditIssuerRequestParams,
+    EditPinnedRequestParams, EditTagsRequestParams, EditUsernameRequestParams, SortItemParams,
+    normalize_tags,
 };
 use application_database::account::access_token;
 use application_database::tool::totp;
 use application_kernel::result::{ErrorCode, Result};
 use std::collections::BTreeSet;
-use totp_rs::Totp;
+use totp_rs::{Algorithm, Secret, Totp};
 use tracing::error;
 
 pub async fn all(access_token: &access_token::AccessToken) -> Result<Vec<DetailResponse>> {
@@ -150,4 +152,126 @@ pub async fn delete(access_token: &access_token::AccessToken, id: u64) -> Result
     totp::delete(id).await?;
 
     Ok(())
+}
+
+/// 导出当前用户的全部 TOTP 条目为加密备份信封。
+pub async fn backup_export(
+    access_token: &access_token::AccessToken,
+    password: String,
+) -> Result<BackupEnvelope> {
+    let rows = totp::all(access_token.user_id).await?;
+
+    if rows.is_empty() {
+        return Err(ErrorCode::ParamsTotpBackupEmpty);
+    }
+
+    if rows.len() > MAX_ITEMS {
+        return Err(ErrorCode::ParamsTotpBackupLimitExceeded);
+    }
+
+    let items = rows.into_iter().map(BackupItem::from).collect::<Vec<_>>();
+
+    backup::encrypt(&password, &items)
+}
+
+/// 导入备份：解密后逐条校验，全部通过才在单事务内批量插入（不去重，重复导入即新增）。
+pub async fn backup_import(
+    access_token: &access_token::AccessToken,
+    params: BackupImportRequestParams,
+) -> Result<BackupImportResponse> {
+    let envelope = serde_json::from_value::<BackupEnvelope>(params.backup)
+        .map_err(|_| ErrorCode::ParamsTotpBackupFormatInvalid)?;
+
+    let items = backup::decrypt(&params.password, &envelope)?;
+
+    if items.is_empty() {
+        return Err(ErrorCode::ParamsTotpBackupFormatInvalid);
+    }
+
+    if items.len() > MAX_ITEMS {
+        return Err(ErrorCode::ParamsTotpBackupLimitExceeded);
+    }
+
+    let created = items
+        .into_iter()
+        .map(|item| validate_backup_item(access_token.user_id, item))
+        .collect::<Result<Vec<_>>>()?;
+
+    let affected = totp::insert_many(access_token.user_id, &created).await?;
+    let imported = u32::try_from(affected).map_err(|_| ErrorCode::ParamsTotpBackupLimitExceeded)?;
+
+    Ok(BackupImportResponse { imported })
+}
+
+impl From<totp::Totp> for BackupItem {
+    fn from(row: totp::Totp) -> Self {
+        // 与详情接口一致：使用净化后的 digits/algorithm，确保备份中的参数与后端算码一致
+        let digits = row.digits();
+        let algorithm = row.algorithm().as_str().to_string();
+        let config = row.config.0;
+
+        Self {
+            issuer: row.issuer,
+            username: row.username,
+            secret: config.secret,
+            period: config.period,
+            digits,
+            algorithm,
+            tags: config.tags,
+            pinned: config.pinned,
+            sort: row.sort,
+        }
+    }
+}
+
+/// 校验并归一化单条备份数据，非法字段一律返回备份格式错误。
+fn validate_backup_item(user_id: u64, item: BackupItem) -> Result<totp::CreatedTotp> {
+    if item.username.is_empty() || item.username.chars().count() > 128 {
+        return Err(ErrorCode::ParamsTotpBackupFormatInvalid);
+    }
+
+    if let Some(issuer) = &item.issuer
+        && issuer.chars().count() > 128
+    {
+        return Err(ErrorCode::ParamsTotpBackupFormatInvalid);
+    }
+
+    if !(1..=600).contains(&item.period) || !totp::is_supported_digits(item.digits) {
+        return Err(ErrorCode::ParamsTotpBackupFormatInvalid);
+    }
+
+    let algorithm = item
+        .algorithm
+        .parse::<Algorithm>()
+        .map_err(|_| ErrorCode::ParamsTotpBackupFormatInvalid)?;
+
+    if item.secret.is_empty() {
+        return Err(ErrorCode::ParamsTotpBackupFormatInvalid);
+    }
+
+    // 先解码再编码：拒绝非法 base32，同时把 secret 归一化为大写、无填充
+    let secret = Secret::try_from_base32(&item.secret)
+        .map_err(|_| ErrorCode::ParamsTotpBackupFormatInvalid)?
+        .to_base32();
+
+    if secret.len() > 128 {
+        return Err(ErrorCode::ParamsTotpBackupFormatInvalid);
+    }
+
+    let tags = normalize_tags(&item.tags).ok_or(ErrorCode::ParamsTotpBackupFormatInvalid)?;
+
+    Ok(totp::CreatedTotp {
+        user_id,
+        sort: Some(item.sort),
+        username: item.username,
+        issuer: item.issuer.filter(|issuer| !issuer.is_empty()),
+        config: totp::TotpConfig {
+            secret,
+            period: item.period,
+            digits: item.digits,
+            algorithm: algorithm.as_str().to_string(),
+            tags,
+            pinned: item.pinned,
+        },
+    })
 }

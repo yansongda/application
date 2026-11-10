@@ -40,6 +40,11 @@ pub enum ErrorCode {
     ParamsLoginPlatformThirdIdFormatInvalid = 2020,
     ParamsRefreshTokenNotFound = 2021,
     ParamsTotpTagsInvalid = 2022,
+    ParamsTotpBackupPasswordInvalid = 2023,
+    ParamsTotpBackupFormatInvalid = 2024,
+    ParamsTotpBackupPasswordFormatInvalid = 2025,
+    ParamsTotpBackupEmpty = 2026,
+    ParamsTotpBackupLimitExceeded = 2027,
 
     // 9800 系列：第三方服务错误
     ThirdHttpRequest = 9800,
@@ -58,6 +63,7 @@ pub enum ErrorCode {
     InternalDatabaseDelete = 9905,
     InternalDataToAccessTokenError = 9906,
     InternalDatabaseDataInvalid = 9907,
+    InternalCryptoFailed = 9908,
 
     // 新增变体用于 catcher 中间件
     StatusNotFound = 404,
@@ -104,6 +110,11 @@ impl ErrorCode {
             }
             Self::ParamsRefreshTokenNotFound => "参数错误: Refresh Token 未找到",
             Self::ParamsTotpTagsInvalid => "参数错误: TOTP 标签格式不正确",
+            Self::ParamsTotpBackupPasswordInvalid => "参数错误: 备份密码不正确或备份数据已损坏",
+            Self::ParamsTotpBackupFormatInvalid => "参数错误: 备份数据格式不正确或版本不受支持",
+            Self::ParamsTotpBackupPasswordFormatInvalid => "参数错误: 备份密码长度不符合要求",
+            Self::ParamsTotpBackupEmpty => "参数错误: 暂无可导出的 TOTP 条目",
+            Self::ParamsTotpBackupLimitExceeded => "参数错误: 备份条目数超出上限(最多 50 条)",
             Self::ThirdHttpRequest => "第三方错误: 第三方 API 请求出错,请联系管理员",
             Self::ThirdHttpResponse => "第三方错误: 第三方 API 响应出错,请联系管理员",
             Self::ThirdHttpResponseParse => "第三方错误: 第三方 API 响应解析出错,请联系管理员",
@@ -120,6 +131,7 @@ impl ErrorCode {
                 "内部错误: 生成 access_token 令牌有误,请联系管理员"
             }
             Self::InternalDatabaseDataInvalid => "内部错误: 数据库数据有误,请联系管理员",
+            Self::InternalCryptoFailed => "内部错误: 加解密处理失败,请联系管理员",
             Self::StatusNotFound => "请求的资源不存在",
             Self::StatusMethodNotAllowed => "请求方法不被允许",
             Self::UnknownError => "内部服务异常,请稍后重试",
@@ -263,6 +275,22 @@ mod tests {
         let err = ErrorCode::StatusMethodNotAllowed;
         assert_eq!(err.code(), 405);
         assert_eq!(err.message(), "请求方法不被允许");
+    }
+
+    #[test]
+    fn test_totp_backup_error_codes() {
+        let cases = [
+            (ErrorCode::ParamsTotpBackupPasswordInvalid, 2023),
+            (ErrorCode::ParamsTotpBackupFormatInvalid, 2024),
+            (ErrorCode::ParamsTotpBackupPasswordFormatInvalid, 2025),
+            (ErrorCode::ParamsTotpBackupEmpty, 2026),
+            (ErrorCode::ParamsTotpBackupLimitExceeded, 2027),
+            (ErrorCode::InternalCryptoFailed, 9908),
+        ];
+
+        for (err, expected) in cases {
+            assert_eq!(err.code(), expected);
+        }
     }
 
     #[test]

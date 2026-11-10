@@ -74,6 +74,11 @@ fn api_v1_totp() -> Router {
                 .push(Router::with_path("/pinned").post(v1::totp::edit_pinned)),
         )
         .push(Router::with_path("/delete").post(v1::totp::delete))
+        .push(
+            Router::with_path("/backup")
+                .push(Router::with_path("/export").post(v1::totp::backup_export))
+                .push(Router::with_path("/import").post(v1::totp::backup_import)),
+        )
 }
 
 fn api_v1_short_url() -> Router {
