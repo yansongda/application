@@ -44,7 +44,9 @@ Component({
           this.setData({ hint: "已取消验证" });
           break;
         case VerifyOutcome.SKIPPED:
-          // 命中 3 秒防抖 / 已在验证中：不改提示，由用户稍后手动重试
+          // 命中 3 秒防抖 / 已在验证中 / 悬挂复位：不卸载遮罩，但必须给出提示，
+          // 否则静默无反馈会让用户以为点击无效
+          this.setData({ hint: "操作过于频繁，请稍后再试" });
           break;
       }
     },

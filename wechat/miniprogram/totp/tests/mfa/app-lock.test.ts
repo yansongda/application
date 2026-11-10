@@ -1,0 +1,163 @@
+import { afterAll, beforeEach, describe, expect, it } from "bun:test";
+import { STORAGE } from "../../src/constant/app";
+
+// wx 最小桩：src/utils/logger.ts 顶层执行 wx.getRealtimeLogManager()，
+// 必须先注入 globalThis.wx 再动态 import 被测模块（与 tests/mfa/security.test.ts 同形态）。
+// 本文件只测 verify 状态机，不落盘、不发请求。
+const storage: Record<string, unknown> = {};
+
+let supportMode: string[] = ["fingerPrint"];
+let enrolled = true;
+let authImpl: () => Promise<unknown> = async () => ({
+  errMsg: "startSoterAuthentication:ok",
+});
+
+const wxStub = {
+  getRealtimeLogManager: () => ({
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+  }),
+  getStorageSync: (key: string) => storage[key],
+  setStorageSync: (key: string, value: unknown) => {
+    storage[key] = value;
+  },
+  removeStorageSync: (key: string) => {
+    delete storage[key];
+  },
+  checkIsSupportSoterAuthentication: async () => ({ supportMode }),
+  checkIsSoterEnrolledInDevice: async () => ({ isEnrolled: enrolled }),
+  getRandomValues: async ({ length }: { length: number }) => ({
+    randomValues: new Uint8Array(length),
+  }),
+  startSoterAuthentication: () => authImpl(),
+};
+
+globalThis.wx = wxStub as unknown as WechatMiniprogram.Wx;
+
+// 时间可控：app-lock 的防抖 / 悬挂保险都基于 Date.now，逐个用例推进虚构时钟。
+const realDateNow = Date.now;
+let fakeNow = 1_700_000_000_000;
+
+const appLock = await import("../../src/utils/app-lock");
+const { VerifyOutcome } = appLock;
+
+// 让出微任务队列，等 verify 真正进入 SOTER 调用（probe + challenge 共 3 次 await）
+const tick = (): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
+beforeEach(() => {
+  // 推进超过 3 秒防抖窗口，避免用例之间互相污染（lastFinishedAt 无公开复位入口）
+  fakeNow += 10_000;
+  Date.now = () => fakeNow;
+
+  for (const key of Object.keys(storage)) {
+    delete storage[key];
+  }
+
+  supportMode = ["fingerPrint"];
+  enrolled = true;
+  authImpl = async () => ({ errMsg: "startSoterAuthentication:ok" });
+
+  // unlock 是唯一公开的运行态复位入口（locked / coldStart / lastHideAt / verifying / verifyStartedAt）
+  appLock.unlock();
+  appLock.onLaunch();
+  appLock.onShow();
+});
+
+afterAll(() => {
+  Date.now = realDateNow;
+});
+
+describe("app-lock verify", () => {
+  it("successOnNormalAuth", async () => {
+    expect(await appLock.verify()).toBe(VerifyOutcome.SUCCESS);
+  });
+
+  it("onHideDuringAuthDoesNotCancelVerify", async () => {
+    // 真机复现：Android 微信 SOTER 认证界面（独立 Activity）会让小程序触发 App.onHide，
+    // 修复前 generation++ 把「验证成功」判成 SKIPPED（开关页提示「操作过于频繁」）
+    authImpl = async () => {
+      appLock.onHide();
+
+      return { errMsg: "startSoterAuthentication:ok" };
+    };
+
+    expect(await appLock.verify()).toBe(VerifyOutcome.SUCCESS);
+  });
+
+  it("onHideKeepsSingleFlightWhileVerifying", async () => {
+    let release: () => void = () => undefined;
+
+    authImpl = () =>
+      new Promise((resolve) => {
+        release = () => resolve({ errMsg: "startSoterAuthentication:ok" });
+      });
+
+    const first = appLock.verify();
+
+    await tick();
+    appLock.onHide();
+    expect(await appLock.verify()).toBe(VerifyOutcome.SKIPPED);
+
+    release();
+    expect(await first).toBe(VerifyOutcome.SUCCESS);
+  });
+
+  it("idleOnHideDoesNotBreakNextVerify", async () => {
+    // 空闲态退后台仍作废代次（generation++），下一次 verify 捕获新代次后照常成功
+    appLock.onHide();
+    expect(await appLock.verify()).toBe(VerifyOutcome.SUCCESS);
+  });
+
+  it("debouncesWithinThreeSeconds", async () => {
+    expect(await appLock.verify()).toBe(VerifyOutcome.SUCCESS);
+    expect(await appLock.verify()).toBe(VerifyOutcome.SKIPPED);
+  });
+
+  it("returnsCanceledWhenUserCancels", async () => {
+    authImpl = async () => {
+      throw { errMsg: "startSoterAuthentication:fail cancel" };
+    };
+
+    expect(await appLock.verify()).toBe(VerifyOutcome.CANCELED);
+  });
+
+  it("returnsFailedOnOtherAuthErrors", async () => {
+    authImpl = async () => {
+      throw { errMsg: "startSoterAuthentication:fail system error" };
+    };
+
+    expect(await appLock.verify()).toBe(VerifyOutcome.FAILED);
+  });
+
+  it("degradesWhenNoCredential", async () => {
+    supportMode = [];
+
+    expect(await appLock.verify()).toBe(VerifyOutcome.NO_CREDENTIAL);
+    // 降级只改本机并清 dirty（不回写云端，避免把华为端同字段一起关掉）
+    expect(storage[STORAGE.SECURITY_SETTINGS]).toMatchObject({
+      v: 1,
+      appLock: false,
+      dirty: false,
+    });
+  });
+
+  it("recoversFromStuckVerify", async () => {
+    // SOTER 控件异常、promise 永不 settle：verifying 卡在 true，必须由悬挂保险复位
+    authImpl = () => new Promise(() => undefined);
+
+    const hanging = appLock.verify();
+
+    await tick();
+    expect(await appLock.verify()).toBe(VerifyOutcome.SKIPPED);
+
+    fakeNow += 31_000;
+    authImpl = async () => ({ errMsg: "startSoterAuthentication:ok" });
+
+    expect(await appLock.verify()).toBe(VerifyOutcome.SUCCESS);
+    expect(hanging).toBeInstanceOf(Promise);
+  });
+});
