@@ -1,9 +1,9 @@
 /**
- * 备份编排测试：导出序列化 / 导入单次调用（api 由测试注入，不触网）。
+ * 备份导出编排测试：序列化服务端信封（api 由测试注入，不触网）。
+ * 导入无编排层，页面直接调用 `backupApi.importBackup`，因此这里不再覆盖。
  */
 import { describe, expect, it } from "bun:test";
 import { buildExport } from "../../src/models/backup/exporter";
-import { runImport } from "../../src/models/backup/importer";
 import type { BackupEnvelope } from "../../src/types/backup";
 
 const envelope = (count: number): BackupEnvelope => ({
@@ -41,32 +41,11 @@ describe("backup export orchestration", () => {
 
     await expect(
       buildExport(
-        { exportBackup: async () => invalid as BackupEnvelope },
+        {
+          exportBackup: async () => invalid as unknown as BackupEnvelope,
+        },
         "correct horse",
       ),
     ).rejects.toThrow("备份类型不受支持");
-  });
-});
-
-describe("backup import orchestration", () => {
-  it("calls_server_once_with_envelope_and_password", async () => {
-    const calls: Array<{ backup: BackupEnvelope; password: string }> = [];
-    const input = envelope(4);
-    const result = await runImport(
-      {
-        importBackup: async (backup, password) => {
-          calls.push({ backup, password });
-
-          return 4;
-        },
-      },
-      input,
-      "passphrase",
-    );
-
-    expect(result.imported).toBe(4);
-    expect(calls).toHaveLength(1);
-    expect(calls[0].backup).toBe(input);
-    expect(calls[0].password).toBe("passphrase");
   });
 });

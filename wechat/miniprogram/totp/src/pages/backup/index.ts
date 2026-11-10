@@ -5,7 +5,13 @@
  * 口令只存在于页面内存与请求体：onHide/onUnload 立即清空，不写 storage、不进日志。
  */
 import backupApi from "@api/backup";
-import { MAX_ITEMS } from "@constant/backup";
+import { CLIPBOARD_MAX_CHARS, MAX_ITEMS } from "@constant/backup";
+import {
+  buildExport,
+  checkExportPassword,
+  checkImportPassword,
+  parseEnvelope,
+} from "@models/backup/index";
 import { EE } from "@models/error";
 import { ensureAuthenticated } from "@utils/app";
 import {
@@ -26,12 +32,6 @@ import { readCache, syncFromRemote } from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
 import type { BackupEnvelope } from "types/backup";
-import { buildExport } from "../../models/backup/exporter";
-import { precheck, runImport } from "../../models/backup/importer";
-import {
-  checkExportPassword,
-  checkImportPassword,
-} from "../../models/backup/password";
 
 interface InputEvent {
   detail: {
@@ -55,8 +55,6 @@ interface BackupPageData {
   importCount: number;
   summary: string;
 }
-
-const CLIPBOARD_MAX_BYTES = 65536;
 
 type ImportChannel = "clipboard" | "file";
 
@@ -231,18 +229,10 @@ Page({
 
     const password = this.data.exportPassword;
 
-    if (password !== this.data.exportPasswordConfirm) {
-      Message.warning({
-        content: "两次输入的口令不一致",
-        duration: 3000,
-        offset: [20, 32],
-        context: this,
-      });
-
-      return;
-    }
-
-    const strength = checkExportPassword(password);
+    const strength = checkExportPassword(
+      password,
+      this.data.exportPasswordConfirm,
+    );
 
     if (!strength.ok) {
       Message.warning({
@@ -266,8 +256,7 @@ Page({
       this.exportText = result.text;
       this.exportFileName = buildBackupFileName();
 
-      const clipboardAllowed =
-        result.count <= MAX_ITEMS && result.text.length <= CLIPBOARD_MAX_BYTES;
+      const clipboardAllowed = result.text.length <= CLIPBOARD_MAX_CHARS;
 
       this.setData({
         exportReady: true,
@@ -349,7 +338,7 @@ Page({
   // 导入第一步：只做结构预检（不索要口令）
   acceptImportText(text: string, channel: ImportChannel) {
     try {
-      const envelope = precheck(text);
+      const envelope = parseEnvelope(text);
 
       this.importEnvelope = envelope;
       this.importChannel = channel;
@@ -434,15 +423,14 @@ Page({
     wx.showLoading({ title: "正在导入...", mask: true });
 
     try {
-      const report = await runImport(
-        backupApi,
+      const report = await backupApi.importBackup(
         envelope,
         this.data.importPassword,
       );
 
       logger.info("backup_import", {
         channel: this.importChannel,
-        imported: report.imported,
+        imported: report,
         elapsedMs: Date.now() - startedAt,
       });
 
@@ -457,12 +445,12 @@ Page({
         importMeta: "",
         importPassword: "",
         importCount: 0,
-        summary: `成功导入 ${report.imported} 条`,
+        summary: `成功导入 ${report} 条`,
       });
       this.importEnvelope = undefined;
 
       Toast({
-        message: `成功导入 ${report.imported} 条`,
+        message: `成功导入 ${report} 条`,
         theme: "success",
         duration: 2500,
         direction: "column",

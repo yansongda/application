@@ -8,7 +8,7 @@ import { HttpError } from "@models/error";
 import error from "@utils/error";
 import http from "@utils/http";
 import logger from "@utils/logger";
-import type { BackupEnvelope, ImportResponse } from "types/backup";
+import type { BackupApi, BackupEnvelope, ImportResponse } from "types/backup";
 
 // 服务端 PBKDF2 600k 次迭代，微信默认 5s 超时偏紧
 const TIMEOUT_MS = 15000;
@@ -69,4 +69,7 @@ const importBackup = async (
   }
 };
 
-export default { exportBackup, importBackup };
+// 按契约标注：接口签名变化时本文件会编译失败，避免与编排层/页面漂移
+const backupApi: BackupApi = { exportBackup, importBackup };
+
+export default backupApi;

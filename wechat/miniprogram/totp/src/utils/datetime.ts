@@ -9,7 +9,6 @@ const TIMESTAMP_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|([+-])(\d{2}):(\d{2}))$/;
 
 const MIN_YEAR = 1970;
-const MAX_YEAR = 9999;
 
 const pad = (value: number): string => {
   return value.toString().padStart(2, "0");
@@ -30,9 +29,10 @@ export const parseCreatedAt = (text: string): ParsedCreatedAt | undefined => {
     return undefined;
   }
 
+  // 正则已限定 4 位年份（≤9999），这里只需拦住 1970 之前的值
   const year = Number(match[1]);
 
-  if (year < MIN_YEAR || year > MAX_YEAR) {
+  if (year < MIN_YEAR) {
     return undefined;
   }
 

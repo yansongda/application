@@ -1,20 +1,22 @@
 /**
- * 备份信封预检测试：只覆盖“不花口令就能发现”的结构性问题。
+ * 备份信封预检测试：只覆盖“不花口令就能发现”的结构性与规模问题。
+ * 预检接受任意来源，因此用例刻意使用无类型的原始对象。
  */
 import { describe, expect, it } from "bun:test";
 import {
-  parseEnvelope,
-  validateEnvelope,
-} from "../../src/models/backup/envelope";
+  MAX_DATA_CHARS,
+  MAX_ENVELOPE_TEXT_CHARS,
+} from "../../src/constant/backup";
 import {
   BackupParseError,
   BackupParseErrorCode,
-} from "../../src/models/backup/errors";
-import type { BackupEnvelope } from "../../src/types/backup";
+  parseEnvelope,
+  validateEnvelope,
+} from "../../src/models/backup/envelope";
 
-const validEnvelope = (
-  overrides: Partial<BackupEnvelope> = {},
-): BackupEnvelope => ({
+const rawEnvelope = (
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> => ({
   format: "application",
   kind: "totp",
   version: 1,
@@ -24,6 +26,17 @@ const validEnvelope = (
   data: "ZGF0YQ==",
   ...overrides,
 });
+
+/** 只改 meta 的某几个字段，保留合法默认值。 */
+const withMeta = (
+  patch: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> => {
+  return rawEnvelope({
+    meta: { created_at: "2026-06-28T14:30:00+08:00", count: 2, ...patch },
+    ...overrides,
+  });
+};
 
 const codeOf = (fn: () => unknown): BackupParseErrorCode => {
   try {
@@ -41,60 +54,96 @@ const codeOf = (fn: () => unknown): BackupParseErrorCode => {
 
 describe("backup envelope", () => {
   it("accepts_valid_envelope_and_keeps_unknown_fields", () => {
-    const envelope = validEnvelope({
-      format: "application",
-      // 未知字段必须原样保留，后端升级后前端不丢数据
-      ...({ future: { note: "ignored" } } as Partial<BackupEnvelope>),
-    });
+    const envelope = rawEnvelope({ future: { note: "kept" } });
+
+    // 未知字段必须原样保留，后端升级后前端不丢数据
+    expect(validateEnvelope(envelope)).toBe(envelope);
+  });
+
+  it("accepts_zulu_and_fractional_seconds", () => {
+    const envelope = withMeta({ created_at: "2026-06-28T06:30:00.5Z" });
 
     expect(validateEnvelope(envelope)).toBe(envelope);
   });
 
-  it("rejects_wrong_format", () => {
-    expect(
-      codeOf(() => validateEnvelope(validEnvelope({ format: "mfa" }))),
-    ).toBe(BackupParseErrorCode.E_FORMAT);
-  });
-
-  it("rejects_wrong_kind", () => {
-    expect(
-      codeOf(() => validateEnvelope(validEnvelope({ kind: "password" }))),
-    ).toBe(BackupParseErrorCode.E_KIND);
-  });
-
-  it("rejects_newer_version", () => {
-    expect(codeOf(() => validateEnvelope(validEnvelope({ version: 2 })))).toBe(
-      BackupParseErrorCode.E_VERSION,
+  it("keeps_prototype_chain_for_instanceof", () => {
+    const e = new BackupParseError(
+      BackupParseErrorCode.E_KIND,
+      "备份类型不受支持（仅支持 TOTP）",
     );
+
+    // 微信 ES5 降级后仍必须能通过 instanceof / name 判定（见 otp/errors.ts）
+    expect(e).toBeInstanceOf(BackupParseError);
+    expect(e).toBeInstanceOf(Error);
+    expect(e.name).toBe("BackupParseError");
+    expect(e.code).toBe("E_KIND");
   });
 
-  it("rejects_non_integer_or_zero_version", () => {
-    expect(
-      codeOf(() => validateEnvelope(validEnvelope({ version: 1.5 }))),
-    ).toBe(BackupParseErrorCode.E_STRUCTURE);
-    expect(codeOf(() => validateEnvelope(validEnvelope({ version: 0 })))).toBe(
-      BackupParseErrorCode.E_STRUCTURE,
-    );
-  });
+  it("rejects_structural_errors_with_explicit_codes", () => {
+    const cases: Array<[string, unknown, BackupParseErrorCode]> = [
+      ["整体为数组", [], BackupParseErrorCode.E_STRUCTURE],
+      ["整体为 null", null, BackupParseErrorCode.E_STRUCTURE],
+      [
+        "format 缺失",
+        rawEnvelope({ format: undefined }),
+        BackupParseErrorCode.E_FORMAT,
+      ],
+      [
+        "format 错误",
+        rawEnvelope({ format: "mfa" }),
+        BackupParseErrorCode.E_FORMAT,
+      ],
+      [
+        "kind 错误",
+        rawEnvelope({ kind: "password" }),
+        BackupParseErrorCode.E_KIND,
+      ],
+      ["版本过高", rawEnvelope({ version: 2 }), BackupParseErrorCode.E_VERSION],
+      [
+        "版本非整数",
+        rawEnvelope({ version: 1.5 }),
+        BackupParseErrorCode.E_STRUCTURE,
+      ],
+      [
+        "版本过低",
+        rawEnvelope({ version: 0 }),
+        BackupParseErrorCode.E_STRUCTURE,
+      ],
+      [
+        "版本为字符串",
+        rawEnvelope({ version: "1" }),
+        BackupParseErrorCode.E_STRUCTURE,
+      ],
+      [
+        "meta 缺失",
+        rawEnvelope({ meta: undefined }),
+        BackupParseErrorCode.E_STRUCTURE,
+      ],
+      [
+        "meta 为数组",
+        rawEnvelope({ meta: [] }),
+        BackupParseErrorCode.E_STRUCTURE,
+      ],
+    ];
 
-  it("rejects_non_positive_count", () => {
-    for (const count of [0, -1, 1.5]) {
-      const envelope = validEnvelope({
-        meta: { created_at: "2026-06-28T14:30:00+08:00", count },
+    for (const [name, value, code] of cases) {
+      expect({ name, code: codeOf(() => validateEnvelope(value)) }).toEqual({
+        name,
+        code,
       });
+    }
+  });
 
-      expect(codeOf(() => validateEnvelope(envelope))).toBe(
+  it("rejects_illegal_count", () => {
+    for (const count of [0, -1, 1.5, "2"]) {
+      expect(codeOf(() => validateEnvelope(withMeta({ count })))).toBe(
         BackupParseErrorCode.E_STRUCTURE,
       );
     }
   });
 
   it("rejects_count_over_server_limit", () => {
-    const envelope = validEnvelope({
-      meta: { created_at: "2026-06-28T14:30:00+08:00", count: 51 },
-    });
-
-    expect(codeOf(() => validateEnvelope(envelope))).toBe(
+    expect(codeOf(() => validateEnvelope(withMeta({ count: 51 })))).toBe(
       BackupParseErrorCode.E_LIMIT,
     );
   });
@@ -105,35 +154,43 @@ describe("backup envelope", () => {
       "2026-06-28",
       "2026-02-30T00:00:00+08:00",
       "2026-06-28T14:30:00",
+      1700000000,
     ]) {
-      const envelope = validEnvelope({ meta: { created_at, count: 2 } });
-
-      expect(codeOf(() => validateEnvelope(envelope))).toBe(
+      expect(codeOf(() => validateEnvelope(withMeta({ created_at })))).toBe(
         BackupParseErrorCode.E_STRUCTURE,
       );
     }
   });
 
-  it("accepts_zulu_and_fractional_seconds", () => {
-    const envelope = validEnvelope({
-      meta: { created_at: "2026-06-28T06:30:00.5Z", count: 2 },
-    });
+  it("rejects_missing_or_malformed_crypto_fields", () => {
+    const cases: Array<Record<string, unknown>> = [
+      { kdf: undefined },
+      { cipher: undefined },
+      { kdf: [] },
+      { cipher: "aes-256-gcm" },
+    ];
 
-    expect(validateEnvelope(envelope)).toBe(envelope);
+    for (const overrides of cases) {
+      expect(codeOf(() => validateEnvelope(rawEnvelope(overrides)))).toBe(
+        BackupParseErrorCode.E_STRUCTURE,
+      );
+    }
   });
 
-  it("rejects_missing_crypto_fields_and_data", () => {
-    expect(
-      codeOf(() => validateEnvelope({ ...validEnvelope(), kdf: undefined })),
-    ).toBe(BackupParseErrorCode.E_STRUCTURE);
+  it("rejects_empty_or_oversized_data", () => {
+    for (const data of ["", 123, "A".repeat(MAX_DATA_CHARS + 1)]) {
+      expect(codeOf(() => validateEnvelope(rawEnvelope({ data })))).toBe(
+        BackupParseErrorCode.E_STRUCTURE,
+      );
+    }
+  });
 
-    expect(
-      codeOf(() => validateEnvelope({ ...validEnvelope(), cipher: undefined })),
-    ).toBe(BackupParseErrorCode.E_STRUCTURE);
+  it("rejects_oversized_text_before_parsing", () => {
+    const text = "x".repeat(MAX_ENVELOPE_TEXT_CHARS + 1);
 
-    expect(
-      codeOf(() => validateEnvelope({ ...validEnvelope(), data: "" })),
-    ).toBe(BackupParseErrorCode.E_STRUCTURE);
+    expect(codeOf(() => parseEnvelope(text))).toBe(
+      BackupParseErrorCode.E_LIMIT,
+    );
   });
 
   it("rejects_json_text_that_is_not_an_object", () => {
@@ -149,8 +206,8 @@ describe("backup envelope", () => {
   });
 
   it("parses_valid_text", () => {
-    const text = JSON.stringify(validEnvelope());
+    const envelope = rawEnvelope();
 
-    expect(parseEnvelope(text).meta.count).toBe(2);
+    expect(parseEnvelope(JSON.stringify(envelope)).meta.count).toBe(2);
   });
 });
