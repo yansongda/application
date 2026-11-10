@@ -92,4 +92,6 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
-console.log(`OTP invariants OK (${walk(otpDir).length} files, 18 error codes).`);
+console.log(
+  `OTP invariants OK (${walk(otpDir).length} otp files, 18 error codes).`,
+);
