@@ -22,6 +22,39 @@ description: 在发布 application-rs Rust 后端 workspace、提升 workspace �
 
 ## 操作流程
 
+### 第 0 步：判定基线（版本号与 CHANGELOG 分类共用）
+
+**两者回答同一个问题：相对上一个 release tag（`application-api/v*`），变化是什么。commit message 与 PR 内的方案演进都不是基线。**
+
+```bash
+# 必须在 application-rs/ 目录下执行
+cd application-rs
+
+# 1) 确认基线 tag（按 semver 排序取最新）
+git tag -l 'application-api/*' | sort -V | tail -5
+
+# 2) 基线里有没有这个模块 / 接口文件？不存在 → 首次交付（CHANGELOG 归 Added，版本至少 MINOR）
+git ls-tree -r --name-only <PREV_TAG> -- application-rs/ | grep -F <path/to/module>
+
+# 3) 区间内提交（只是线索）与真实改动（事实）
+git log <PREV_TAG>..HEAD --oneline
+git show --stat <commit>
+git diff <PREV_TAG>..HEAD
+
+# 4) 曾存在于未合并分支的旧实现（不算基线）
+git log --all --oneline -- <path/to/module>
+```
+
+**commit message 只是线索，diff 才是事实。** 一个 `fix:` 提交可能只改了一处注释（无需提升版本），而一个 `chore:` 提交可能引入了新 API（应提升 MINOR）。
+
+| 相对基线 tag 的变化 | CHANGELOG 分类 | 版本提升 |
+|---|---|---|
+| 基线中不存在的新接口 / 新能力 / 新的二进制行为 | `Added` | **MINOR** |
+| 基线中已存在，且做了有意的行为调整 | `Changed` | **MINOR**（无对外可见变化则不提升） |
+| 基线中已存在，原本就是缺陷 | `Fixed` | **PATCH** |
+| 移除 / 废弃已发布接口或配置项 | `Removed` / `Deprecated` | **MINOR**；破坏向后兼容则 **MAJOR** |
+| 纯内部重构 / 注释 / 测试 / 依赖升级 | 不单列 | 无对外可见变化则不发版，否则 **PATCH** |
+
 ### 第 1 步：检查当前状态
 
 ```bash
@@ -30,9 +63,6 @@ cd application-rs
 
 # 当前 workspace 版本
 grep '^version = ' Cargo.toml
-
-# application-api 最近的 tag
-git tag -l 'application-api/*' | sort -V | tail -5
 
 # 检查 git 状态
 git status --short
@@ -45,36 +75,14 @@ git branch --show-current
 
 ### 第 2 步：提升版本号 & 更新 CHANGELOG
 
-**通过分析实际代码 diff 来决定版本提升，而不是只看 commit message。**
+版本级别按**第 0 步**的基线 diff 与映射表确定，本节只落地文件改动。
 
-```bash
-cd application-rs
+**判定流程（落地前再确认一次）：**
 
-# 第 1 步：列出上个 tag 之后的提交（仅供参考）
-git log <PREV_TAG>..HEAD --oneline
-
-# 第 2 步：查看每个提交的实际改动（这才是关键依据）
-git show --stat <commit>
-
-# 第 3 步：审查整体 diff
-git diff <PREV_TAG>..HEAD
-```
-
-**commit message 只是线索，diff 才是事实。** 一个 `fix:` 提交可能只改了一处注释（无需提升版本），而一个 `chore:` 提交可能引入了新 API（应提升 MINOR）。根据**行为影响**套用 SemVer：
-
-| 改动内容 | 版本提升 | 示例 |
-|--------------|-------------|---------|
-| 新增面向用户的功能 / 新 API / 新的二进制行为 | **MINOR** | `1.13.0` → `1.14.0` |
-| 有行为变化的缺陷修复 | **PATCH** | `1.13.0` → `1.13.1` |
-| 纯重构 / 注释修改 / 无行为变化 | **不提升** 或与其他改动合并发布 | 若无用户可见变化，可跳过发版 |
-| 破坏性变更（移除 API、改变配置格式） | **MAJOR** | `1.13.0` → `2.0.0` |
-
-**判定流程：**
-
-1. 是否有提交新增了用户可见功能？ → **MINOR**
-2. 是否有提交修复了用户实际遇到的问题？ → **PATCH**（若无 MINOR）
-3. 是否所有改动都是内部重构 / 清理？ → 若打包发布则 **PATCH**，否则可考虑跳过本次发版
-4. 是否有提交破坏向后兼容？ → **MAJOR**
+1. 是否有新接口 / 新能力 / 新的二进制行为？ → **MINOR**
+2. 否则是否有既有缺陷修复？ → **PATCH**
+3. 是否全部是内部重构 / 清理？ → 无对外可见变化可跳过发版，打包发布则 **PATCH**
+4. 是否破坏向后兼容（移除 API、改变配置格式）？ → **MAJOR**
 
 **更新 `application-rs/Cargo.toml`（仅 workspace 根）：**
 
@@ -107,6 +115,7 @@ version = "X.Y.Z"  # 提升这个版本号
 - [ ] 段落标题首字母大写：`### Added`、`### Changed`、`### Fixed`
 - [ ] 每条都带 PR 编号和 commit 链接
 - [ ] 新版本加在文件**最上方**
+- [ ] 每条按**第 0 步**映射表归入正确分类：基线中不存在的新接口归 `Added`，既有缺陷归 `Fixed`，有意的行为调整才归 `Changed`
 
 **获取上次发布以来的提交：**
 ```bash
@@ -162,7 +171,8 @@ git push origin application-api/vX.Y.Z
 
 | 步骤 | 操作 | 目的 |
 |------|--------|---------|
-| 1. 检查 | `git status`、`git tag`、查看版本号 | 确认状态干净 |
+| 0. 基线 | `git tag -l 'application-api/*'`、`git ls-tree`、`git diff <PREV_TAG>..HEAD` | 判定 CHANGELOG 分类与版本级别（见第 0 步） |
+| 1. 检查 | `git status`、查看版本号 | 确认状态干净 |
 | 2. 提升 | 编辑 `Cargo.toml`、`CHANGELOG.md` | 更新版本号和 changelog |
 | 3. 校验 | `cargo check`、`cargo fmt`、`cargo clippy` | 确保代码质量 |
 | 4. PR | 创建 PR，等待合并 | 审核与批准 |
@@ -183,9 +193,9 @@ git push origin application-api/vX.Y.Z
 - **问题：** PR 因 `cargo fmt` 或 `cargo clippy` 报错导致 CI 失败
 - **修正：** 创建 PR 前始终运行三项检查
 
-**只看 commit message 决定版本号**
-- **问题：** `fix:` 提交可能只改了注释（无需提升版本），而 `chore:` 提交可能新增了 API（应提升 MINOR）
-- **修正：** 必须检查 `git show --stat` 和 `git diff` 判断实际行为影响；commit message 只是线索，diff 才是事实
+**不按基线判定版本号 / CHANGELOG 分类**
+- **问题：** 只看 commit message（或照 PR 内的方案演进）就定级：首次上线的接口写成 `Changed`、既有缺陷也写成 `Changed`、`chore:` 新增能力被判成 PATCH
+- **修正：** 按**第 0 步**确认基线 tag，用 `git ls-tree` / `git show --stat` / `git diff` 对照映射表判定；commit message 只是线索，diff 才是事实
 
 **PR 合并前就打 tag**
 - **问题：** tag 指向合并前的 commit
@@ -220,7 +230,7 @@ application-rs/
 - 跳过 `cargo fmt` / `cargo clippy` 检查
 - 从有未提交改动的工作区发布
 - 使用错误的 tag 格式（`v1.0.0` 而非 `application-api/v1.0.0`）
-- 只看 commit message 而不检查实际 diff 就决定版本号
+- 不按基线 tag 判定版本号 / CHANGELOG 分类（见第 0 步）
 
 **务必：**
 - 创建 PR 前运行所有 Rust 检查
