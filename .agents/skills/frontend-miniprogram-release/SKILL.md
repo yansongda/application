@@ -86,6 +86,29 @@ git push -u origin release/wechat-v1.x.x
 - 新版本段落始终加在文件**最上方**
 - 一次发布包含多种类型的提交时，每种类型各列在自己的分类下
 
+#### 分类判定：以「已发布 tag」为基线
+
+**判定依据是上一个 release tag 中是否已存在该功能 / 文件，而不是本次分支或 PR 内部的演进史。**
+
+| 情况 | 归入 | 说明 |
+|------|------|------|
+| 功能 / 页面 / 接口 / 文件在上一个 tag 中**不存在** | `Added` | 即使本 PR 内换过实现方案（如端内加密 → 改走服务端接口），或 commit message 写着「改用 / 改为 / 移除端内实现」，对用户仍是首次发版 |
+| 上一个 tag 中**已存在**，且对外行为发生变化 | `Changed` | 必须能说出「以前是什么样 → 现在是什么样」 |
+| 既有功能的缺陷修复（含开发版专属展示问题） | `Fixed` | 不是新增能力，也不是有意的行为设计变更 |
+| 纯内部重构 / 内部函数加参数 / 测试与脚本调整 | 不单列 | 并入所属功能条目；只有影响可观测行为时才写，且写 `Changed` |
+
+判定命令（先确认基线）：
+
+```bash
+# 功能 / 目录在上一个 tag 中是否存在？不存在 → 该条目必须归 Added
+git ls-tree -r --name-only <last-tag> -- <target-dir>/ | grep -F '<path/to/feature>' || echo '上一个 tag 无此文件 → Added'
+
+# 实现若曾存在于未合并的 feature 分支（如 端内加密 → 服务端加密），不算「已发布基线」
+git log --all --oneline -- <path/to/feature>
+```
+
+**反例（真实发生过）**：加密备份随 1.3.0 首次发布，但 commit message 为 `feat: 加密备份改用后端接口（移除端内实现）`，若照 message 写成 `Changed: 备份加解密改为由服务端完成` 即错误——上一个 tag 中根本没有备份功能，应为 `Added: 新增加密备份（加解密在服务端完成）`。
+
 ### 4. 版本号判定
 
 提升版本前，必须通过**分析实际 diff** 来决定新版本号，而不是只看 commit message：
@@ -126,6 +149,7 @@ git diff <last-tag>..HEAD -- <target-dir>/
 - [ ] 已通过 diff 分析确定新版本号（见 §4）
 - [ ] 已更新 `package.json` 中的版本号
 - [ ] 已更新 `CHANGELOG.md`，新增段落并按变更类型分类
+- [ ] 已逐条核对分类：每条 `Changed` 都能指出「上一个 tag 中已存在过的旧行为」；每条 `Fixed` 都是既有功能的缺陷修复（见 §3 分类判定）
 - [ ] 若依赖有变化，已更新锁文件（`pnpm-lock.yaml` / `package-lock.json`）
 - [ ] 提交中只包含目标目录的文件
 - [ ] commit message 遵循仓库约定：`release(wechat): v1.x.x`
@@ -140,6 +164,8 @@ git diff <last-tag>..HEAD -- <target-dir>/
 | CHANGELOG 格式不规范 | 沿用了旧的、不一致的格式 | 使用 Keep a Changelog 标准格式 |
 | 未经用户同意自动合并 PR | 想当然认为 release PR 可以安全自动合并 | 合并前必须等待用户明确确认 |
 | 只看 commit message 决定版本号 | `fix:` 可能只是改注释；`chore:` 可能新增页面 | 必须检查 `git show --stat` 和 `git diff` 判断实际行为影响 |
+| 把首次发布的新功能写成 `Changed` | 照着 commit message（「改用 / 移除端内实现」）或分支里的方案变更归类 | 以已发布 tag 为基线：tag 中不存在的功能一律归 `Added` |
+| 把既有行为的缺陷修复写成 `Changed` | 把「显示值变了」当成有意的行为设计变更 | 修 bug 归 `Fixed`，`Changed` 只留给有意的行为调整 |
 | 等待期间把 TODO 留在 `in_progress` | 系统会不断催促继续 | 把阻塞/等待中的任务标记为 `completed` 并加说明，否则系统会反复提醒 |
 
 ## 发布流程
