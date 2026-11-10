@@ -28,7 +28,7 @@ chrono = { workspace = true }
 ulid = { workspace = true }
 
 tokio = { version = "1.53.3", features = ["full"] }
-salvo = { version = "1.0.1", features = ["cors", "request-id", "logging", "catch-panic", "timeout", "compression"] }
+salvo = { version = "1.0.1", features = ["cors", "request-id", "logging", "catch-panic", "timeout", "compression", "size-limiter"] }
 futures-util = { version = "0.3.34" }
 bytes = { version = "1.12.1" }
 

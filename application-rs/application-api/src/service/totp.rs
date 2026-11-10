@@ -174,7 +174,7 @@ pub async fn backup_export(
     backup::encrypt(&password, &items)
 }
 
-/// 导入备份：解密后逐条校验，全部通过才在单事务内批量插入（不去重，重复导入即新增）。
+/// 导入备份：解密后逐条校验，全部通过后逐条插入（不去重，重复导入即新增）。
 pub async fn backup_import(
     access_token: &access_token::AccessToken,
     params: BackupImportRequestParams,
