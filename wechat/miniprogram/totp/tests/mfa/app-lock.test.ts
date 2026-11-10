@@ -161,3 +161,70 @@ describe("app-lock verify", () => {
     expect(hanging).toBeInstanceOf(Promise);
   });
 });
+
+// 页面 onShow 的锁定判定：真机上页面 onShow 可能早于 App.onLaunch / App.onShow，
+// 判定不得依赖 App 生命周期先置位（coldStart 初始 true + lastHideAt 时间戳兜底）。
+describe("app-lock syncOnPageShow", () => {
+  const enableInStorage = (appLockOn: boolean): void => {
+    storage[STORAGE.SECURITY_SETTINGS] = {
+      v: 1,
+      privacyWindow: true,
+      appLock: appLockOn,
+      dirty: false,
+    };
+  };
+
+  it("coldStartLocksFirstPageShowWithoutAppOnShow", () => {
+    enableInStorage(true);
+    appLock.unlock();
+    appLock.onLaunch();
+
+    // 不调用 App.onShow（pendingCheck 未置位）也必须锁
+    expect(appLock.syncOnPageShow()).toBe(true);
+  });
+
+  it("locksAfterBackgroundBeyondTimeoutWithoutAppOnShow", () => {
+    enableInStorage(true);
+    appLock.unlock();
+    appLock.onHide();
+    fakeNow += 61_000;
+
+    // 模拟页面 onShow 早于 App.onShow：pendingCheck 仍为 false
+    expect(appLock.syncOnPageShow()).toBe(true);
+  });
+
+  it("doesNotLockWithinTimeoutAndStopsTimer", () => {
+    enableInStorage(true);
+    appLock.unlock();
+    appLock.onHide();
+    fakeNow += 30_000;
+
+    expect(appLock.syncOnPageShow()).toBe(false);
+
+    // 回前台未达阈值：本次离开结束，同页再停留 31s 后切页不得误锁
+    fakeNow += 31_000;
+
+    expect(appLock.syncOnPageShow()).toBe(false);
+  });
+
+  it("setEnabledClearsSoterHideTimestamp", () => {
+    enableInStorage(true);
+    appLock.unlock();
+    appLock.onLaunch();
+
+    // 开启流程中 SOTER 认证界面触发 onHide（记录退后台时间但作废验证）
+    appLock.onHide();
+    expect(appLock.setEnabled(true)).toBe(true);
+
+    fakeNow += 61_000;
+
+    // 刚完成身份验证：切页不得因 SOTER 期间的时间戳被误锁
+    expect(appLock.syncOnPageShow()).toBe(false);
+  });
+
+  it("disabledNeverLocks", () => {
+    enableInStorage(false);
+
+    expect(appLock.syncOnPageShow()).toBe(false);
+  });
+});

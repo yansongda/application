@@ -14,8 +14,9 @@ export enum VerifyOutcome {
 type SoterAuthMode = "fingerPrint" | "facial";
 
 // --- 运行态（绝不落盘）---
+// coldStart 初始 true：模块加载即视为冷启动，避免页面 onShow 早于 App.onLaunch 时漏锁
 let locked = false;
-let coldStart = false;
+let coldStart = true;
 let pendingCheck = false;
 let lastHideAt: number | undefined;
 let verifying = false;
@@ -71,7 +72,9 @@ const syncOnPageShow = (): boolean => {
   const should = shouldLock({
     enabled: true,
     coldStart,
-    pendingCheck,
+    // 页面 onShow 可能早于 App.onShow（真机启动 / 回前台时序不确定）：
+    // 只要存在退后台时间戳就按时间判定，不依赖 App.onShow 先置 pendingCheck
+    pendingCheck: pendingCheck || lastHideAt !== undefined,
     lastHideAt,
     now: Date.now(),
   });
@@ -80,6 +83,9 @@ const syncOnPageShow = (): boolean => {
 
   if (should) {
     locked = true;
+  } else if (lastHideAt !== undefined) {
+    // 本次离开未达 60s：清掉时间戳，避免在同一页面停留后再切页误锁
+    lastHideAt = undefined;
   }
 
   return locked;
@@ -107,6 +113,9 @@ const setEnabled = (on: boolean): boolean => {
     // 复位运行态：否则下一次页面 onShow 仍按「冷启动」立刻上锁
     coldStart = false;
     pendingCheck = false;
+    // 刚完成一次身份验证：清掉 SOTER 认证界面触发的退后台时间戳，
+    // 避免开启应用锁 60s 后首次切页被误锁
+    lastHideAt = undefined;
     locked = false;
   } else {
     unlock();
