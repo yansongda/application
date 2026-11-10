@@ -43,6 +43,39 @@ description: 在发布 huawei/atomicservice/MFA 下的华为元服务（atomic s
 
 ## 操作流程
 
+### 第 0 步：判定基线（版本号与 CHANGELOG 分类共用）
+
+**两者回答同一个问题：相对上一个 tag（`huawei-atomicservice-mfa/v*`），变化是什么。commit message、`[Unreleased]` 草稿与 PR 内的方案演进都不是基线。**
+
+```bash
+cd huawei/atomicservice/MFA
+
+# 1) 确认基线 tag（按 semver 排序取最新）
+git tag -l 'huawei-atomicservice-mfa/*' | sort -V | tail -5
+
+# 2) 基线里有没有这个页面 / 模块 / 资源？不存在 → 首次交付（CHANGELOG 归 Added，版本至少 MINOR）
+git ls-tree -r --name-only <PREV_TAG> -- huawei/atomicservice/MFA/ | grep -F <path/to/page>
+
+# 3) 区间内提交（只是线索）与真实改动（事实）
+git log <PREV_TAG>..HEAD --oneline -- huawei/
+git show --stat <commit> -- huawei/
+git diff <PREV_TAG>..HEAD -- huawei/
+
+# 4) 曾存在于未合并分支、或后来被回滚的改动（不算基线）
+git log --all --oneline -- <path/to/page>
+```
+
+**commit message 只是线索，diff 才是事实。** 一个 `feat:` 提交可能只改了字符串资源（`PATCH`），一个 `chore:` 提交可能新增整个页面（`MINOR`）。
+
+| 相对基线 tag 的变化 | CHANGELOG 分类 | 版本提升 |
+|---|---|---|
+| 基线中不存在的新页面 / 功能 / 卡片 | `Added` | **MINOR** |
+| 基线中已存在，且做了有意的行为调整（含交互、文案语义） | `Changed` | **MINOR**（无用户可见变化则不提升） |
+| 基线中已存在，原本就是缺陷（含 UI 不刷新等） | `Fixed` | **PATCH** |
+| 移除 / 废弃已发布页面或能力 | `Removed` / `Deprecated` | **MINOR**；破坏向后兼容则 **MAJOR** |
+| 安全相关修复 | `Security` | **PATCH**（影响面大则 **MINOR**） |
+| 纯内部重构 / 资源重命名 / 注释 | 不单列 | 无用户可见变化则不发版，否则 **PATCH** |
+
 ### 第 1 步：检查当前状态
 
 ```bash
@@ -50,7 +83,6 @@ cd huawei/atomicservice/MFA
 
 git status --short
 git branch --show-current
-git tag -l 'huawei-atomicservice-mfa/*' | sort -V | tail -5
 grep -E 'versionCode|versionName' AppScope/app.json5
 ```
 
@@ -74,27 +106,14 @@ git diff main..HEAD -- huawei/
 
 ### 第 2 步：确定版本号
 
-**commit message 只是线索，diff 才是事实。**
+版本级别按**第 0 步**的基线 diff 与映射表确定。
 
-```bash
-# 第 1 步：列出上个 tag 之后的提交（仅供参考）
-git log <PREV_TAG>..HEAD --oneline -- huawei/
+**判定流程（落地前再确认一次）：**
 
-# 第 2 步：查看每个提交的实际改动（这才是关键依据）
-git show --stat <commit> -- huawei/
-
-# 第 3 步：审查整体 diff
-git diff <PREV_TAG>..HEAD -- huawei/
-```
-
-一个 `chore:` 提交可能新增整个页面（MINOR），一个 `feat:` 提交可能只是改了字符串资源（PATCH）。根据**行为影响**套用 [SemVer](https://semver.org/lang/zh-CN/)：
-
-| 改动内容 | 版本提升 | 示例 |
-|--------------|-------------|---------|
-| 新增面向用户的页面 / 功能 / API 调用 | **MINOR** | `1.3.1` → `1.4.0` |
-| 有行为变化的缺陷修复 | **PATCH** | `1.3.0` → `1.3.1` |
-| 纯重构 / 注释或资源重命名 | **不提升** 或与其他改动合并发布 | 若无用户可见变化，可跳过发版 |
-| 破坏性变更（移除页面、改变鉴权流程） | **MAJOR** | `1.3.1` → `2.0.0` |
+1. 是否有新页面 / 新功能 / 新卡片？ → **MINOR**
+2. 否则是否有既有缺陷修复？ → **PATCH**
+3. 是否全部是内部重构 / 资源重命名？ → 无用户可见变化可跳过发版，否则 **PATCH**
+4. 是否破坏向后兼容（移除页面、改变鉴权流程）？ → **MAJOR**
 
 然后根据目标版本计算 `versionCode` —— 它**不是**独立计数器：
 
@@ -158,14 +177,10 @@ versionCode = MAJOR * 10000 + MINOR * 100 + PATCH
 - [ ] **顶部若已存在 `## [Unreleased]` 段落**：先按实际 diff 逐条复核其中内容，再把该标题改写为 `## [X.Y.Z] - YYYY-MM-DD`；**不要**另起新版本段落、也不要留下空的 `[Unreleased]` 段
 - [ ] 保留文件顶部的 `# Changelog` 标题 + 规范说明行
 - [ ] 日期必须是实际发布日期 —— 用 `date +%F` 读取；绝不臆造或照抄
-- [ ] 文件中所有标题都使用 `## [X.Y.Z] - YYYY-MM-DD` —— 绝不新增 `## vX.Y.Z` 标题；若仍存在旧格式标题，在同一次提交中一并转换
+- [ ] 文件内所有标题都使用 `## [X.Y.Z] - YYYY-MM-DD` —— 绝不新增 `## vX.Y.Z` 标题；若仍存在旧格式标题，在同一次提交中一并转换
+- [ ] 每条按**第 0 步**映射表归入正确分类：基线中不存在的新页面 / 功能归 `Added`，既有缺陷归 `Fixed`，有意的行为调整才归 `Changed`
 
-**以实际 diff 为准复核条目**（commit message 只是线索；`[Unreleased]` 是草稿，不得照搬）：
-
-```bash
-git log <PREV_TAG>..HEAD --oneline -- huawei/     # ① 提交清单：仅作线索
-git diff <PREV_TAG>..HEAD -- huawei/              # ② 实际改动：以此为准
-```
+**以实际 diff 为准复核条目**（基线命令与分类映射见**第 0 步**；commit message 只是线索；`[Unreleased]` 是草稿，不得照搬）：
 
 逐条核对 CHANGELOG：**补上**「已改但未记录」的、**改写**「与实际不符」的、**删掉**「改后被回滚或未随本版本发布」的，并保证每条都描述**用户可见行为**。若复核后确无用户可见变更（纯重构），把条目留在 `[Unreleased]` 继续累积即可，不必强行发版（见「版本决策」表）。
 
@@ -235,7 +250,7 @@ git push origin huawei-atomicservice-mfa/vX.Y.Z
 检查 git diff main..HEAD -- huawei/  +  app.json5 版本号 vs 最新 tag
   |
   v
-分析提交/diff → SemVer 提升 → 计算 versionCode
+确认基线 tag → 按第 0 步判定分类与版本 → 计算 versionCode
   |
   v
 更新 AppScope/app.json5 + CHANGELOG.md（Keep a Changelog）
@@ -260,7 +275,8 @@ git pull main → 打 tag huawei-atomicservice-mfa/vX.Y.Z → 推送 tag
 
 | 步骤 | 操作 | 目的 |
 |------|--------|---------|
-| 1. 检查 | `git status`、`git tag -l 'huawei-atomicservice-mfa/*'`、`grep version AppScope/app.json5` | 确认状态干净 & 待发布版本 |
+| 0. 基线 | `git tag -l 'huawei-atomicservice-mfa/*'`、`git ls-tree`、`git diff <PREV_TAG>..HEAD -- huawei/` | 判定 CHANGELOG 分类与版本级别（见第 0 步） |
+| 1. 检查 | `git status`、`grep version AppScope/app.json5` | 确认状态干净 & 待发布版本 |
 | 2. 提升 | 编辑 `AppScope/app.json5`（`versionCode` + `versionName`）、`CHANGELOG.md` | 更新版本号和 changelog |
 | 3. PR | 创建 PR，等待用户合并 | 审核与批准 |
 | 4. Tag | `git tag huawei-atomicservice-mfa/vX.Y.Z` + 推送 | 标记 release commit |
@@ -281,6 +297,7 @@ git pull main → 打 tag huawei-atomicservice-mfa/vX.Y.Z → 推送 tag
 | 混入无关目录的改动 | 想当然认为分支只涉及 huawei | 用 `-- huawei/` 显式过滤 |
 | 提交 `build/` 产物或 `.app` | 图省事把产物一起提交 | release PR 里只应有 `app.json5` + `CHANGELOG.md`（+ 锁文件） |
 | 自动合并 PR | 想当然认为 release PR 是安全的 | 合并前等待用户明确确认 |
+| 按 `[Unreleased]` 草稿或 commit message 直接定分类 / 版本 | 草稿可能缺条目、含已回滚内容；message 只是线索 | 按**第 0 步**以基线 tag 的 diff 逐条复核：首次上线归 `Added`、既有缺陷归 `Fixed` |
 | 试图用脚本上传 AGC | 自动化惯性 | 需要交互式登录 —— 这一步只能手动 |
 
 ## 危险信号
