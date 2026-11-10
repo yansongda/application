@@ -73,8 +73,23 @@ const clearDirty = (): boolean => {
   return writeSettings({ ...readSettings(), dirty: false });
 };
 
+// 本地是否已落地过安全设置：未落地说明是新装/重装，
+// 需先从服务端恢复应用锁再渲染内容（否则首屏漏锁）。
+const hasSettings = (): boolean => {
+  try {
+    const raw = wx.getStorageSync(STORAGE.SECURITY_SETTINGS);
+
+    return typeof raw === "object" && raw !== null;
+  } catch (e: unknown) {
+    logger.warning("读取安全设置存在性失败", e);
+
+    return false;
+  }
+};
+
 export {
   clearDirty,
+  hasSettings,
   markDirty,
   normalizeSettings,
   readSettings,

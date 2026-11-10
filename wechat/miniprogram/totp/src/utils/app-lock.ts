@@ -14,16 +14,21 @@ export enum VerifyOutcome {
 type SoterAuthMode = "fingerPrint" | "facial";
 
 // --- 运行态（绝不落盘）---
+// coldStart 初始 true：模块加载即视为冷启动，避免页面 onShow 早于 App.onLaunch 时漏锁
 let locked = false;
-let coldStart = false;
+let coldStart = true;
 let pendingCheck = false;
 let lastHideAt: number | undefined;
 let verifying = false;
+let verifyStartedAt: number | undefined;
 let generation = 0;
 let lastFinishedAt: number | undefined;
 
 // 3 秒防抖：验证结束后短时间内重复触发直接跳过，避免系统认证控件闪烁
 const VERIFY_DEBOUNCE_MS = 3_000;
+
+// 悬挂保险：SOTER 控件异常未回调时 verifying 会一直为 true，用户点解锁永远 SKIPPED（锁死）
+const VERIFY_STUCK_MS = 30_000;
 
 const onLaunch = (): void => {
   coldStart = true;
@@ -38,8 +43,16 @@ const onShow = (): void => {
 const onHide = (): void => {
   lastHideAt = Date.now();
   pendingCheck = false;
+
+  // 真机 SOTER 认证界面会让小程序短暂进入后台（Android 微信为独立认证 Activity，认证结束才回前台）；
+  // 此时若作废进行中的验证，用户按完指纹/面容后会被判 SKIPPED，开关页显示「操作过于频繁」（已真机复现）。
+  // 真正的离开由 lastHideAt（回前台 60s 判定）与系统自身取消 SOTER（fail）兜底，
+  // 因此只作废「空闲代次」，不打断进行中的验证（也不复位 verifying，保持单飞）。
+  if (verifying) {
+    return;
+  }
+
   generation++;
-  verifying = false;
 };
 
 const syncOnPageShow = (): boolean => {
@@ -59,7 +72,9 @@ const syncOnPageShow = (): boolean => {
   const should = shouldLock({
     enabled: true,
     coldStart,
-    pendingCheck,
+    // 页面 onShow 可能早于 App.onShow（真机启动 / 回前台时序不确定）：
+    // 只要存在退后台时间戳就按时间判定，不依赖 App.onShow 先置 pendingCheck
+    pendingCheck: pendingCheck || lastHideAt !== undefined,
     lastHideAt,
     now: Date.now(),
   });
@@ -68,6 +83,9 @@ const syncOnPageShow = (): boolean => {
 
   if (should) {
     locked = true;
+  } else if (lastHideAt !== undefined) {
+    // 本次离开未达 60s：清掉时间戳，避免在同一页面停留后再切页误锁
+    lastHideAt = undefined;
   }
 
   return locked;
@@ -80,6 +98,7 @@ const unlock = (): void => {
   coldStart = false;
   lastHideAt = undefined;
   verifying = false;
+  verifyStartedAt = undefined;
   generation++;
 };
 
@@ -94,6 +113,9 @@ const setEnabled = (on: boolean): boolean => {
     // 复位运行态：否则下一次页面 onShow 仍按「冷启动」立刻上锁
     coldStart = false;
     pendingCheck = false;
+    // 刚完成一次身份验证：清掉 SOTER 认证界面触发的退后台时间戳，
+    // 避免开启应用锁 60s 后首次切页被误锁
+    lastHideAt = undefined;
     locked = false;
   } else {
     unlock();
@@ -169,10 +191,26 @@ const randomChallenge = async (): Promise<string> => {
 };
 
 // 发起身份认证。不检查 enabled——「开启应用锁」流程需要先验证成功再 setEnabled(true)。
-// 单飞 + 3 秒防抖；退后台（generation++）作废旧请求；不做 resultJSONSignature 签名校验（计划明确，UI 门禁非密码学证明）。
+// 单飞 + 3 秒防抖 + 悬挂保险；退后台作废仅发生在「未验证」的空闲态（见 onHide）；
+// 不做 resultJSONSignature 签名校验（计划明确，UI 门禁非密码学证明）。
 const verify = async (): Promise<VerifyOutcome> => {
   if (verifying) {
-    return VerifyOutcome.SKIPPED;
+    // 悬挂保险：认证已发起但超过阈值仍无回调（SOTER 控件异常），强制复位后继续发起；
+    // 旧的悬挂请求若最终返回，会因 generation 变化被判 SKIPPED。
+    if (
+      verifyStartedAt !== undefined &&
+      Date.now() - verifyStartedAt >= VERIFY_STUCK_MS
+    ) {
+      logger.warning(
+        "应用锁验证悬挂超时，强制复位",
+        Date.now() - verifyStartedAt,
+      );
+      verifying = false;
+      verifyStartedAt = undefined;
+      generation++;
+    } else {
+      return VerifyOutcome.SKIPPED;
+    }
   }
 
   if (
@@ -184,6 +222,7 @@ const verify = async (): Promise<VerifyOutcome> => {
 
   const gen = generation;
   verifying = true;
+  verifyStartedAt = Date.now();
 
   try {
     const mode = await probeCredential();
@@ -228,6 +267,7 @@ const verify = async (): Promise<VerifyOutcome> => {
   } finally {
     // 出口统一复位：任一漏复位会让用户点解锁永远 SKIPPED = 锁死
     verifying = false;
+    verifyStartedAt = undefined;
     lastFinishedAt = Date.now();
   }
 };
