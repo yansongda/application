@@ -23,11 +23,12 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+chrono = { workspace = true }
 
 ulid = { workspace = true }
 
 tokio = { version = "1.53.3", features = ["full"] }
-salvo = { version = "1.0.1", features = ["cors", "request-id", "logging", "catch-panic", "timeout", "compression"] }
+salvo = { version = "1.0.1", features = ["cors", "request-id", "logging", "catch-panic", "timeout", "compression", "size-limiter"] }
 futures-util = { version = "0.3.34" }
 bytes = { version = "1.12.1" }
 
@@ -35,3 +36,10 @@ murmurs = { version = "1.0.5" }
 base62 = { version = "2.2.6" }
 url = { version = "2.5.8" }
 totp-rs = { version = "6.0.0", features = ["otpauth"] }
+
+aes-gcm = { version = "0.10.3" }
+base64 = { version = "0.22.1" }
+getrandom = { version = "0.2.17" }
+pbkdf2 = { version = "0.12.2", features = ["hmac"] }
+sha2 = { version = "0.10.9" }
+zeroize = { version = "1.9.1" }

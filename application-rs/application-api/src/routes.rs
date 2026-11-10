@@ -27,6 +27,7 @@ pub fn api_v1() -> Router {
         .push(api_v1_access_token())
         .push(api_v1_users())
         .push(api_v1_totp())
+        .push(api_v1_backup())
         .push(api_v1_short_url())
 }
 
@@ -74,6 +75,13 @@ fn api_v1_totp() -> Router {
                 .push(Router::with_path("/pinned").post(v1::totp::edit_pinned)),
         )
         .push(Router::with_path("/delete").post(v1::totp::delete))
+}
+
+fn api_v1_backup() -> Router {
+    Router::with_path("/backup")
+        .hoop(authorization)
+        .push(Router::with_path("/export").post(v1::backup::export))
+        .push(Router::with_path("/import").post(v1::backup::import))
 }
 
 fn api_v1_short_url() -> Router {

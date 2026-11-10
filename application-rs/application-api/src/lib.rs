@@ -4,6 +4,7 @@ use salvo::catcher::Catcher;
 use salvo::compression::{Compression, CompressionLevel};
 use salvo::cors::{AllowOrigin, Cors};
 use salvo::http::Method;
+use salvo::size_limiter::max_size;
 use salvo::timeout::Timeout;
 use salvo::{Router, Service};
 use std::net::{Ipv4Addr, SocketAddr};
@@ -41,6 +42,9 @@ impl App {
             )
             .hoop(Timeout::new(Duration::from_secs(10)))
             .hoop(Compression::new().enable_brotli(CompressionLevel::Fastest))
+            // 请求体上限必须挂在 request_logger 之前：该中间件通过 `limit_body` 设置
+            // 本次请求的 body 读取上限，否则 logger 会先按默认 64 KiB 读取，导入大备份会失败。
+            .hoop(max_size(512 * 1024))
             .hoop(request_logger)
             .hoop(salvo::catch_panic::CatchPanic::new())
             .catcher(Catcher::default().hoop(catcher))
