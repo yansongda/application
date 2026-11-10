@@ -182,6 +182,34 @@ pub async fn insert(totp: CreatedTotp) -> Result<Totp> {
     })
 }
 
+/// 批量插入（备份导入专用）：逐条复用 `insert!` 宏写入，任一条失败即返回 `9903`。
+/// 当前不做事务：失败时可能已写入部分条目（按需求接受）。
+pub async fn insert_many(user_id: u64, items: &[CreatedTotp]) -> Result<u64> {
+    if items.is_empty() {
+        return Ok(0);
+    }
+
+    let sql =
+        "insert into tool.totp (user_id, username, issuer, config, sort) values (?, ?, ?, ?, ?)";
+    let mut affected = 0u64;
+
+    for item in items {
+        let result = insert!(
+            Pool::mysql("tool")?,
+            sql,
+            user_id,
+            &item.username,
+            &item.issuer,
+            Json(&item.config),
+            item.sort.unwrap_or(0)
+        );
+
+        affected += result.rows_affected();
+    }
+
+    Ok(affected)
+}
+
 pub async fn update_issuer(id: u64, issuer: &str) -> Result<()> {
     let sql = "update tool.totp set issuer = ? where id = ?";
     let pool_ref = Pool::mysql("tool")?;

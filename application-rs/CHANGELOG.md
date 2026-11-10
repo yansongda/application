@@ -1,3 +1,18 @@
+## [1.25.0] - 2026-11-10
+
+### Added
+
+- feat(api): 新增 `POST /api/v1/backup/export` 与 `POST /api/v1/backup/import`（通用加密备份，当前 `kind=totp`）：PBKDF2-SHA256（导出 600k 次迭代，导入接受 10 万~100 万）+ AES-256-GCM，信封 `format=application` / `version=1`，AAD 绑定全部头字段，单次最多 50 条、密文上限 512 KiB；密码不落库、不可找回；导入不去重且逐条插入（无事务，失败可能部分写入）(#199) ([d75fa1f](https://github.com/yansongda/application/commit/d75fa1f))
+- feat(api): 全局请求体上限提升至 512 KiB（`size-limiter`，挂载在 `request_logger` 之前），保证大备份导入不被 64 KiB 默认值截断 (#199) ([d75fa1f](https://github.com/yansongda/application/commit/d75fa1f))
+- feat(kernel): 新增备份错误码 `2023`~`2028`（密码错误/信封格式/密码长度/空备份/条目超限/不支持的类型）与 `9908`（加解密失败），并附带单元测试 (#199) ([d75fa1f](https://github.com/yansongda/application/commit/d75fa1f))
+- docs(api): 新增 `docs/backup-format.md`，跨端加密备份信封 v1 契约（微信小程序/华为元服务/CLI 可实现导入）(#199) ([d75fa1f](https://github.com/yansongda/application/commit/d75fa1f))
+
+### Changed
+
+- refactor(api): 抽取 `normalize_tags` 供备份导入与 TOTP 标签编辑复用，对外行为不变 (#199) ([d75fa1f](https://github.com/yansongda/application/commit/d75fa1f))
+- build(application-rs): `application-api` 新增 aes-gcm 0.10.3、pbkdf2 0.12.2、sha2 0.10.9、base64 0.22.1、zeroize 1.9.1、getrandom 0.2.17、chrono，salvo 启用 `size-limiter` feature (#199) ([d75fa1f](https://github.com/yansongda/application/commit/d75fa1f))
+- chore(docs): 删除过期的 `api.http` 调试样例与 `docs/util-http-refactor.md` 设计稿 (#199) ([d75fa1f](https://github.com/yansongda/application/commit/d75fa1f))
+
 ## [1.24.0] - 2026-10-22
 
 ### Added

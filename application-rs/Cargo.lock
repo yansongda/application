@@ -84,29 +84,36 @@ dependencies = [
 
 [[package]]
 name = "application-api"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
+ "aes-gcm",
  "application-database",
  "application-http",
  "application-kernel",
  "base62",
+ "base64 0.22.1",
  "bytes",
+ "chrono",
  "futures-util",
+ "getrandom 0.2.17",
  "murmurs",
+ "pbkdf2",
  "salvo",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "totp-rs",
  "tracing",
  "tracing-subscriber",
  "ulid",
  "url",
+ "zeroize",
 ]
 
 [[package]]
 name = "application-database"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "application-kernel",
  "chrono",
@@ -120,7 +127,7 @@ dependencies = [
 
 [[package]]
 name = "application-http"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "application-kernel",
  "reqwest",
@@ -131,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "application-kernel"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "chrono",
  "config",
@@ -1627,6 +1634,16 @@ name = "pathdiff"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
+
+[[package]]
+name = "pbkdf2"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8ed6a7761f76e3b9f92dfb0a60a6a6477c61024b775147ff0973a02653abaf2"
+dependencies = [
+ "digest 0.10.7",
+ "hmac 0.12.1",
+]
 
 [[package]]
 name = "percent-encoding"
