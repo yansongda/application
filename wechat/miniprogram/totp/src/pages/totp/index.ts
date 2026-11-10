@@ -15,6 +15,7 @@ import {
 } from "@utils/item-filter";
 import { withLoading } from "@utils/loading";
 import logger from "@utils/logger";
+import { hasSettings } from "@utils/security";
 import { substr } from "@utils/string";
 import {
   applySort,
@@ -166,6 +167,21 @@ Page({
       return;
     }
 
+    // 新装/重装：本地安全设置已被清空，须先从服务端恢复应用锁再拉取验证码，
+    // 否则首屏漏锁、直到下一个页面才要求验证（完全删除后重新扫码可复现）
+    let securityRestored = false;
+
+    if (!hasSettings()) {
+      await refreshUser();
+      securityRestored = true;
+
+      if (appLockSyncOnPageShow()) {
+        this.setData({ locked: true });
+
+        return;
+      }
+    }
+
     // 头像/昵称：优先本地缓存，远端刷新成功后覆盖
     const cachedUser = readUserCache();
 
@@ -181,20 +197,22 @@ Page({
     await this.loadItems();
 
     // 用户资料刷新不阻塞列表渲染；失败静默（refreshUser 内部已捕获）
-    refreshUser()
-      .then((user) => {
-        if (user !== null) {
-          this.setData({
-            user: {
-              avatar: user.config?.avatar ?? "",
-              nickname: user.config?.nickname ?? "",
-            },
-          });
-        }
-      })
-      .catch(() => {
-        // 静默：个人中心资料刷新失败不影响列表
-      });
+    if (!securityRestored) {
+      refreshUser()
+        .then((user) => {
+          if (user !== null) {
+            this.setData({
+              user: {
+                avatar: user.config?.avatar ?? "",
+                nickname: user.config?.nickname ?? "",
+              },
+            });
+          }
+        })
+        .catch(() => {
+          // 静默：个人中心资料刷新失败不影响列表
+        });
+    }
 
     // 冷启动恢复筛选/分组视图，并在数据刷新后清理失效状态
     this.viewState = readViewState();

@@ -102,5 +102,6 @@ bun run check:otp-invariants    # OTP 不变量静态守卫
 - 新增纯逻辑测试放 `tests/mfa/`。
 - 应用锁状态机 `src/utils/app-lock.ts`（安全关键）：`onHide` 仅在 `verifying === false` 时 `generation++`；验证中（Android 微信 SOTER 认证 Activity 会触发 `onHide`）不得作废请求，否则「验证成功」会被判 `SKIPPED`，开关页提示「操作过于频繁」。`verifying` 复位必须恰为 3 处（`unlock` / 悬挂保险 / `verify` finally），`verifyStartedAt` 同步复位；悬挂保险阈值 `VERIFY_STUCK_MS`（30s）覆盖 SOTER 未回调导致的锁死。
 - 应用锁判定不得依赖 App 生命周期先置位：`coldStart` 初始 `true`（模块加载即冷启动）；`syncOnPageShow` 以 `pendingCheck || lastHideAt !== undefined` 传入 `shouldLock`，未达阈值时清 `lastHideAt`（否则退后台 <60s 回前台后停留再切页会误锁）；`setEnabled(true)` 必须清 `lastHideAt`（SOTER 界面会触发 `onHide`）。回归用例见 `tests/mfa/app-lock.test.ts`。
+- 新装/重装（本地 `security_settings` 不存在）：必须先恢复安全设置再渲染验证码。`pages/totp/index` 在 `ensureAuthenticated` 后用 `hasSettings()` 判断，`await refreshUser()` 触发端云调和 → `syncOnPageShow()` 复核，锁定则 `setData({locked:true})` 并 `return`（**不调用** `loadItems`）；`pages/user/index` 在 `await refreshUser()` 后同样复核。禁止把该路径的 `refreshUser` 改成始终非阻塞，否则首屏漏锁（删小程序重装后扫码可复现）。
 - 不要重新引入 `otpauth` 或任何运行时密码学依赖；哈希原语在 `src/otp/internal/sha{1,256,512}.ts`，SHA-512 必须用 hi/lo 半字（禁止 BigInt，老设备兼容）。
 - `src/otp` 关键不变量：全库无日志、`Secret.toJSON()` 脱敏、`verify` 扫满窗口、取模只在 `digits.format`、`internal/*` 不进 barrel（测试经深路径 import）。

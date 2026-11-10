@@ -109,6 +109,18 @@ Page({
     // refreshUser 内部已捕获异常，失败静默；资料以本地缓存兜底展示
     await refreshUser();
 
+    // 新装/重装：refreshUser 内的端云调和可能刚把 appLock 恢复为 true，
+    // 必须在渲染前复核并上锁（否则要等下一个页面才验证）
+    const restoredLocked = appLockSyncOnPageShow();
+
+    if (restoredLocked !== this.data.locked) {
+      this.setData({ locked: restoredLocked });
+    }
+
+    if (restoredLocked) {
+      return;
+    }
+
     const settings = readSettings();
     const user = readUserCache();
     const cache = readCache();

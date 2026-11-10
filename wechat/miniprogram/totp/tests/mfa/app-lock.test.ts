@@ -227,4 +227,18 @@ describe("app-lock syncOnPageShow", () => {
 
     expect(appLock.syncOnPageShow()).toBe(false);
   });
+
+  it("disabledPageShowKeepsColdStartUntilSecurityRestored", () => {
+    // 新装/重装：本地 security_settings 被清空（beforeEach 已清 storage）
+    appLock.unlock();
+    appLock.onLaunch();
+
+    // 首页首次显示：appLock=false → 不锁，但不得消费 coldStart
+    expect(appLock.syncOnPageShow()).toBe(false);
+
+    // 登录后 reconcile 从服务端恢复 appLock=true，首页复核必须锁
+    enableInStorage(true);
+
+    expect(appLock.syncOnPageShow()).toBe(true);
+  });
 });
