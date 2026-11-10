@@ -63,19 +63,19 @@ bun run check:otp-invariants    # OTP 不变量静态守卫
 - 与后端 API 对接时，字段命名和含义应与后端保持一致，避免前端自行发明新语义
 - 修改公共常量、接口模型或页面交互时，尽量保持微信小程序现有用法一致，避免无关重构
 
-## 加密备份模块（`src/backup` + `src/models/backup`）
+## 加密备份模块（后端 API）
 
+- 加解密全部由服务端完成（`POST /api/v1/backup/export|import`，`kind=totp`），契约见 `application-rs/docs/backup-format.md`；前端**不得**重新引入端内 PBKDF2 / AES-GCM 实现。
 - 分层：
-  - `src/backup/` —— **纯库**（零业务依赖，可独立成库）：`spec.ts`（常量/错误码/`BackupAlgorithm`）、`base64.ts`（严格 base64）、`time.ts`（createdAt 带时区编解码）、`envelope.ts`（信封解析 + `canonicalMetaJson`/`buildAad`，顺序严格按规范 §8）、`payload.ts`（明文校验/归一）、`aes-gcm.ts`（手写 AES-256-GCM）、`pbkdf2.ts`（同步内核 + 分片异步）、`crypto.ts`（kcv/加解密编排）、`index.ts`（barrel）、`README.md`。
-  - `src/models/backup/` —— **业务编排**：`exporter.ts` / `importer.ts`（依赖缓存类型与后端 API，api 由页面注入）。
+  - `src/constant/backup.ts` / `src/types/backup.d.ts` —— 信封常量与类型（字段名与后端 snake_case 保持一致）。
+  - `src/api/backup.ts` —— 两个接口封装与后端错误码（2023~2028 / 9903 / 9908）文案映射；备份请求超时 15s。
+  - `src/models/backup/` —— 业务编排：`envelope.ts`（无口令结构预检）、`password.ts`（导出强度 / 导入可用性，**不 trim、不做 NFC**）、`exporter.ts` / `importer.ts`（api 由调用方注入，便于单测）。
 - 不变量：
-  - 禁 `BigInt` / `Math.random` / `console.*` / `require(` / 原生 crypto；由 `scripts/check-otp-invariants.mjs` 静态守卫（去注释后检查）。
-  - `src/backup` 只允许依赖 `src/otp`（`internal/{sha256,hmac}` 原语 + 公开 `OtpError` / `Secret`）；**禁止** import `../api` / `../pages` / `../utils` / `../models` / `../types`（守卫规则 `backup-purity`）。
-  - Base32 严格校验走 otp 公开入口 `Secret.fromBase32(secret, { strict: true })`，不重复实现。
-  - IO 与随机源只落 `src/utils/backup-file.ts`（`secureRandom` / `writeBackupFile` / `shareBackupFile` / `readBackupFileFromChat`）。
-  - 口令/密钥/明文/密文不得进 logger / storage；口令只存在于页面内存，`onHide/onUnload` 清空。
-  - 导出前应用锁门禁：仅 `SUCCESS` / `NO_CREDENTIAL` 放行，`SKIPPED` 必须拒绝（规范 S4）。
-  - 测试放 `tests/mfa`；向量唯一事实源为仓库根 `docs/specs/mfa-backup-v1.vectors.json`（CI 依赖其已入库）。
+  - 口令/密文不得进 logger / storage；口令只存在于页面内存与请求体，`onHide/onUnload` 清空。
+  - 导出前应用锁门禁：仅 `SUCCESS` / `NO_CREDENTIAL` 放行，`SKIPPED` 必须拒绝。
+  - 服务端上限 50 条；导入**不去重**、非事务（失败可能已写入部分条目，以 `syncFromRemote` 结果为准）。
+  - 文件通道只落 `src/utils/backup-file.ts`（`writeBackupFile` / `shareBackupFile` / `readBackupFileFromChat`），文件名后缀沿用 `.mfa`。
+  - 测试放 `tests/mfa`（预检 / 口令 / 编排 / 时间解析），不得依赖端内加密向量。
 
 ## CI 与提交流程
 

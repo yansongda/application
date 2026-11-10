@@ -60,30 +60,3 @@
   margin-top: 16rpx;
   line-height: 1.6;
 }
-
-.plan-preview {
-  font-size: 26rpx;
-  color: #333;
-  background: #f7f8fa;
-  border-radius: 8rpx;
-  padding: 16rpx;
-  margin-top: 16rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.progress {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 16rpx;
-  padding: 16rpx;
-  background: #f7f8fa;
-  border-radius: 8rpx;
-}
-
-.progress-text {
-  font-size: 24rpx;
-  color: #555;
-}

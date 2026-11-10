@@ -4,13 +4,13 @@
 
 <view class="page">
   <view wx:if="{{mode === 'import'}}" class="section-hint import-mode-hint">
-    从其它应用备份导入：粘贴加密文本或选择 .mfa 文件
+    导入加密备份：粘贴备份文本或选择 .mfa 文件
   </view>
 
   <view class="section" wx:if="{{mode !== 'import'}}">
     <view class="section-label">导出加密备份</view>
     <view class="card">
-      <view class="card-desc">当前共 {{itemsCount}} 个账号。备份使用你设置的口令加密，忘记口令将无法恢复。</view>
+      <view class="card-desc">当前共 {{itemsCount}} 个账号，单次最多导出 {{maxItems}} 条。备份由服务端加密，忘记口令将无法恢复。</view>
       <t-input
         type="safe-password"
         label="口令"
@@ -45,7 +45,7 @@
   <view class="section">
     <view class="section-label">导入备份</view>
     <view class="card">
-      <view class="card-desc">支持华为元服务与微信小程序导出的 .mfa 备份（内容嗅探，不看后缀）。</view>
+      <view class="card-desc">从备份文件或剪贴板导入，自动识别内容（不看后缀）。重复导入会新增重复条目。</view>
       <view class="actions">
         <t-button variant="outline" block bind:tap="onPasteImport">从剪贴板粘贴</t-button>
         <t-button variant="outline" block bind:tap="onChooseFile">从聊天选择文件</t-button>
@@ -66,22 +66,7 @@
       />
 
       <view class="actions" wx:if="{{importReady}}">
-        <t-button theme="primary" block bind:tap="onAnalyze">解析备份</t-button>
-      </view>
-
-      <view wx:if="{{planReady}}" class="plan-preview">
-        <view>可导入 {{planAccepted}} 条</view>
-        <view wx:if="{{planDuplicates > 0}}">已存在 {{planDuplicates}} 条（跳过）</view>
-        <view wx:if="{{planInvalid > 0}}">异常 {{planInvalid}} 条（跳过）</view>
-      </view>
-
-      <view class="actions" wx:if="{{planReady}}">
-        <t-button theme="primary" block disabled="{{planAccepted <= 0}}" bind:tap="onStartImport">导入 {{planAccepted}} 条</t-button>
-      </view>
-
-      <view wx:if="{{progressVisible}}" class="progress">
-        <view class="progress-text">{{progressText}}</view>
-        <t-button size="small" variant="outline" bind:tap="onCancelImport">取消</t-button>
+        <t-button theme="primary" block bind:tap="onStartImport">导入 {{importCount}} 条</t-button>
       </view>
 
       <view wx:if="{{summary}}" class="card-desc">{{summary}}</view>

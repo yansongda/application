@@ -1,8 +1,12 @@
 /**
- * 导入 / 导出页：导出为口令加密的 .mfa（文件转发 / 剪贴板），从任一端备份导入。
- * 口令只存在于页面内存：onHide/onUnload 立即清空，不写 storage、不进日志。
+ * 导入 / 导出页：加解密全部由服务端完成。
+ * - 导出：POST /api/v1/backup/export → 信封 JSON → 保存 / 转发 / 复制
+ * - 导入：预检信封 → POST /api/v1/backup/import（批量写入，不去重）
+ * 口令只存在于页面内存与请求体：onHide/onUnload 立即清空，不写 storage、不进日志。
  */
-import api from "@api/totp";
+import backupApi from "@api/backup";
+import { MAX_ITEMS } from "@constant/backup";
+import { EE } from "@models/error";
 import { ensureAuthenticated } from "@utils/app";
 import {
   syncOnPageShow as appLockSyncOnPageShow,
@@ -12,26 +16,22 @@ import {
 import {
   buildBackupFileName,
   readBackupFileFromChat,
-  secureRandom,
   shareBackupFile,
   writeBackupFile,
 } from "@utils/backup-file";
 import { copyText, readText } from "@utils/clipboard";
 import { formatLocalDateTime } from "@utils/datetime";
 import logger from "@utils/logger";
-import { readCache, syncFromRemote, upsertItem } from "@utils/totp-cache";
+import { readCache, syncFromRemote } from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
 import Toast from "tdesign-miniprogram/toast/index";
-import { checkPasswordStrength } from "../../backup/crypto";
-import { BackupError, backupErrorMessage } from "../../backup/spec";
+import type { BackupEnvelope } from "types/backup";
 import { buildExport } from "../../models/backup/exporter";
+import { precheck, runImport } from "../../models/backup/importer";
 import {
-  analyze,
-  type ImportPlan,
-  precheck,
-  run,
-} from "../../models/backup/importer";
-import type { CacheItem, Item } from "../../types/totp";
+  checkExportPassword,
+  checkImportPassword,
+} from "../../models/backup/password";
 
 interface InputEvent {
   detail: {
@@ -43,6 +43,7 @@ interface BackupPageData {
   locked: boolean;
   mode: "both" | "import";
   itemsCount: number;
+  maxItems: number;
   exportPassword: string;
   exportPasswordConfirm: string;
   exportReady: boolean;
@@ -51,36 +52,16 @@ interface BackupPageData {
   importReady: boolean;
   importMeta: string;
   importPassword: string;
-  planReady: boolean;
-  planAccepted: number;
-  planDuplicates: number;
-  planInvalid: number;
-  progressVisible: boolean;
-  progressDone: number;
-  progressTotal: number;
-  progressText: string;
+  importCount: number;
   summary: string;
 }
 
-const CLIPBOARD_MAX_ITEMS = 50;
 const CLIPBOARD_MAX_BYTES = 65536;
 
-// 备份 meta.app：开发版取不到上传版本号，回落到 envVersion（自由字符串，≤32 字符，仅用于排障）
-const appVersion = (): string => {
-  const { miniProgram } = wx.getAccountInfoSync();
-  const version = (miniProgram.version || "").trim();
-
-  return version.length > 0 ? version : miniProgram.envVersion;
-};
+type ImportChannel = "clipboard" | "file";
 
 const describeError = (e: unknown): string => {
-  if (e instanceof BackupError) {
-    return e.detail === undefined
-      ? backupErrorMessage(e.code)
-      : `${backupErrorMessage(e.code)}（${e.detail}）`;
-  }
-
-  if (e instanceof Error) {
+  if (e instanceof Error || e instanceof EE) {
     return e.message;
   }
 
@@ -105,6 +86,7 @@ Page({
     locked: false,
     mode: "both" as BackupPageData["mode"],
     itemsCount: 0,
+    maxItems: MAX_ITEMS,
     exportPassword: "",
     exportPasswordConfirm: "",
     exportReady: false,
@@ -113,23 +95,14 @@ Page({
     importReady: false,
     importMeta: "",
     importPassword: "",
-    planReady: false,
-    planAccepted: 0,
-    planDuplicates: 0,
-    planInvalid: 0,
-    progressVisible: false,
-    progressDone: 0,
-    progressTotal: 0,
-    progressText: "",
+    importCount: 0,
     summary: "",
   } as BackupPageData,
   exportText: "",
   exportFileName: "",
-  importText: "",
-  importFileName: "",
-  plan: undefined as ImportPlan | undefined,
+  importEnvelope: undefined as BackupEnvelope | undefined,
+  importChannel: "file" as ImportChannel,
   busy: false,
-  cancelRequested: false,
 
   onLoad(options?: { mode?: string }) {
     if (options?.mode === "import") {
@@ -174,13 +147,12 @@ Page({
     this.setData({
       exportPassword: "",
       exportPasswordConfirm: "",
+      exportReady: false,
+      exportMeta: "",
+      exportClipboardAllowed: true,
       importPassword: "",
-      progressVisible: false,
-      progressText: "",
     });
     this.exportText = "";
-    this.importText = "";
-    this.plan = undefined;
   },
 
   onExportPasswordChange(e: InputEvent) {
@@ -195,7 +167,7 @@ Page({
     this.setData({ importPassword: e.detail.value });
   },
 
-  // 导出前：确认（含不可恢复警告）→ 应用锁门禁 → 口令强度 → 生成密文
+  // 导出：确认（含不可恢复警告）→ 应用锁门禁 → 口令强度 → 服务端加密
   async onExport() {
     if (this.busy) {
       return;
@@ -214,10 +186,22 @@ Page({
       return;
     }
 
+    // 服务端以数据库为准；本地缓存超限时提前拦截，给出一致文案
+    if (cache.items.length > MAX_ITEMS) {
+      Message.warning({
+        content: `单次最多导出 ${MAX_ITEMS} 个账号，请先删除多余账号`,
+        duration: 3000,
+        offset: [20, 32],
+        context: this,
+      });
+
+      return;
+    }
+
     const confirmed = await new Promise<boolean>((resolve) => {
       wx.showModal({
         title: "导出加密备份",
-        content: `将导出 ${cache.items.length} 个账号。请牢记口令：忘记口令将无法恢复备份。`,
+        content: `将导出 ${cache.items.length} 个账号。备份由服务端加密，请牢记口令：忘记口令将无法恢复。`,
         confirmText: "继续",
         success: (res) => resolve(res.confirm === true),
         fail: () => resolve(false),
@@ -230,7 +214,7 @@ Page({
 
     const outcome = await verifyAppLock();
 
-    // 门禁映射（规范 S4）：SKIPPED 必须拒绝，NO_CREDENTIAL 视为系统已关闭应用锁
+    // 门禁映射：SKIPPED 必须拒绝，NO_CREDENTIAL 视为系统已关闭应用锁
     if (
       outcome !== VerifyOutcome.SUCCESS &&
       outcome !== VerifyOutcome.NO_CREDENTIAL
@@ -258,7 +242,7 @@ Page({
       return;
     }
 
-    const strength = checkPasswordStrength(password);
+    const strength = checkExportPassword(password);
 
     if (!strength.ok) {
       Message.warning({
@@ -277,29 +261,23 @@ Page({
     wx.showLoading({ title: "正在加密...", mask: true });
 
     try {
-      const result = await buildExport(cache.items, {
-        password,
-        app: appVersion(),
-        rng: secureRandom,
-      });
+      const result = await buildExport(backupApi, password);
 
       this.exportText = result.text;
       this.exportFileName = buildBackupFileName();
 
       const clipboardAllowed =
-        result.count <= CLIPBOARD_MAX_ITEMS &&
-        result.text.length <= CLIPBOARD_MAX_BYTES;
+        result.count <= MAX_ITEMS && result.text.length <= CLIPBOARD_MAX_BYTES;
 
       this.setData({
         exportReady: true,
-        exportMeta: `已加密 ${result.count} 条（跳过 ${result.skipped} 条）· 备份时间 ${formatLocalDateTime(result.createdAt)}`,
+        exportMeta: `已加密 ${result.count} 条 · 备份时间 ${formatLocalDateTime(result.createdAt)}`,
         exportClipboardAllowed: clipboardAllowed,
       });
 
       logger.info("backup_export", {
         channel: "generate",
         count: result.count,
-        skipped: result.skipped,
         elapsedMs: Date.now() - startedAt,
       });
 
@@ -368,25 +346,18 @@ Page({
     }
   },
 
-  // 导入第一步：只做结构校验（不索要口令）
-  acceptImportText(text: string, fileName: string) {
+  // 导入第一步：只做结构预检（不索要口令）
+  acceptImportText(text: string, channel: ImportChannel) {
     try {
       const envelope = precheck(text);
 
-      this.importText = text;
-      this.importFileName = fileName;
-      this.plan = undefined;
-
-      const source =
-        envelope.meta.source === "huawei" ? "华为元服务" : "微信小程序";
+      this.importEnvelope = envelope;
+      this.importChannel = channel;
 
       this.setData({
         importReady: true,
-        importMeta: `来自${source}，含 ${envelope.meta.count} 条，导出于 ${formatLocalDateTime(envelope.meta.createdAt)}（本地时间）`,
-        planReady: false,
-        planAccepted: 0,
-        planDuplicates: 0,
-        planInvalid: 0,
+        importMeta: `含 ${envelope.meta.count} 条，导出于 ${formatLocalDateTime(envelope.meta.created_at)}（本地时间）`,
+        importCount: envelope.meta.count,
         summary: "",
       });
     } catch (e: unknown) {
@@ -424,7 +395,7 @@ Page({
         return;
       }
 
-      this.acceptImportText(file.text, file.fileName);
+      this.acceptImportText(file.text, "file");
     } catch (_e: unknown) {
       logger.warning("backup_parse", { channel: "file", result: "failed" });
       Message.error({
@@ -436,17 +407,19 @@ Page({
     }
   },
 
-  // 导入第二步：解密 + 生成计划（预览 accepted / duplicates / invalid）
-  async onAnalyze() {
-    if (this.busy || this.importText.length === 0) {
+  // 导入第二步：一次请求交给服务端解密并批量写入；不去重、非事务
+  async onStartImport() {
+    const envelope = this.importEnvelope;
+
+    if (envelope === undefined || this.busy) {
       return;
     }
 
-    const password = this.data.importPassword;
+    const strength = checkImportPassword(this.data.importPassword);
 
-    if (password.length === 0) {
+    if (!strength.ok) {
       Message.warning({
-        content: "请输入备份口令",
+        content: strength.reason,
         duration: 3000,
         offset: [20, 32],
         context: this,
@@ -458,138 +431,39 @@ Page({
     this.busy = true;
     const startedAt = Date.now();
 
-    wx.showLoading({ title: "正在解密...", mask: true });
+    wx.showLoading({ title: "正在导入...", mask: true });
 
     try {
-      const cache = readCache();
-      const plan = await analyze(this.importText, password, cache?.items ?? []);
-
-      this.plan = plan;
-
-      this.setData({
-        planReady: true,
-        planAccepted: plan.accepted.length,
-        planDuplicates: plan.duplicates,
-        planInvalid: plan.invalid.length,
-      });
-
-      logger.info("backup_parse", {
-        channel: this.importFileName === "clipboard" ? "clipboard" : "file",
-        accepted: plan.accepted.length,
-        duplicates: plan.duplicates,
-        invalid: plan.invalid.length,
-        count: plan.envelopeCount,
-        elapsedMs: Date.now() - startedAt,
-      });
-    } catch (e: unknown) {
-      logger.error("backup_error", {
-        stage: "derive",
-        code: (e as BackupError)?.code,
-      });
-      Message.error({
-        content: describeError(e),
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
-    } finally {
-      wx.hideLoading();
-      this.busy = false;
-    }
-  },
-
-  // 导入第三步：串行 create + 校正，可取消；结束后从服务端刷新缓存
-  async onStartImport() {
-    if (this.plan === undefined || this.busy) {
-      return;
-    }
-
-    const plan = this.plan;
-
-    if (plan.accepted.length === 0) {
-      Toast({
-        message: "没有需要导入的账号",
-        theme: "success",
-        duration: 1500,
-        direction: "column",
-      });
-
-      return;
-    }
-
-    this.busy = true;
-    this.cancelRequested = false;
-    const startedAt = Date.now();
-
-    this.setData({
-      progressVisible: true,
-      progressDone: 0,
-      progressTotal: plan.accepted.length,
-      progressText: `正在导入 0/${plan.accepted.length}`,
-      summary: "",
-    });
-
-    try {
-      const report = await run(plan, {
-        api,
-        shouldCancel: () => this.cancelRequested,
-        onProgress: (done, total) => {
-          this.setData({
-            progressDone: done,
-            progressText: `正在导入 ${done}/${total}`,
-          });
-        },
-        onCreated: (created: Item) => {
-          upsertItem({
-            id: created.id,
-            issuer: created.issuer,
-            username: created.username,
-            secret: created.config.secret,
-            period: created.config.period,
-            digits: created.config.digits,
-            algorithm: created.config.algorithm,
-            tags: created.tags ?? [],
-            pinned: created.pinned === true,
-          } as CacheItem);
-        },
-      });
-
-      const summary = [
-        `成功 ${report.done} 条`,
-        report.failed.length > 0 ? `失败 ${report.failed.length} 条` : "",
-        report.canceled ? `未执行 ${report.notExecuted} 条` : "",
-      ]
-        .filter((part) => part.length > 0)
-        .join("，");
-
-      this.setData({ progressVisible: false, summary });
+      const report = await runImport(
+        backupApi,
+        envelope,
+        this.data.importPassword,
+      );
 
       logger.info("backup_import", {
-        done: report.done,
-        failed: report.failed.length,
-        canceled: report.canceled,
-        withTags: report.withTags,
-        withPinned: report.withPinned,
+        channel: this.importChannel,
+        imported: report.imported,
         elapsedMs: Date.now() - startedAt,
       });
 
-      // 失败条目不阻塞；以服务端为准刷新本地缓存与列表
+      // 服务端为准刷新本地缓存与列表
       await syncFromRemote().catch(() => undefined);
 
       const cache = readCache();
 
       this.setData({
         itemsCount: cache?.items.length ?? this.data.itemsCount,
-        planReady: false,
         importReady: false,
+        importMeta: "",
         importPassword: "",
+        importCount: 0,
+        summary: `成功导入 ${report.imported} 条`,
       });
-      this.plan = undefined;
-      this.importText = "";
+      this.importEnvelope = undefined;
 
       Toast({
-        message: summary.length > 0 ? summary : "导入完成",
-        theme: report.failed.length > 0 ? "warning" : "success",
+        message: `成功导入 ${report.imported} 条`,
+        theme: "success",
         duration: 2500,
         direction: "column",
       });
@@ -604,14 +478,9 @@ Page({
         offset: [20, 32],
         context: this,
       });
-      this.setData({ progressVisible: false });
     } finally {
+      wx.hideLoading();
       this.busy = false;
     }
-  },
-
-  onCancelImport() {
-    this.cancelRequested = true;
-    this.setData({ progressText: "正在取消..." });
   },
 });

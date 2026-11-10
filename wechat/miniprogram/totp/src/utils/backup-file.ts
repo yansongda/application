@@ -1,11 +1,9 @@
 /**
- * 备份文件通道（微信侧唯一 wx 文件 / 随机数入口）：
+ * 备份文件通道（微信侧唯一 wx 文件入口）：
  * - 导出：写 USER_DATA_PATH 后由用户点击转发（wx.shareFileMessage 必须用户触发）
  * - 导入：从聊天选择文件并读文本（wx.chooseMessageFile，不依赖后缀）
- * 本模块不做加解密、不打日志内容。
+ * 加密/解密全部在服务端完成；本模块不触碰口令，也不打日志内容。
  */
-import logger from "./logger";
-
 export interface BackupFile {
   filePath: string;
   fileName: string;
@@ -15,7 +13,7 @@ const pad = (value: number): string => {
   return value.toString().padStart(2, "0");
 };
 
-/** 推荐命名 mfa-backup-YYYYMMDD-HHmm.mfa（规范 §7）。 */
+/** 推荐命名 mfa-backup-YYYYMMDD-HHmm.mfa（后缀沿用小程序文案约定，内容为后端信封 JSON）。 */
 export const buildBackupFileName = (now: Date = new Date()): string => {
   const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
   const time = `${pad(now.getHours())}${pad(now.getMinutes())}`;
@@ -73,17 +71,4 @@ export const readBackupFileFromChat = async (): Promise<
   const fileName = file.name || "mfa-backup.mfa";
 
   return { text, fileName };
-};
-
-/** CSPRNG：签名是 Promise（基础库 2.15.0+），供 crypto 的 rng 注入使用。 */
-export const secureRandom = async (length: number): Promise<Uint8Array> => {
-  try {
-    const result = await wx.getRandomValues({ length });
-
-    return new Uint8Array(result.randomValues);
-  } catch (e: unknown) {
-    logger.error("获取安全随机数失败", e);
-
-    throw new Error("当前环境不支持安全随机数");
-  }
 };

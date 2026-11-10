@@ -194,8 +194,12 @@ const wxRequest = <T>(
   });
 };
 
-const post = <T>(url: string, data?: RequestData): Promise<T> => {
-  return request<T>({ url, data, method: "POST" } as Request);
+const post = <T>(
+  url: string,
+  data?: RequestData,
+  timeout?: number,
+): Promise<T> => {
+  return request<T>({ url, data, method: "POST", timeout } as Request);
 };
 
 const get = <T>(url: string, query?: RequestQuery): Promise<T> => {

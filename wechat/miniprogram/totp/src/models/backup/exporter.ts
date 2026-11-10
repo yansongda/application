@@ -1,86 +1,34 @@
 /**
- * 导出编排：本地缓存条目 → 校验/归一 → 加密信封文本。
- * 缺 secret 或无法归一（非法 Base32 / period）的条目跳过并计数，不阻塞整体导出。
+ * 导出编排：调用服务端加密接口，把返回的信封序列化为可保存 / 分享的文本。
+ * 条目读取、校验与加密全部在服务端完成；前端不再持有明文打包结果。
  */
+import type { BackupEnvelope } from "types/backup";
+import { validateEnvelope } from "./envelope";
 
-import { encryptEnvelope, type RandomBytes } from "../../backup/crypto";
-import { type BackupItem, sanitizeItem } from "../../backup/payload";
-import { BackupError, BackupErrorCode, MAX_ITEMS } from "../../backup/spec";
-import type { CacheItem } from "../../types/totp";
-
-export interface ExportOptions {
-  password: string;
-  app: string;
-  rng: RandomBytes;
-  iterations?: number;
-  now?: () => Date;
-  offsetMinutes?: number;
+export interface ExportApi {
+  exportBackup(password: string): Promise<BackupEnvelope>;
 }
 
 export interface ExportResult {
+  /** 可直接写文件 / 复制到剪贴板的 JSON 文本。 */
   text: string;
   count: number;
-  skipped: number;
-  /** 信封 meta.createdAt（带时区偏移，规范 §4.1），供页面按本地时间显示。 */
+  /** 信封 meta.created_at（带时区偏移），页面按本地时间显示。 */
   createdAt: string;
+  envelope: BackupEnvelope;
 }
 
-const toRawItem = (item: CacheItem): Record<string, unknown> => {
-  return {
-    issuer: item.issuer,
-    username: item.username,
-    secret: item.secret,
-    period: item.period,
-    digits: item.digits,
-    algorithm: item.algorithm,
-    tags: item.tags,
-    pinned: item.pinned,
-  };
-};
-
 export const buildExport = async (
-  items: CacheItem[],
-  options: ExportOptions,
+  api: ExportApi,
+  password: string,
 ): Promise<ExportResult> => {
-  const editable: BackupItem[] = [];
-  let skipped = 0;
-
-  for (const item of items) {
-    if (typeof item.secret !== "string" || item.secret.length === 0) {
-      skipped += 1;
-      continue;
-    }
-
-    const sanitized = sanitizeItem(toRawItem(item));
-
-    if (!sanitized.ok) {
-      skipped += 1;
-      continue;
-    }
-
-    editable.push(sanitized.item);
-  }
-
-  if (editable.length > MAX_ITEMS) {
-    throw new BackupError({
-      code: BackupErrorCode.E_PAYLOAD,
-      detail: `单包条目数超过上限 ${MAX_ITEMS}`,
-    });
-  }
-
-  const encrypted = await encryptEnvelope(editable, options.password, {
-    source: "wechat",
-    app: options.app,
-    rng: options.rng,
-    iterations: options.iterations,
-    now: options.now,
-    offsetMinutes: options.offsetMinutes,
-  });
+  // 服务端响应也走一次预检：避免后端升级 / 代理篡改后把异常信封落成文件
+  const envelope = validateEnvelope(await api.exportBackup(password));
 
   return {
-    text: encrypted.text,
-    count: editable.length,
-    skipped,
-    createdAt: encrypted.meta.createdAt,
+    text: JSON.stringify(envelope, null, 2),
+    count: envelope.meta.count,
+    createdAt: envelope.meta.created_at,
+    envelope,
   };
 };
