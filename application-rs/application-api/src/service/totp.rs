@@ -2,7 +2,7 @@ use crate::request::totp::{
     DetailResponse, EditIssuerRequestParams, EditPinnedRequestParams, EditTagsRequestParams,
     EditUsernameRequestParams, SortItemParams, normalize_tags,
 };
-use crate::service::backup::{self, BackupEnvelope, BackupItem};
+use crate::service::backup::{self, Envelope, Item};
 use application_database::account::access_token;
 use application_database::tool::totp;
 use application_kernel::result::{ErrorCode, Result};
@@ -156,7 +156,7 @@ pub async fn delete(access_token: &access_token::AccessToken, id: u64) -> Result
 }
 
 /// TOTP 备份类型标识：与信封 `kind` 一致。
-pub(crate) const TOTP_KIND: &str = "totp";
+pub(crate) const BACKUP_KIND_TOTP: &str = "totp";
 
 /// TOTP 备份中的单条数据；字段与 `tool.totp` 的 `config` 语义保持一致。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,8 +191,8 @@ fn default_backup_algorithm() -> String {
     "SHA1".to_string()
 }
 
-impl BackupItem for TotpBackupItem {
-    const KIND: &'static str = TOTP_KIND;
+impl Item for TotpBackupItem {
+    const KIND: &'static str = BACKUP_KIND_TOTP;
 
     fn validate(self) -> Result<Self> {
         let Self {
@@ -261,7 +261,7 @@ impl BackupItem for TotpBackupItem {
 }
 
 impl TotpBackupItem {
-    /// 已通过 [`BackupItem::validate`] 的条目转换为入库对象（不再重复校验）。
+    /// 已通过 [`Item::validate`] 的条目转换为入库对象（不再重复校验）。
     fn into_created(self, user_id: u64) -> totp::CreatedTotp {
         totp::CreatedTotp {
             user_id,
@@ -305,7 +305,7 @@ impl From<totp::Totp> for TotpBackupItem {
 pub async fn export_backup(
     access_token: &access_token::AccessToken,
     password: String,
-) -> Result<BackupEnvelope> {
+) -> Result<Envelope> {
     let rows = totp::all(access_token.user_id).await?;
 
     if rows.is_empty() {
@@ -326,7 +326,7 @@ pub async fn import_backup(
     password: String,
     backup: Value,
 ) -> Result<u32> {
-    let envelope = serde_json::from_value::<BackupEnvelope>(backup)
+    let envelope = serde_json::from_value::<Envelope>(backup)
         .map_err(|_| ErrorCode::ParamsBackupFormatInvalid)?;
 
     let items = backup::open::<TotpBackupItem>(&password, &envelope)?;

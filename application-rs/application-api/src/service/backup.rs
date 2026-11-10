@@ -1,6 +1,6 @@
 //! 通用加密备份：信封编解码、PBKDF2 + AES-256-GCM 加解密与按 `kind` 分发。
 //!
-//! 具体备份类型（如 `totp`）只需在自己的模块中定义条目结构并实现 [`BackupItem`]：
+//! 具体备份类型（如 `totp`）只需在自己的模块中定义条目结构并实现 [`Item`]：
 //!
 //! - [`seal`] / [`open`] 负责信封构造、AAD、加解密与逐条校验；
 //! - [`export`] / [`import`] 是按 `kind` 分发的注册入口，新增类型时在此追加分支。
@@ -52,7 +52,7 @@ const TAG_LEN: usize = 16;
 const MAX_DATA_LEN: usize = 512 * 1024;
 
 /// 备份载荷条目契约：每种 `kind` 的条目类型实现本 trait 即可复用信封/加解密/校验流程。
-pub trait BackupItem: Serialize + DeserializeOwned + Sized {
+pub trait Item: Serialize + DeserializeOwned + Sized {
     /// 该条目类型对应的信封 `kind`（如 `totp`）。
     const KIND: &'static str;
 
@@ -62,18 +62,18 @@ pub trait BackupItem: Serialize + DeserializeOwned + Sized {
 
 /// 备份信封：头部字段参与 AAD 认证，`data` 为密文。
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BackupEnvelope {
+pub struct Envelope {
     pub format: String,
     pub kind: String,
     pub version: u32,
-    pub meta: BackupMeta,
-    pub kdf: BackupKdf,
-    pub cipher: BackupCipher,
+    pub meta: Meta,
+    pub kdf: Kdf,
+    pub cipher: Cipher,
     /// base64（标准字母表）编码的 `密文 || 16 字节 GCM tag`
     pub data: String,
 }
 
-impl BackupEnvelope {
+impl Envelope {
     /// AAD：按固定顺序用 `\x1f` 拼接全部头字段。
     ///
     /// 任何头字段被篡改都会导致 AES-GCM 校验失败（表现为“密码错误或数据损坏”）。
@@ -97,7 +97,7 @@ impl BackupEnvelope {
 
 /// 明文可见的元信息：用于导入前的展示与解密后的条数校验。
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BackupMeta {
+pub struct Meta {
     /// 带时区偏移的 RFC3339 时间，例如 `2026-06-28T14:30:00+08:00`
     pub created_at: String,
     /// 条目数，解密后必须与 payload 数组长度一致
@@ -106,7 +106,7 @@ pub struct BackupMeta {
 
 /// 密钥派生参数。
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BackupKdf {
+pub struct Kdf {
     pub alg: String,
     pub iterations: u32,
     /// base64（标准字母表）编码的 16 字节随机 salt
@@ -115,7 +115,7 @@ pub struct BackupKdf {
 
 /// 对称加密参数。
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BackupCipher {
+pub struct Cipher {
     pub alg: String,
     /// base64（标准字母表）编码的 12 字节随机 nonce
     pub nonce: String,
@@ -126,8 +126,8 @@ pub async fn export(
     access_token: &access_token::AccessToken,
     kind: &str,
     password: String,
-) -> Result<BackupEnvelope> {
-    if kind == totp::TOTP_KIND {
+) -> Result<Envelope> {
+    if kind == totp::BACKUP_KIND_TOTP {
         return totp::export_backup(access_token, password).await;
     }
 
@@ -141,15 +141,15 @@ pub async fn import(
     password: String,
     backup: Value,
 ) -> Result<u32> {
-    if kind == totp::TOTP_KIND {
+    if kind == totp::BACKUP_KIND_TOTP {
         return totp::import_backup(access_token, password, backup).await;
     }
 
     Err(ErrorCode::ParamsBackupKindUnsupported)
 }
 
-/// 用生产参数（[`KDF_ITERATIONS`]）加密并生成 v1 信封；`kind` 取自 [`BackupItem::KIND`]。
-pub fn seal<P: BackupItem>(password: &str, items: &[P]) -> Result<BackupEnvelope> {
+/// 用生产参数（[`KDF_ITERATIONS`]）加密并生成 v1 信封；`kind` 取自 [`Item::KIND`]。
+pub fn seal<P: Item>(password: &str, items: &[P]) -> Result<Envelope> {
     if items.len() > MAX_ITEMS {
         return Err(ErrorCode::ParamsBackupLimitExceeded);
     }
@@ -172,11 +172,11 @@ pub fn seal<P: BackupItem>(password: &str, items: &[P]) -> Result<BackupEnvelope
     )
 }
 
-/// 校验信封头并解密为条目数组；`kind` 必须与 [`BackupItem::KIND`] 一致。
+/// 校验信封头并解密为条目数组；`kind` 必须与 [`Item::KIND`] 一致。
 ///
 /// 头字段校验失败返回 `ParamsBackupFormatInvalid`；密文认证失败统一返回
 /// `ParamsBackupPasswordInvalid`（不区分密码错误与数据损坏，避免给出爆破提示）。
-pub fn open<P: BackupItem>(password: &str, envelope: &BackupEnvelope) -> Result<Vec<P>> {
+pub fn open<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> {
     if envelope.kind != P::KIND {
         return Err(ErrorCode::ParamsBackupFormatInvalid);
     }
@@ -187,7 +187,7 @@ pub fn open<P: BackupItem>(password: &str, envelope: &BackupEnvelope) -> Result<
 }
 
 /// 信封头校验：格式/版本/算法/参数范围/时间/base64 长度。
-fn validate_envelope(envelope: &BackupEnvelope) -> Result<()> {
+fn validate_envelope(envelope: &Envelope) -> Result<()> {
     if envelope.format != FORMAT || envelope.version != VERSION {
         return Err(ErrorCode::ParamsBackupFormatInvalid);
     }
@@ -221,7 +221,7 @@ fn validate_envelope(envelope: &BackupEnvelope) -> Result<()> {
 }
 
 /// 解密、反序列化并逐条校验 payload；调用方需保证信封头已校验（或测试中主动绕过）。
-fn open_payload<P: BackupItem>(password: &str, envelope: &BackupEnvelope) -> Result<Vec<P>> {
+fn open_payload<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> {
     let salt = decode_fixed::<SALT_LEN>(&envelope.kdf.salt)?;
     let nonce_bytes = decode_fixed::<NONCE_LEN>(&envelope.cipher.nonce)?;
 
@@ -273,7 +273,7 @@ fn open_payload<P: BackupItem>(password: &str, envelope: &BackupEnvelope) -> Res
         return Err(ErrorCode::ParamsBackupLimitExceeded);
     }
 
-    items.into_iter().map(BackupItem::validate).collect()
+    items.into_iter().map(Item::validate).collect()
 }
 
 /// 生成信封并用 AES-256-GCM 封装给定明文（`kind` 由调用方给出，测试可构造不匹配场景）。
@@ -284,7 +284,7 @@ fn seal_raw(
     count: u32,
     created_at: &str,
     iterations: u32,
-) -> Result<BackupEnvelope> {
+) -> Result<Envelope> {
     let mut salt = [0u8; SALT_LEN];
     let mut nonce_bytes = [0u8; NONCE_LEN];
 
@@ -299,20 +299,20 @@ fn seal_raw(
         ErrorCode::InternalCryptoFailed
     })?;
 
-    let mut envelope = BackupEnvelope {
+    let mut envelope = Envelope {
         format: FORMAT.to_string(),
         kind: kind.to_string(),
         version: VERSION,
-        meta: BackupMeta {
+        meta: Meta {
             created_at: created_at.to_string(),
             count,
         },
-        kdf: BackupKdf {
+        kdf: Kdf {
             alg: KDF_ALG.to_string(),
             iterations,
             salt: STANDARD.encode(salt),
         },
-        cipher: BackupCipher {
+        cipher: Cipher {
             alg: CIPHER_ALG.to_string(),
             nonce: STANDARD.encode(nonce_bytes),
         },
@@ -383,7 +383,7 @@ mod tests {
         name: String,
     }
 
-    impl BackupItem for TestItem {
+    impl Item for TestItem {
         const KIND: &'static str = "test";
 
         fn validate(self) -> Result<Self> {
@@ -406,7 +406,7 @@ mod tests {
         ]
     }
 
-    fn sample_envelope() -> BackupEnvelope {
+    fn sample_envelope() -> Envelope {
         let items = sample_items();
         let plaintext = serde_json::to_vec(&items).unwrap();
         let count = u32::try_from(items.len()).unwrap();
@@ -423,21 +423,21 @@ mod tests {
     }
 
     /// 固定字段的信封：只用于锁定 AAD 字节序，不参与加解密。
-    fn fixed_envelope() -> BackupEnvelope {
-        BackupEnvelope {
+    fn fixed_envelope() -> Envelope {
+        Envelope {
             format: FORMAT.to_string(),
             kind: TestItem::KIND.to_string(),
             version: VERSION,
-            meta: BackupMeta {
+            meta: Meta {
                 created_at: TEST_CREATED_AT.to_string(),
                 count: 2,
             },
-            kdf: BackupKdf {
+            kdf: Kdf {
                 alg: KDF_ALG.to_string(),
                 iterations: KDF_ITERATIONS,
                 salt: "AAAAAAAAAAAAAAAAAAAAAA==".to_string(),
             },
-            cipher: BackupCipher {
+            cipher: Cipher {
                 alg: CIPHER_ALG.to_string(),
                 nonce: "AAAAAAAAAAAAAAAA".to_string(),
             },
