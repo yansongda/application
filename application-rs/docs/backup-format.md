@@ -179,7 +179,7 @@ Content-Type: application/json
 ### 9.1 服务端扩展新类型
 
 1. 在对应业务模块（如 `service/settings.rs`）定义条目结构并实现 `service::backup::Item`（`KIND` + `validate`）。
-2. 实现该类型的导出/导入函数（读取数据 → `backup::seal`；`backup::open` → 落库）。
+2. 实现该类型的导出/导入函数（读取数据 → `backup::create`；`backup::decrypt` → 落库）。
 3. 在 `service/backup.rs` 的 `export` / `import` 分发入口追加一个 `kind` 分支。
 4. 新类型建议同步更新本规范，补充其 payload 字段表。
 

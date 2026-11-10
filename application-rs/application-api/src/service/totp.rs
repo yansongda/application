@@ -293,7 +293,7 @@ impl From<totp::Totp> for TotpBackupItem {
 }
 
 /// 导出当前用户的全部 TOTP 条目为加密备份信封（由 `service::backup` 按 kind 分发进入）。
-pub async fn export_backup(
+pub async fn backup_export(
     access_token: &access_token::AccessToken,
     password: String,
 ) -> Result<Envelope> {
@@ -308,11 +308,11 @@ pub async fn export_backup(
         .map(TotpBackupItem::from)
         .collect::<Vec<_>>();
 
-    backup::seal(&password, &items)
+    backup::create(&password, &items)
 }
 
 /// 导入备份：解密后逐条校验，全部通过后逐条插入（不去重，重复导入即新增）。
-pub async fn import_backup(
+pub async fn backup_import(
     access_token: &access_token::AccessToken,
     password: String,
     backup: Value,
@@ -320,7 +320,7 @@ pub async fn import_backup(
     let envelope = serde_json::from_value::<Envelope>(backup)
         .map_err(|_| ErrorCode::ParamsBackupFormatInvalid)?;
 
-    let items = backup::open::<TotpBackupItem>(&password, &envelope)?;
+    let items = backup::decrypt::<TotpBackupItem>(&password, &envelope)?;
 
     if items.is_empty() {
         return Err(ErrorCode::ParamsBackupFormatInvalid);

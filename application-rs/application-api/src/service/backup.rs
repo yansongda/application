@@ -2,7 +2,7 @@
 //!
 //! 具体备份类型（如 `totp`）只需在自己的模块中定义条目结构并实现 [`Item`]：
 //!
-//! - [`seal`] / [`open`] 负责信封构造、AAD、加解密与逐条校验；
+//! - [`create`] / [`decrypt`] 负责信封构造、AAD、加解密与逐条校验；
 //! - [`export`] / [`import`] 是按 `kind` 分发的注册入口，新增类型时在此追加分支。
 
 use crate::service::totp;
@@ -128,7 +128,7 @@ pub async fn export(
     password: String,
 ) -> Result<Envelope> {
     if kind == totp::BACKUP_KIND_TOTP {
-        return totp::export_backup(access_token, password).await;
+        return totp::backup_export(access_token, password).await;
     }
 
     Err(ErrorCode::ParamsBackupKindUnsupported)
@@ -142,14 +142,14 @@ pub async fn import(
     backup: Value,
 ) -> Result<u32> {
     if kind == totp::BACKUP_KIND_TOTP {
-        return totp::import_backup(access_token, password, backup).await;
+        return totp::backup_import(access_token, password, backup).await;
     }
 
     Err(ErrorCode::ParamsBackupKindUnsupported)
 }
 
-/// 用生产参数（[`KDF_ITERATIONS`]）加密并生成 v1 信封；`kind` 取自 [`Item::KIND`]。
-pub fn seal<P: Item>(password: &str, items: &[P]) -> Result<Envelope> {
+/// 用生产参数（`KDF_ITERATIONS`）加密并生成 v1 信封；`kind` 取自 [`Item::KIND`]。
+pub fn create<P: Item>(password: &str, items: &[P]) -> Result<Envelope> {
     if items.len() > MAX_ITEMS {
         return Err(ErrorCode::ParamsBackupLimitExceeded);
     }
@@ -161,21 +161,21 @@ pub fn seal<P: Item>(password: &str, items: &[P]) -> Result<Envelope> {
     })?);
     let count = u32::try_from(items.len()).map_err(|_| ErrorCode::ParamsBackupLimitExceeded)?;
 
-    seal_with::<P>(password, plaintext.as_slice(), count, KDF_ITERATIONS)
+    create_with::<P>(password, plaintext.as_slice(), count, KDF_ITERATIONS)
 }
 
 /// 校验信封头并解密为条目数组；`kind` 必须与 [`Item::KIND`] 一致。
 ///
 /// 头字段校验失败返回 `ParamsBackupFormatInvalid`；密文认证失败统一返回
 /// `ParamsBackupPasswordInvalid`（不区分密码错误与数据损坏，避免给出爆破提示）。
-pub fn open<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> {
+pub fn decrypt<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> {
     if envelope.kind != P::KIND {
         return Err(ErrorCode::ParamsBackupFormatInvalid);
     }
 
     validate_envelope(envelope)?;
 
-    open_payload::<P>(password, envelope)
+    decrypt_payload::<P>(password, envelope)
 }
 
 /// 信封头校验：格式/版本/算法/参数范围/时间/base64 长度。
@@ -213,7 +213,7 @@ fn validate_envelope(envelope: &Envelope) -> Result<()> {
 }
 
 /// 解密、反序列化并逐条校验 payload；调用方需保证信封头已校验（或测试中主动绕过）。
-fn open_payload<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> {
+fn decrypt_payload<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> {
     let salt = decode_fixed::<SALT_LEN>(&envelope.kdf.salt)?;
     let nonce_bytes = decode_fixed::<NONCE_LEN>(&envelope.cipher.nonce)?;
 
@@ -261,8 +261,8 @@ fn open_payload<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P>> 
 }
 
 /// 生成信封并用 AES-256-GCM 封装给定明文；`kind` 取 `P::KIND`。
-/// `iterations` 仅供测试使用低迭代参数，生产入口 [`seal`] 固定传 [`KDF_ITERATIONS`]。
-fn seal_with<P: Item>(
+/// `iterations` 仅供测试使用低迭代参数，生产入口 [`create`] 固定传 [`KDF_ITERATIONS`]。
+fn create_with<P: Item>(
     password: &str,
     plaintext: &[u8],
     count: u32,
@@ -392,7 +392,7 @@ mod tests {
         let plaintext = serde_json::to_vec(&items).unwrap();
         let count = u32::try_from(items.len()).unwrap();
 
-        seal_with::<TestItem>(
+        create_with::<TestItem>(
             "correct horse battery staple",
             plaintext.as_slice(),
             count,
@@ -455,7 +455,7 @@ mod tests {
     #[test]
     fn roundtrip_restores_items() {
         let envelope = sample_envelope();
-        let items = open_payload::<TestItem>("correct horse battery staple", &envelope).unwrap();
+        let items = decrypt_payload::<TestItem>("correct horse battery staple", &envelope).unwrap();
 
         assert_eq!(items, sample_items());
     }
@@ -464,7 +464,7 @@ mod tests {
     #[test]
     fn wrong_password_is_rejected() {
         let envelope = sample_envelope();
-        let err = open_payload::<TestItem>("wrong password", &envelope).unwrap_err();
+        let err = decrypt_payload::<TestItem>("wrong password", &envelope).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupPasswordInvalid);
     }
@@ -478,7 +478,8 @@ mod tests {
         ciphertext[last] ^= 0x01;
         envelope.data = STANDARD.encode(ciphertext);
 
-        let err = open_payload::<TestItem>("correct horse battery staple", &envelope).unwrap_err();
+        let err =
+            decrypt_payload::<TestItem>("correct horse battery staple", &envelope).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupPasswordInvalid);
     }
@@ -489,7 +490,8 @@ mod tests {
         let mut envelope = sample_envelope();
         envelope.meta.count += 1;
 
-        let err = open_payload::<TestItem>("correct horse battery staple", &envelope).unwrap_err();
+        let err =
+            decrypt_payload::<TestItem>("correct horse battery staple", &envelope).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupPasswordInvalid);
     }
@@ -500,7 +502,8 @@ mod tests {
         let mut envelope = sample_envelope();
         envelope.meta.created_at = "2026-06-28T06:30:00Z".to_string();
 
-        let err = open_payload::<TestItem>("correct horse battery staple", &envelope).unwrap_err();
+        let err =
+            decrypt_payload::<TestItem>("correct horse battery staple", &envelope).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupPasswordInvalid);
     }
@@ -511,7 +514,8 @@ mod tests {
         let mut envelope = sample_envelope();
         envelope.kdf.iterations += 1;
 
-        let err = open_payload::<TestItem>("correct horse battery staple", &envelope).unwrap_err();
+        let err =
+            decrypt_payload::<TestItem>("correct horse battery staple", &envelope).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupPasswordInvalid);
     }
@@ -522,7 +526,7 @@ mod tests {
         let mut envelope = sample_envelope();
         envelope.kind = "other".to_string();
 
-        let err = open::<TestItem>("password", &envelope).unwrap_err();
+        let err = decrypt::<TestItem>("password", &envelope).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupFormatInvalid);
     }
@@ -531,7 +535,7 @@ mod tests {
     #[test]
     fn validate_rejects_low_iterations() {
         let envelope = sample_envelope();
-        let err = open::<TestItem>("correct horse battery staple", &envelope).unwrap_err();
+        let err = decrypt::<TestItem>("correct horse battery staple", &envelope).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupFormatInvalid);
     }
@@ -573,9 +577,9 @@ mod tests {
     #[test]
     fn payload_must_be_array() {
         let envelope =
-            seal_with::<TestItem>("password", br#"{"items":[]}"#, 0, TEST_ITERATIONS).unwrap();
+            create_with::<TestItem>("password", br#"{"items":[]}"#, 0, TEST_ITERATIONS).unwrap();
 
-        let err = open_payload::<TestItem>("password", &envelope).unwrap_err();
+        let err = decrypt_payload::<TestItem>("password", &envelope).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupFormatInvalid);
     }
@@ -583,9 +587,9 @@ mod tests {
     /// 测试场景：`meta.count` 与明文数组长度不一致 → 预期格式错误
     #[test]
     fn payload_count_must_match_meta() {
-        let envelope = seal_with::<TestItem>("password", b"[]", 1, TEST_ITERATIONS).unwrap();
+        let envelope = create_with::<TestItem>("password", b"[]", 1, TEST_ITERATIONS).unwrap();
 
-        let err = open_payload::<TestItem>("password", &envelope).unwrap_err();
+        let err = decrypt_payload::<TestItem>("password", &envelope).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupFormatInvalid);
     }
@@ -598,9 +602,9 @@ mod tests {
         }];
         let plaintext = serde_json::to_vec(&items).unwrap();
         let envelope =
-            seal_with::<TestItem>("password", plaintext.as_slice(), 1, TEST_ITERATIONS).unwrap();
+            create_with::<TestItem>("password", plaintext.as_slice(), 1, TEST_ITERATIONS).unwrap();
 
-        let err = open_payload::<TestItem>("password", &envelope).unwrap_err();
+        let err = decrypt_payload::<TestItem>("password", &envelope).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupFormatInvalid);
     }
@@ -614,7 +618,7 @@ mod tests {
             })
             .collect();
 
-        let err = seal("password", &items).unwrap_err();
+        let err = create("password", &items).unwrap_err();
 
         assert_eq!(err, ErrorCode::ParamsBackupLimitExceeded);
     }
