@@ -1,7 +1,9 @@
 .item {
   height: 100px;
   background-color: white;
-  border-radius: 8px;
+  // 与华为元服务卡片圆角一致；overflow 裁切保证滑出按钮不超出圆角
+  border-radius: 10px;
+  overflow: hidden;
   position: relative;
 
   .item-body {
