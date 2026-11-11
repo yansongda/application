@@ -2,6 +2,12 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.1] - 2026-11-11
+
+### Fixed
+
+- 修复首页列表卡片左右留 16px 边距、分组表头内边距过大：改为通栏卡片（圆角 10px + `overflow: hidden` 裁切滑出按钮）、分组表头 4px 内边距，与华为 MFA 元服务对齐，平铺 / 分组 / 排序三种视图宽度统一 (#203)
+
 ## [1.3.0] - 2026-11-11
 
 ### Added
