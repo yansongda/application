@@ -108,9 +108,10 @@
 .items {
   padding-bottom: 120px;
 
+  // 与华为元服务首页一致：卡片通栏、无左右间距，仅保留纵向 10px 间隔
   .item-card {
     display: block;
-    margin: 0 16px 10px;
+    margin: 0 0 10px;
   }
 
   .group-header {
@@ -120,7 +121,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 4px 20px 6px;
+    // 卡片通栏后表头同步贴边，左右内边距对齐华为（4）
+    padding: 4px 4px 6px;
     background-color: #f5f5f5;
 
     .group-title {
