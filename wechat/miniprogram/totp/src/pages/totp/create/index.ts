@@ -1,5 +1,4 @@
 import api from "@api/totp";
-import { HttpError } from "@models/error";
 import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import { withLoading } from "@utils/loading";
 import { upsertItem } from "@utils/totp-cache";
@@ -198,9 +197,9 @@ Page({
         direction: "column",
       });
 
-      // buildTotpUri 抛 OtpError → describeOtpError；api.create 抛 HttpError（后端错误）。
+      // buildTotpUri 抛 OtpError；api.create 抛 HttpError —— 文案统一由 describeOtpError 处理
       Message.error({
-        content: `创建失败：${err instanceof HttpError ? err.message : describeOtpError(err)}`,
+        content: `创建失败：${describeOtpError(err)}`,
         duration: 5000,
         offset: [20, 32],
         context: this,

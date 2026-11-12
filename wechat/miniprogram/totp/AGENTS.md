@@ -63,6 +63,14 @@ bun run check:otp-dependency    # OTP 依赖守卫（版本基线 / dist 指纹 
 - 与后端 API 对接时，字段命名和含义应与后端保持一致，避免前端自行发明新语义
 - 修改公共常量、接口模型或页面交互时，尽量保持微信小程序现有用法一致，避免无关重构
 
+## 错误处理约定
+
+- 自建错误统一继承 `src/models/error.ts` 的 `AppError`（`extends Error` + `new.target.prototype` + `readonly code` + 字面量 `name`）；子类不得重声明 `code`（class field 会重置基类赋值，TS 亦会报 TS2612 / TS2564）。
+- 码域分离：业务 / HTTP 用 `EE` / `HttpError`（数字码，`src/constant/error.ts`）；备份预检用 `BackupParseError`（字符串码，对齐 `@yansongda/miniprogram-otp` 的 `OtpError`）。
+- 面向用户的文案统一走 `utils/error.ts#getErrorMessage`（仅信任 `AppError.message`）；领域码表留在所属模块（后端码表 `src/api/backup.ts`、`OtpError` 码表 `src/utils/totp-uri.ts`），其余一律回落“操作失败，请重试”。
+- `describeOtpError` 的码表必须对 `OtpErrorCode` 穷尽：库新增码时编译期报错，运行期未知码回落通用文案。
+- 本轮仅在 totp 落地：`yansongda` 的 `models/error.ts`、`utils/error.ts` 暂未同步，两端允许暂时漂移（后续单独任务同步）。
+
 ## 加密备份模块（后端 API）
 
 - 加解密全部由服务端完成（`POST /api/v1/backup/export|import`，`kind=totp`），契约见 `application-rs/docs/backup-format.md`；前端**不得**重新引入端内 PBKDF2 / AES-GCM 实现。
@@ -73,7 +81,7 @@ bun run check:otp-dependency    # OTP 依赖守卫（版本基线 / dist 指纹 
   - `src/models/backup.ts` —— 单文件模型（与 `models/error.ts` 同形态），按分区注释组织：`BackupParseError`（无口令结构预检错误）、`validateEnvelope` / `parseEnvelope`（无口令结构预检）、口令策略（导出强度 / 导入可用性，**不 trim、不做 NFC**）、`buildExport`（导出编排，api 由调用方注入，便于单测）。
   - 导入无编排层：页面直接调用 `backupApi.importBackup(envelope, password)`，服务端一次请求完成解密与批量写入。
   - 跨目录 import 写 `@models/backup`（文件路径，微信运行时支持；目录 index 不解析）。模型内部分区不强拆文件，除非新增导入编排 / 多 `kind` / 改密等真需求。
-  - 预检错误 `BackupParseError` 与 `@yansongda/miniprogram-otp` 的 `OtpError` 同构（`as const` 字符串码 + `Object.setPrototypeOf` 保 `instanceof`）；**禁止**改用 `models/error.ts` 的 `EE` / 数值码。
+  - 预检错误 `BackupParseError` 与 `@yansongda/miniprogram-otp` 的 `OtpError` 同构（`as const` 字符串码），并共用 `models/error.ts` 的 `AppError` 基类；**禁止**改用 `EE` / 数值码。
 - 不变量：
   - 口令/密文不得进 logger / storage；口令只存在于页面内存与请求体，`onHide/onUnload` 清空。
   - 导出前应用锁门禁：仅 `SUCCESS` / `NO_CREDENTIAL` 放行，`SKIPPED` 必须拒绝。

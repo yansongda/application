@@ -194,4 +194,18 @@ describe("totp-uri", () => {
     expect(describeOtpError(new Error("boom"))).toBe("操作失败，请重试");
     expect(describeOtpError("not an error")).toBe("操作失败，请重试");
   });
+
+  it("describeOtpError_covers_every_known_code", () => {
+    for (const code of Object.values(OtpErrorCode)) {
+      expect(describeOtpError(new OtpError(code, code)).length).toBeGreaterThan(
+        0,
+      );
+    }
+  });
+
+  it("describeOtpError_fallsBackForFutureCode", () => {
+    expect(
+      describeOtpError(new OtpError("FUTURE_CODE" as OtpErrorCode, "x")),
+    ).toBe("操作失败，请重试");
+  });
 });

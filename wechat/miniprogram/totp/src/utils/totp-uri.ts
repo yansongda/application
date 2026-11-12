@@ -4,6 +4,8 @@
  * 手输密钥必须先经 Secret.fromBase32(strict) 校验——OTPAuthURI.build 的 secret 规范化是宽松的，
  * 不能当作唯一校验。本文件不依赖 wx / logger（logger 顶层执行 wx 调用，纯逻辑模块不得引入）。
  */
+
+import error from "@utils/error";
 import {
   OTPAuthURI,
   type OtpAuthParams,
@@ -64,29 +66,36 @@ const rebuildTotpUri = (p: OtpAuthParams): string => {
   return OTPAuthURI.build(p);
 };
 
-// 错误文案映射：按 code 分支，绝不打印 secret
+// 错误文案映射：键穷尽（库新增码时编译期报错），值 `undefined` 表示回落通用文案；绝不打印 secret
+const OTP_ERROR_MESSAGES: Record<OtpErrorCode, string | undefined> = {
+  EMPTY_SECRET: "密钥不符合 Base32 规范，请重新输入或扫码",
+  INVALID_BASE32_CHAR: "密钥不符合 Base32 规范，请重新输入或扫码",
+  INVALID_BASE32_PADDING: "密钥不符合 Base32 规范，请重新输入或扫码",
+  SECRET_TOO_SHORT: "密钥不符合 Base32 规范，请重新输入或扫码",
+  SECRET_TOO_WEAK: "密钥不符合 Base32 规范，请重新输入或扫码",
+  INVALID_ALGORITHM: "配置信息不合法",
+  INVALID_DIGITS: "配置信息不合法",
+  INVALID_PERIOD: "配置信息不合法",
+  INVALID_T0: "配置信息不合法",
+  // 以下码当前应用流程不可达（verify / crypto 路径），保持原有通用文案
+  INVALID_WINDOW: undefined,
+  INVALID_COUNTER: undefined,
+  INVALID_TIMESTAMP: undefined,
+  INVALID_TOKEN: undefined,
+  CRYPTO_FAILED: undefined,
+  CRYPTO_NOT_INITIALIZED: undefined,
+  NOT_IMPLEMENTED: undefined,
+  INVALID_OTPAUTH_URI: "二维码不是有效的 otpauth 链接",
+  UNSUPPORTED_OTPAUTH_TYPE: "仅支持 TOTP 二维码",
+};
+
 const describeOtpError = (e: unknown): string => {
   if (e instanceof OtpError) {
-    switch (e.code) {
-      case OtpErrorCode.INVALID_BASE32_CHAR:
-      case OtpErrorCode.INVALID_BASE32_PADDING:
-      case OtpErrorCode.EMPTY_SECRET:
-      case OtpErrorCode.SECRET_TOO_SHORT:
-        return "密钥不符合 Base32 规范，请重新输入或扫码";
-      case OtpErrorCode.UNSUPPORTED_OTPAUTH_TYPE:
-        return "仅支持 TOTP 二维码";
-      case OtpErrorCode.INVALID_ALGORITHM:
-      case OtpErrorCode.INVALID_DIGITS:
-      case OtpErrorCode.INVALID_PERIOD:
-        return "配置信息不合法";
-      case OtpErrorCode.INVALID_OTPAUTH_URI:
-        return "二维码不是有效的 otpauth 链接";
-      default:
-        return "操作失败，请重试";
-    }
+    // 运行时可能有库新增码未同步（类型层已穷尽，运行层兜底）
+    return OTP_ERROR_MESSAGES[e.code] ?? error.getErrorMessage(e);
   }
 
-  return "操作失败，请重试";
+  return error.getErrorMessage(e);
 };
 
 export { buildTotpUri, describeOtpError, parseTotpUri, rebuildTotpUri };
