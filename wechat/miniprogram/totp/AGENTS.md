@@ -46,7 +46,7 @@ bun run biome:fix               # 自动修复
 bun run biome:fix-unsafe        # 自动修复（含不安全修复）
 bun run typecheck               # TypeScript 类型检查（tsc --noEmit）
 bun run test                    # 全部 Bun 测试（tests/）
-bun run check:otp-invariants    # OTP 不变量静态守卫
+bun run check:otp-dependency    # OTP 依赖守卫（版本基线 / dist 指纹 / RFC 向量冒烟）
 ```
 
 ## 代码风格规范
@@ -73,7 +73,7 @@ bun run check:otp-invariants    # OTP 不变量静态守卫
   - `src/models/backup.ts` —— 单文件模型（与 `models/error.ts` 同形态），按分区注释组织：`BackupParseError`（无口令结构预检错误）、`validateEnvelope` / `parseEnvelope`（无口令结构预检）、口令策略（导出强度 / 导入可用性，**不 trim、不做 NFC**）、`buildExport`（导出编排，api 由调用方注入，便于单测）。
   - 导入无编排层：页面直接调用 `backupApi.importBackup(envelope, password)`，服务端一次请求完成解密与批量写入。
   - 跨目录 import 写 `@models/backup`（文件路径，微信运行时支持；目录 index 不解析）。模型内部分区不强拆文件，除非新增导入编排 / 多 `kind` / 改密等真需求。
-  - 预检错误 `BackupParseError` 与 `src/otp/errors.ts` 同构（`as const` 字符串码 + `Object.setPrototypeOf` 保 `instanceof`）；**禁止**改用 `models/error.ts` 的 `EE` / 数值码。
+  - 预检错误 `BackupParseError` 与 `@yansongda/miniprogram-otp` 的 `OtpError` 同构（`as const` 字符串码 + `Object.setPrototypeOf` 保 `instanceof`）；**禁止**改用 `models/error.ts` 的 `EE` / 数值码。
 - 不变量：
   - 口令/密文不得进 logger / storage；口令只存在于页面内存与请求体，`onHide/onUnload` 清空。
   - 导出前应用锁门禁：仅 `SUCCESS` / `NO_CREDENTIAL` 放行，`SKIPPED` 必须拒绝。
@@ -83,7 +83,7 @@ bun run check:otp-invariants    # OTP 不变量静态守卫
 
 ## CI 与提交流程
 
-- 前端 CI 检查为：`bun install && bun run biome:check && bun run typecheck`
+- 前端 CI 检查为：`bun install && bun run biome:check && bun run typecheck && bun run test && bun run check:otp-dependency`
 - 禁止提交：`node_modules/`、`src/miniprogram_npm/`、`project.private.config.json`、`.idea/`、`.vscode/`
 - 必须提交：`bun.lock`
 
@@ -95,13 +95,13 @@ bun run check:otp-invariants    # OTP 不变量静态守卫
 ## NOTES
 
 - 与 `yansongda` 主小程序共享 `utils/error.ts`、`utils/logger.ts`、`utils/string.ts`、`models/error.ts`、`types/http.d.ts` 等代码，但当前无正式共享包，分别独立维护。
-- 当前 CI 已接入 `bun run biome:check`、`bun run typecheck`、`bun run test`（`tests/`）与 `bun run check:otp-invariants`（不变量静态守卫）。
-- `src/otp/` 为自研零依赖 OTP 库（对照 ohos-otp / 华为 `@yansongda/otp` 的分层与契约），`utils/totp.ts` 是唯一业务调用点；API、不变量、错误码与覆盖边界见 `src/otp/README.md`。
-- `src/otp/` 相关 import 必须显式指向 `../otp/index`（禁止写 `../otp` 目录），微信运行时不做目录 index 解析。
-- 业务 OTP 解析/生成只经 `utils/totp-uri.ts` / `utils/totp.ts`，页面与组件不得直接 import `src/otp/`。
+- 当前 CI 已接入 `bun run biome:check`、`bun run typecheck`、`bun run test`（`tests/`）与 `bun run check:otp-dependency`（OTP 依赖守卫：caret 版本基线、dist 指纹、RFC 向量与错误码冒烟）。
+- OTP 算法实现来自 npm 包 `@yansongda/miniprogram-otp`（源码在上游 otp monorepo 的 `packages/core`，与鸿蒙 `@yansongda/otp` 同源）；**本仓库不再保留 OTP 源码与算法测试**，`utils/totp.ts` 是唯一算码调用点，`utils/totp-uri.ts` 是唯一 URI / 错误文案编排点。
+- 微信运行时只消费该包的 `dist/index.js`（CJS 单文件，包声明了 `miniprogram: dist`）：本地开发 / 真机调试前必须在微信开发者工具执行 **工具 → 构建 npm**；`src/miniprogram_npm/` 是本地产物，不入库。
+- 业务 OTP 解析 / 生成只经 `utils/totp-uri.ts` / `utils/totp.ts`，页面与组件不得直接 import `@yansongda/miniprogram-otp`。
 - 新增纯逻辑测试放 `tests/mfa/`。
 - 应用锁状态机 `src/utils/app-lock.ts`（安全关键）：`onHide` 仅在 `verifying === false` 时 `generation++`；验证中（Android 微信 SOTER 认证 Activity 会触发 `onHide`）不得作废请求，否则「验证成功」会被判 `SKIPPED`，开关页提示「操作过于频繁」。`verifying` 复位必须恰为 3 处（`unlock` / 悬挂保险 / `verify` finally），`verifyStartedAt` 同步复位；悬挂保险阈值 `VERIFY_STUCK_MS`（30s）覆盖 SOTER 未回调导致的锁死。
 - 应用锁判定不得依赖 App 生命周期先置位：`coldStart` 初始 `true`（模块加载即冷启动）；`syncOnPageShow` 以 `pendingCheck || lastHideAt !== undefined` 传入 `shouldLock`，未达阈值时清 `lastHideAt`（否则退后台 <60s 回前台后停留再切页会误锁）；`setEnabled(true)` 必须清 `lastHideAt`（SOTER 界面会触发 `onHide`）。回归用例见 `tests/mfa/app-lock.test.ts`。
 - 新装/重装（本地 `security_settings` 不存在）：必须先恢复安全设置再渲染验证码。`pages/totp/index` 在 `ensureAuthenticated` 后用 `hasSettings()` 判断，`await refreshUser()` 触发端云调和 → `syncOnPageShow()` 复核，锁定则 `setData({locked:true})` 并 `return`（**不调用** `loadItems`）；`pages/user/index` 在 `await refreshUser()` 后同样复核。禁止把该路径的 `refreshUser` 改成始终非阻塞，否则首屏漏锁（删小程序重装后扫码可复现）。
-- 不要重新引入 `otpauth` 或任何运行时密码学依赖；哈希原语在 `src/otp/internal/sha{1,256,512}.ts`，SHA-512 必须用 hi/lo 半字（禁止 BigInt，老设备兼容）。
-- `src/otp` 关键不变量：全库无日志、`Secret.toJSON()` 脱敏、`verify` 扫满窗口、取模只在 `digits.format`、`internal/*` 不进 barrel（测试经深路径 import）。
+- 不要重新引入 `otpauth` 或任何第三方运行时密码学依赖：HOTP / TOTP 只来自 `@yansongda/miniprogram-otp`（零运行时依赖，纯 JS SHA-1/256/512，SHA-512 用 hi/lo 半字、禁止 BigInt 的实现已在上游固化）。升级版本时必须同步更新 `scripts/check-otp-dependency.mjs` 的版本基线、`EXPECTED_DIST_SHA512`，并补做真机冒烟。
+- OTP 关键不变量（全库零日志、`Secret.toJSON()` 脱敏、`verify` 扫满窗口、取模只在 `digits.format`、`internal/*` 不进 barrel）由上游仓库及其 CI 保证；本仓库由 `check:otp-dependency` 守住依赖版本、产物指纹与关键行为。

@@ -1,12 +1,12 @@
+import { TOTP } from "@yansongda/miniprogram-otp";
 import type { TotpAlgorithm } from "types/totp";
-// 微信运行时不做目录 index 解析（"../otp" 会被当成 otp.js），必须显式指向 barrel 文件
-import { TOTP } from "../otp/index";
 
 const DEFAULT_DIGITS = 6;
 const DEFAULT_ALGORITHM: TotpAlgorithm = "SHA1";
 
 // 与后端 Totp::digits() 一致：仅 6~8 合法，其余按默认值算码
-const normalizeDigits = (digits: number | undefined): number => {
+// 返回字面量联合，直接满足 @yansongda/miniprogram-otp 的 TotpOptions.digits 契约
+const normalizeDigits = (digits: number | undefined): 6 | 7 | 8 => {
   return digits === 7 || digits === 8 ? digits : DEFAULT_DIGITS;
 };
 

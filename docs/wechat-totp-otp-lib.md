@@ -4,6 +4,11 @@
 > **状态**：已实施（待真机 / 开发者工具冒烟）
 > **范围**：`wechat/miniprogram/totp/`（业务侧仅 `src/utils/totp.ts` 一个引用点）
 > **参考实现**：`~/000-Coding/ohos-otp`（华为元服务在用的 `@yansongda/otp`）
+>
+> **现状更新（2026-11-12）**：OTP 实现已在 `github.com/yansongda/otp` monorepo 提取为独立 npm 包
+> `@yansongda/miniprogram-otp@^1.0.1`（源码 `packages/core` 与本仓库原 `src/otp/` 同源，242 项算法测试由上游承接）。
+> 本仓库已删除 `src/otp/` 与 `tests/otp/`，业务改从包入口导入；下文「为什么落在本仓库而非独立发版仓库」的结论
+> 已被该包取代（包声明 `miniprogram: dist`，微信「构建 npm」可直接消费）。
 
 ## 1. 背景与决策
 

@@ -11,7 +11,7 @@ import {
   OtpErrorCode,
   OtpType,
   Secret,
-} from "../otp/index";
+} from "@yansongda/miniprogram-otp";
 import type { TotpAlgorithm } from "../types/totp";
 
 export interface TotpUriInput {

@@ -2,6 +2,13 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Changed
+
+- OTP 实现迁移到独立 npm 包 `@yansongda/miniprogram-otp@^1.0.1`（与本仓库共享同一份源码的产物，算法 / 错误码 / URI 行为不变）：删除本地 `src/otp/`（20 文件 / 1800 行）与 `tests/otp/`（242 项重复测试），`utils/totp.ts` / `utils/totp-uri.ts` 改为从包入口导入
+- `check:otp-invariants` 替换为 `check:otp-dependency`：校验依赖版本基线、`dist/index.js` 指纹、RFC 4226/6238 向量与关键错误码冒烟，并禁止业务代码深 import 已删除的 `src/otp`
+
 ## [1.3.1] - 2026-11-11
 
 ### Fixed

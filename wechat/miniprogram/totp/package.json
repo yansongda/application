@@ -7,7 +7,7 @@
     "biome:check": "biome check",
     "biome:fix": "biome check --fix",
     "biome:fix-unsafe": "biome check --fix --unsafe",
-    "check:otp-invariants": "bun scripts/check-otp-invariants.mjs",
+    "check:otp-dependency": "bun scripts/check-otp-dependency.mjs",
     "test": "bun test tests",
     "typecheck": "tsc --noEmit"
   },
@@ -23,6 +23,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "@yansongda/miniprogram-otp": "^1.0.1",
     "tdesign-miniprogram": "^1.15.2"
   }
 }
