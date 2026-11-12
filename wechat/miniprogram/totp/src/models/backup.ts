@@ -3,7 +3,7 @@
  *
  * 契约见 `application-rs/docs/backup-format.md`：加解密全部由服务端完成，
  * 本模块不持有明文条目；口令只存在于页面内存与请求体，绝不写 storage / 日志。
- * 预检错误对齐 `src/otp/errors.ts`（`as const` 字符串码 + `setPrototypeOf` 保 `instanceof`）。
+ * 预检错误对齐 `@yansongda/miniprogram-otp` 的 `OtpError`（`as const` 字符串码 + `setPrototypeOf` 保 `instanceof`）。
  */
 import {
   FORMAT,
@@ -20,7 +20,7 @@ import type { BackupApi, BackupEnvelope } from "types/backup";
 
 /**
  * 预检失败分类：仅用于前端提示、日志与测试断言；服务端错误码在 `api/backup.ts` 映射。
- * 与 `src/otp/errors.ts` 同构（字符串码冻结，v1 起仅允许新增）。
+ * 与 `@yansongda/miniprogram-otp` 的 `OtpError` 同构（字符串码冻结，v1 起仅允许新增）。
  */
 export const BackupParseErrorCode = {
   E_JSON: "E_JSON", // 文本不是合法 JSON
@@ -39,7 +39,7 @@ export type BackupParseErrorCode =
  *
  * 微信编译会把 class 降级到 ES5（`project.config.json` 的 `es6 + enhance`），
  * 届时 `extends Error` 会丢原型链；这里显式 setPrototypeOf 保证 instanceof 可靠
- * （与 `src/otp/errors.ts` 的 OtpError 同一处理）。
+ * （与 `@yansongda/miniprogram-otp` 的 OtpError 同一处理）。
  */
 export class BackupParseError extends Error {
   readonly code: BackupParseErrorCode;

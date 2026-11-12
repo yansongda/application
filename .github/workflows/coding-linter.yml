@@ -144,6 +144,6 @@ jobs:
       - name: Run unit tests
         run: |
           bun run test
-      - name: Check OTP invariants
+      - name: Check OTP dependency
         run: |
-          bun run check:otp-invariants
+          bun run check:otp-dependency

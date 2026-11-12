@@ -42,16 +42,6 @@
           }
         }
       }
-    },
-    {
-      "includes": ["src/otp/otpauth-uri.ts"],
-      "linter": {
-        "rules": {
-          "complexity": {
-            "noStaticOnlyClass": "off"
-          }
-        }
-      }
     }
   ]
 }

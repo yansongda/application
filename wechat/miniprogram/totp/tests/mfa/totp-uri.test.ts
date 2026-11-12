@@ -2,7 +2,7 @@
  * otpauth URI 包装层契约测试（自设计文档 §3.3.1 / §3.9）。
  */
 import { describe, expect, it } from "bun:test";
-import { OtpError, OtpErrorCode, OtpType } from "../../src/otp/index";
+import { OtpError, OtpErrorCode, OtpType } from "@yansongda/miniprogram-otp";
 import {
   buildTotpUri,
   describeOtpError,
