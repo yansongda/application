@@ -120,6 +120,15 @@ MFA/
   grep -c "_lastFinishedAt = "     $F   # 3
   ```
 
+## 弹窗与认证跳转（防重叠）
+
+- **loading 必须走 `utils/PromptAction.ets` 的 `Dialog.openLoading/closeLoading`**（模块级引用计数 + 全局单飞）：同一时刻只允许一个 loading 窗口，多个页面并发打开时复用同一 id，引用归零才真正关闭。**不要**再用 `Dialog.open` 直接承载 loading（会新开窗口，两个 loading 同屏）。
+- **重试 / 失败框走 `Dialog.openAlert`**（单槽位）；关闭后必须等 `Dialog.settle()` 的退场间隙（`closeCustomDialog(dialogId)` 只有同步 void 形态），再开下一个窗口。失败分支顺序固定：`await closeLoading()` → `openAlert()`。
+- **认证失效的信号是 `AuthExpiredError`**（`utils/Http.ets`）：响应拦截器命中 `1000/1001/1002/1004/1005/1006` 时先 `redirectLoginPage(...)` 再 reject。页面 catch 到它时**不得**再弹重试框（会挂在登录页上方），只记日志。
+- **登录页 `pages/Login.ets` 整个认证流程只开一个 loading**：refresh 失败在同一窗口内降级 `login()`，不得「关闭 → 重开 → 递归 auth」；`isAuthenticating` 为重入锁（`finally` 必复位），成功路径先 `await Dialog.closeLoading()` 再 `pop()`。
+- **首页 `pages/index/Index.ets` 的 `onActive` 刷新有门禁**：登录页在栈中或 `Authorization.state() !== NORMAL` 直接返回；已有条目时 `refresh(true)` 静默刷新（不弹 loading），首屏与下拉刷新才用 loading。
+- **`utils/Nav.ets#redirectLoginPage` 有节流**（`utils/AuthGate.ets`）：1s 去抖 + 60s 内最多自动跳 3 次；跳转前 `Dialog.closeAll()`（入栈前再清一次），并延迟 200ms 入栈，让调用方的失败清理先跑完。登录成功只复位去抖/单飞标记，**不重置 60s 计数**（否则异常场景会无限跳转）。
+
 ## 服务卡片（`pages/form/`）
 
 - 卡片使用**状态管理 V2**（`@Entry @ComponentV2`）：`updateForm` 注入的数据按**变量名**匹配卡片内的 `@Local` 变量，入口组件用裸 `@Entry`、**不传** LocalStorage 实例；`@LocalStorageProp` 等 V1 组件内装饰器在 `@ComponentV2` 中**编译报错**，两套不可混用。
@@ -146,6 +155,16 @@ MFA/
     --pack-info-path "$PWD/build/outputs/default/pack.info" --out-path /tmp/pack.res --force true
   ```
   常见反例报错（便于搜索定位）：`The name is not same as formName`（文件名 ≠ form name）、`The level-4 directory of EntryCard must be named as snapshot`（四级目录名错）、`entry/<form>-2x2 has no related snapshot`（缺 2x2 快照）、`No image in PNG format is found`（非 PNG）。
+
+## 加密备份（`pages/user/Backup.ets`，服务端加解密）
+
+- 契约以 `application-rs/docs/backup-format.md` 为准（`POST /api/v1/backup/export|import`，`kind=totp`，信封 v1）；**加解密全部在服务端**，前端只做信封预检与口令策略，**禁止**引入端内 PBKDF2 / AES-GCM。
+- 分层：`types/Backup.ets`（契约常量 / 信封类型 / `BackupPageParams`）→ `api/Backup.ets`（两个接口 + 超时 15s + 后端错误码文案）→ `models/Backup.ets`（`parseEnvelope` / 口令策略 / `buildExport`）→ `utils/BackupFile.ets`（文件通道）→ `pages/user/Backup.ets`（UI）。
+- **备份接口超时固定 15s**（`BACKUP_TIMEOUT_MS`，服务端 PBKDF2 600k 迭代）；其余接口仍用默认 5s。
+- **口令只存在于页面内存与请求体**：`onHidden` 调 `clearSecrets()`，不写 preferences、不进日志；导出文本与导入信封同样在 `onHidden` 清空。
+- 通道：导出（复制到剪贴板 / `DocumentViewPicker.save` 存 `.mfa`）、导入（`PasteButton` 安全控件读剪贴板 / `DocumentViewPicker.select` 选文件 / 手动粘贴兜底，按内容识别不看后缀）。
+- 读剪贴板**不要申请**受限权限 `ohos.permission.READ_PASTEBOARD`：只能用 `PasteButton` 授权成功后的临时权限（编译器会提示需要该权限，属预期告警）。
+- 导入**不去重**；`9903` 表示部分写入，页面仍会刷新列表并提示核对。导入成功后用 `Totp.all()` 重载 `ItemsRuntime` 并 `FormBridge.sync` 同步卡片。
 
 ## 测试
 

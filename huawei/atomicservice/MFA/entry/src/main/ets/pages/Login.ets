@@ -8,6 +8,11 @@ import { Dialog } from '../utils/PromptAction';
 import { User } from '../models/User';
 import { User as UserApi } from '../api/User';
 import { SecuritySync } from '../models/security/Sync';
+import { AuthGate } from '../utils/AuthGate';
+import { AuthExpiredError } from '../utils/Http';
+
+// 重试按钮与关闭重试框之间的让位时间（alert 自带关闭动画，立刻开 loading 会短暂同屏）
+const RETRY_DELAY_MS: number = 200;
 
 export interface LoginPageParams {
   forceAuthorizationState: State;
@@ -34,6 +39,8 @@ struct Login {
   private failed: boolean = false;
   @Local
   private lastAuthType: AuthType = AuthType.LOGIN;
+  // 认证重入锁：onReady 与重试按钮可能并发触发，多个流程会各自抢 loading 窗口
+  private isAuthenticating: boolean = false;
 
   build() {
     NavDestination() {
@@ -61,6 +68,13 @@ struct Login {
       const state = this.getFinalState(context.pathInfo.param as LoginPageParams);
 
       hilog.info(LogDomain.PAGES, AppPagesName.LOGIN, 'onReady, state: %{public}s', state.toString());
+
+      // 认证状态已被其它流程恢复（例如延迟入栈期间 refresh 完成）：直接关闭登录页，避免停在空页
+      if (!loginState.includes(state) && !refreshState.includes(state)) {
+        this.pages.pop();
+
+        return;
+      }
 
       if (loginState.includes(state)) {
         await this.auth(AuthType.LOGIN);
@@ -96,35 +110,39 @@ struct Login {
   }
 
   private async auth(type: AuthType): Promise<void> {
+    if (this.isAuthenticating) {
+      return;
+    }
+
+    this.isAuthenticating = true;
     this.lastAuthType = type;
     this.failed = false;
 
+    // 整个认证流程只开一个 loading：refresh 失败时在同一窗口内降级登录，
+    // 不再「关掉 → 重开 → 递归 auth」，否则接口在超时边界抖动时会在两个 loading 之间来回闪
+    await Dialog.openLoading(() => this.loadingDialog());
+
     try {
-      if (AuthType.LOGIN === type) {
-        await Dialog.execute(
-          () => this.loadingDialog(),
-          () => this.authorization.login(),
-          () => this.loginConfirmDialog(() => this.auth(type))
-        );
-      }
-
       if (AuthType.LOGIN_REFRESH === type) {
-        const dialogId = await Dialog.open(() => this.loadingDialog());
-
         try {
           await this.authorization.refresh(this.authorization.refreshToken);
-
-          Dialog.close(dialogId);
         } catch (e) {
           hilog.warn(LogDomain.PAGES, AppPagesName.LOGIN,
             'refresh_token 刷新失败，可能过期或服务器错误，重新登录， Cause: %{public}s',
-            JSON.stringify(e))
+            JSON.stringify(e));
 
-          Dialog.close(dialogId);
+          await this.authorization.login();
 
-          return this.auth(AuthType.LOGIN);
+          this.lastAuthType = AuthType.LOGIN;
         }
+      } else {
+        await this.authorization.login();
       }
+
+      // 先让认证 loading 完全退场，再回首页：否则首页 onActive 的刷新 loading 会与它同屏
+      await Dialog.closeLoading();
+
+      AuthGate.reset();
 
       // 先跳转再补用户信息：列表渲染只依赖 itemsRuntime，头像/昵称由全局 User（@ObservedV2/@Trace）异步刷新。
       // 若把 fetchUser 串在跳转前，会在登录页多等一次与列表无关的请求（网络差时至多 5s 超时），表现为「登录成功却卡住」。
@@ -134,10 +152,26 @@ struct Login {
         // fetchUser 内部已吞掉异常，这里仅避免 unhandled rejection
       });
     } catch (e) {
+      await Dialog.closeLoading();
+
+      // 认证失效已由拦截器跳转登录页，这里再弹重试框只会叠在登录页上方；保留页面内重试按钮
+      if (!(e instanceof AuthExpiredError)) {
+        await Dialog.openAlert(() => this.loginConfirmDialog(() => {
+          // 按钮 action 是同步回调：延迟一拍，等重试框关闭动画结束再开 loading
+          setTimeout(() => {
+            this.auth(this.lastAuthType).catch(() => {
+              // 失败已在 auth 内部处理，仅避免 unhandled rejection
+            });
+          }, RETRY_DELAY_MS);
+        }));
+      }
+
       // 用户在重试对话框选择取消，停留在登录页并提供重试按钮
       hilog.warn(LogDomain.PAGES, AppPagesName.LOGIN, '登录失败: %{public}s', JSON.stringify(e));
 
       this.failed = true;
+    } finally {
+      this.isAuthenticating = false;
     }
   }
 

@@ -619,6 +619,142 @@
     {
       "name": "user_help_page_organize_pin",
       "value": "左滑或详情页可置顶；置顶账号排在最前，分组视图按置顶、标签、未分类排列"
+    },
+    {
+      "name": "backup_page_title",
+      "value": "加密备份"
+    },
+    {
+      "name": "user_detail_page_backup_export",
+      "value": "导出加密备份"
+    },
+    {
+      "name": "user_detail_page_backup_import",
+      "value": "导入加密备份"
+    },
+    {
+      "name": "backup_export_title",
+      "value": "导出加密备份"
+    },
+    {
+      "name": "backup_export_desc",
+      "value": "当前共 %d 个账号，单次最多导出 50 条。备份由服务端加密，忘记口令将无法恢复。"
+    },
+    {
+      "name": "backup_export_password_placeholder",
+      "value": "口令（至少 8 个字符）"
+    },
+    {
+      "name": "backup_export_password_confirm_placeholder",
+      "value": "再次输入口令"
+    },
+    {
+      "name": "backup_export_generate",
+      "value": "生成加密备份"
+    },
+    {
+      "name": "backup_export_save",
+      "value": "保存为文件"
+    },
+    {
+      "name": "backup_export_copy",
+      "value": "复制到剪贴板"
+    },
+    {
+      "name": "backup_export_warn",
+      "value": "备份只有密文；忘记口令将无法恢复。发送或复制后请注意清理剪贴板与备份文件。"
+    },
+    {
+      "name": "backup_export_clipboard_too_large",
+      "value": "备份较大，剪贴板通道不可用，请使用文件通道"
+    },
+    {
+      "name": "backup_export_generated",
+      "value": "加密备份已生成"
+    },
+    {
+      "name": "backup_import_title",
+      "value": "导入加密备份"
+    },
+    {
+      "name": "backup_import_desc",
+      "value": "从剪贴板、文件或手动粘贴导入（按内容识别，不看后缀）；重复导入会新增重复条目。"
+    },
+    {
+      "name": "backup_import_file",
+      "value": "从文件选择"
+    },
+    {
+      "name": "backup_import_manual_placeholder",
+      "value": "也可长按粘贴备份文本"
+    },
+    {
+      "name": "backup_import_manual_button",
+      "value": "使用粘贴内容"
+    },
+    {
+      "name": "backup_import_password_placeholder",
+      "value": "输入备份口令"
+    },
+    {
+      "name": "backup_import_start",
+      "value": "开始导入"
+    },
+    {
+      "name": "backup_import_note",
+      "value": "导入完成后请清理剪贴板与备份文件"
+    },
+    {
+      "name": "backup_import_empty",
+      "value": "没有可导入的内容"
+    },
+    {
+      "name": "backup_import_clipboard_empty",
+      "value": "剪贴板没有内容"
+    },
+    {
+      "name": "backup_import_file_too_large",
+      "value": "备份文件过大"
+    },
+    {
+      "name": "backup_import_file_failed",
+      "value": "读取文件失败"
+    },
+    {
+      "name": "backup_paste_denied",
+      "value": "未获得剪贴板授权，可改用文件或手动粘贴"
+    },
+    {
+      "name": "backup_no_items",
+      "value": "没有可导出的账号"
+    },
+    {
+      "name": "backup_items_over_limit",
+      "value": "单次最多导出 50 个账号，请先删除多余账号"
+    },
+    {
+      "name": "backup_saved",
+      "value": "备份文件已保存"
+    },
+    {
+      "name": "backup_save_failed",
+      "value": "保存文件失败，可尝试复制到剪贴板"
+    },
+    {
+      "name": "backup_copied",
+      "value": "加密备份已复制，导入完成后请清理剪贴板"
+    },
+    {
+      "name": "backup_failed",
+      "value": "操作失败，请重试"
+    },
+    {
+      "name": "backup_encrypting",
+      "value": "正在加密..."
+    },
+    {
+      "name": "backup_importing",
+      "value": "正在导入..."
     }
   ]
 }
