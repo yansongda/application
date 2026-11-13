@@ -7,7 +7,7 @@
 import { Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
-import { State } from '../Auth';
+import { State } from '../../types/Session';
 import { FORM_ROUTE_PARAM, FormRoute, parseFormRoute } from './FormRoute';
 
 // 待处理卡片意图的保质期：解锁/登录等待超过该时长后不再消费，避免陈旧意图突然触发

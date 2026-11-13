@@ -1,6 +1,4 @@
-import { AxiosResponse } from '@ohos/axios';
-import http, { Response } from '../utils/Http';
-import { HttpError } from '../utils/Errors';
+import { request } from './request';
 
 export interface AccessTokenLoginRequest {
   platform: string;
@@ -28,37 +26,20 @@ export interface AccessTokenLoginRefreshResponse {
 
 export class AccessToken {
   static async login(clientId: string, authorizationCode: string): Promise<AccessTokenLoginResponse> {
-    const response: AxiosResponse<Response<AccessTokenLoginResponse>> =
-      await http.post<AccessTokenLoginResponse, AxiosResponse<Response<AccessTokenLoginResponse>>, AccessTokenLoginRequest>(
-        'api/v1/access-token/login',
-        {
-          platform: "HUAWEI",
-          third_id: clientId,
-          code: authorizationCode
-        });
-
-    if (0 === response.data?.code && response.data?.data?.access_token) {
-      return response.data.data;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return request<AccessTokenLoginResponse, AccessTokenLoginRequest>('api/v1/access-token/login',
+      {
+        platform: 'HUAWEI',
+        third_id: clientId,
+        code: authorizationCode,
+      });
   }
 
-  static async loginRefresh(clientId: string,
-    refreshToken: string): Promise<AccessTokenLoginRefreshResponse> {
-    const response: AxiosResponse<Response<AccessTokenLoginRefreshResponse>> =
-      await http.post<AccessTokenLoginRefreshResponse, AxiosResponse<Response<AccessTokenLoginRefreshResponse>>, AccessTokenLoginRefreshRequest>(
-        'api/v1/access-token/login/refresh',
-        {
-          platform: "HUAWEI",
-          third_id: clientId,
-          refresh_token: refreshToken
-        });
-
-    if (0 === response.data?.code && response.data?.data?.access_token) {
-      return response.data.data;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+  static async loginRefresh(clientId: string, refreshToken: string): Promise<AccessTokenLoginRefreshResponse> {
+    return request<AccessTokenLoginRefreshResponse, AccessTokenLoginRefreshRequest>('api/v1/access-token/login/refresh',
+      {
+        platform: 'HUAWEI',
+        third_id: clientId,
+        refresh_token: refreshToken,
+      });
   }
 }

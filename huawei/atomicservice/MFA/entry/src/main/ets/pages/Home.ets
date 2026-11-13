@@ -1,10 +1,11 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AppStorageV2, PersistenceV2 } from '@kit.ArkUI';
-import { Authorization, State } from '../models/Auth';
+import { Authorization } from '../models/Auth';
 import { AppLock } from '../models/security/AppLock';
 import { AppPagesName, LogDomain } from '../App';
 import { LockScreen } from '../components/LockScreen';
-import { redirectLoginPage } from '../utils/Nav';
+import { SessionGuard } from '../utils/SessionGuard';
+import { State } from '../types/Session';
 
 @Entry
 @ComponentV2
@@ -20,7 +21,7 @@ struct Home {
     hilog.info(LogDomain.PAGES, AppPagesName.HOME, '页面显示');
 
     if (State.NORMAL !== this.authorization.state()) {
-      redirectLoginPage();
+      SessionGuard.redirect();
     }
   }
 
