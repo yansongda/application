@@ -51,6 +51,11 @@
       "buildFunction": "builder"
     },
     {
+      "name": "user/backup",
+      "pageSourceFile": "src/main/ets/pages/user/Backup.ets",
+      "buildFunction": "builder"
+    },
+    {
       "name": "help",
       "pageSourceFile": "src/main/ets/pages/Help.ets",
       "buildFunction": "builder"

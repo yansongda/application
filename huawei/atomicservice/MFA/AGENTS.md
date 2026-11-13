@@ -157,6 +157,17 @@ MFA/
   ```
   常见反例报错（便于搜索定位）：`The name is not same as formName`（文件名 ≠ form name）、`The level-4 directory of EntryCard must be named as snapshot`（四级目录名错）、`entry/<form>-2x2 has no related snapshot`（缺 2x2 快照）、`No image in PNG format is found`（非 PNG）。
 
+## 加密备份（`pages/user/Backup.ets`，服务端加解密）
+
+- 契约以 `application-rs/docs/backup-format.md` 为准（`POST /api/v1/backup/export|import`，`kind=totp`，信封 v1）；**加解密全部在服务端**，前端只做信封预检与口令策略，**禁止**引入端内 PBKDF2 / AES-GCM。
+- 分层：`types/Backup.ets`（契约常量 / 信封类型 / `BackupPageParams`）→ `api/Backup.ets`（两个接口 + 超时 15s + 后端错误码文案）→ `models/Backup.ets`（`parseEnvelope` / 口令策略 / `buildExport`）→ `utils/BackupFile.ets`（文件通道）→ `pages/user/Backup.ets`（UI）。
+- **备份接口超时固定 15s**（`BACKUP_TIMEOUT_MS`，服务端 PBKDF2 600k 迭代）；其余接口仍用默认 5s。
+- **口令只存在于页面内存与请求体**：`onHidden` 调 `clearSecrets()`，不写 preferences、不进日志；导出文本与导入信封同样在 `onHidden` 清空。
+- 通道：导出（复制到剪贴板 / `DocumentViewPicker.save` 存 `.mfa`）、导入（`PasteButton` 安全控件读剪贴板 / `DocumentViewPicker.select` 选文件 / 手动粘贴兜底，按内容识别不看后缀）。
+- 读剪贴板**不要申请**受限权限 `ohos.permission.READ_PASTEBOARD`：只能用 `PasteButton` 授权成功后的临时权限（编译器会提示需要该权限，属预期告警）。
+- 导入**不去重**；`9903` 表示部分写入，页面仍会刷新列表并提示核对。导入成功后用 `Totp.all()` 重载 `ItemsRuntime` 并 `FormBridge.sync` 同步卡片。
+- 弹窗一律复用 `Dialog.openLoading/closeLoading`（与登录/首页共用同一个全局单飞窗口）；错误一律是 `utils/Errors.ets` 的 `HttpError`（`kind` 可用于区分认证失效）。
+
 ## 测试
 
 - 本地测试目录：`entry/src/test/`
