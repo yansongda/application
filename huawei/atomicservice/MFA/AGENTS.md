@@ -120,6 +120,16 @@ MFA/
   grep -c "_lastFinishedAt = "     $F   # 3
   ```
 
+## 弹窗与认证跳转（防重叠）
+
+- **loading 必须走 `utils/PromptAction.ets` 的 `Dialog.openLoading/closeLoading`**（模块级引用计数 + 全局单飞 + 代号）：同一时刻只允许一个 loading 窗口，多个页面并发打开时复用同一 id，引用归零才真正关闭。**不要**再用 `Dialog.open` 直接承载 loading（会新开窗口，两个 loading 同屏）。`closeAll()` 会自增代号并清空看门狗，打开中的旧窗口会自行关闭，禁止绕过它重置内部状态。
+- **重试 / 失败框走 `Dialog.openAlert`**（单槽位 + 串行化）；关闭后必须等 `Dialog.settle()` 的退场间隙（`closeCustomDialog(dialogId)` 只有同步 void 形态），再开下一个窗口。失败分支顺序固定：`await closeLoading()` → `openAlert()`。
+- **认证失效是 `AuthExpiredError`（`utils/Errors.ets`）**：响应拦截器命中 `1000/1001/1002/1004/1005/1006` 时先 `redirectLoginPage(...)` 再 reject。`Dialog.execute` / `Toast.execute` 已统一跳过重试框与失败 toast；页面 catch 到它时只记日志，**不得**再弹任何框（user/detail 等使用 `Dialog.execute` 的页面无需再逐页判断）。
+- **错误分类统一用 `HttpError.kind`（`ErrorKind`）**：`network` / `timeout` / `server` / `auth` / `business`。禁止用 message 文案做分支。`utils/Errors.ets` 是叶子模块，不依赖任何业务模块（防止 `Http` 与 `PromptAction` 互相 import 形成循环）。
+- **登录页**：整个认证流程只开 1 个 loading；refresh 失败在同一窗口内降级 `login()`；`isAuthenticating` 为重入锁（`finally` 必复位）；成功路径先 `await Dialog.closeLoading()` 再 `popIfSelf()`（只关栈顶的登录页，避免用户返回手势后误关下层页面）。
+- **首页 `pages/index/Index.ets` 的 `onActive` 刷新有门禁**：登录页在栈中或 `Authorization.state() !== NORMAL` 直接返回；已有条目时 `refresh(true)` 静默刷新（不弹 loading），首屏与下拉刷新才用 loading。
+- **`utils/Nav.ets#redirectLoginPage` 有节流**（`utils/AuthGate.ets`）：1s 去抖 + 60s 内最多自动跳 3 次；跳转前 `Dialog.closeAll()`（入栈前再清一次），并延迟 200ms 入栈，让调用方的失败清理先跑完。登录成功只复位去抖/单飞标记，**不重置 60s 计数**（否则异常场景会无限跳转）。
+
 ## 服务卡片（`pages/form/`）
 
 - 卡片使用**状态管理 V2**（`@Entry @ComponentV2`）：`updateForm` 注入的数据按**变量名**匹配卡片内的 `@Local` 变量，入口组件用裸 `@Entry`、**不传** LocalStorage 实例；`@LocalStorageProp` 等 V1 组件内装饰器在 `@ComponentV2` 中**编译报错**，两套不可混用。
