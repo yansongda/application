@@ -12,7 +12,6 @@ import {
   checkImportPassword,
   parseEnvelope,
 } from "@models/backup";
-import { EE } from "@models/error";
 import { ensureAuthenticated } from "@utils/app";
 import {
   syncOnPageShow as appLockSyncOnPageShow,
@@ -27,6 +26,7 @@ import {
 } from "@utils/backup-file";
 import { copyText, readText } from "@utils/clipboard";
 import { formatLocalDateTime } from "@utils/datetime";
+import error from "@utils/error";
 import logger from "@utils/logger";
 import { readCache, syncFromRemote } from "@utils/totp-cache";
 import Message from "tdesign-miniprogram/message/index";
@@ -57,14 +57,6 @@ interface BackupPageData {
 }
 
 type ImportChannel = "clipboard" | "file";
-
-const describeError = (e: unknown): string => {
-  if (e instanceof Error || e instanceof EE) {
-    return e.message;
-  }
-
-  return "操作失败，请重试";
-};
 
 const appLockMessage = (outcome: VerifyOutcome): string => {
   switch (outcome) {
@@ -282,7 +274,7 @@ Page({
         name: (e as Error)?.name,
       });
       Message.error({
-        content: describeError(e),
+        content: error.getErrorMessage(e),
         duration: 5000,
         offset: [20, 32],
         context: this,
@@ -351,7 +343,7 @@ Page({
       });
     } catch (e: unknown) {
       Message.error({
-        content: describeError(e),
+        content: error.getErrorMessage(e),
         duration: 5000,
         offset: [20, 32],
         context: this,
@@ -461,7 +453,7 @@ Page({
         name: (e as Error)?.name,
       });
       Message.error({
-        content: describeError(e),
+        content: error.getErrorMessage(e),
         duration: 5000,
         offset: [20, 32],
         context: this,

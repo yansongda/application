@@ -3,7 +3,8 @@
  *
  * 契约见 `application-rs/docs/backup-format.md`：加解密全部由服务端完成，
  * 本模块不持有明文条目；口令只存在于页面内存与请求体，绝不写 storage / 日志。
- * 预检错误对齐 `@yansongda/miniprogram-otp` 的 `OtpError`（`as const` 字符串码 + `setPrototypeOf` 保 `instanceof`）。
+ * 预检错误与 `@yansongda/miniprogram-otp` 的 `OtpError` 同构（`as const` 字符串码），
+ * 原型链修复与 `readonly code` 由 `models/error.ts` 的 `AppError` 基类统一承担。
  */
 import {
   FORMAT,
@@ -13,6 +14,7 @@ import {
   MAX_ITEMS,
   VERSION,
 } from "@constant/backup";
+import { AppError } from "@models/error";
 import { parseCreatedAt } from "@utils/datetime";
 import type { BackupApi, BackupEnvelope } from "types/backup";
 
@@ -37,18 +39,13 @@ export type BackupParseErrorCode =
 /**
  * 预检错误：`code` 供日志 / 测试断言，`message` 可直接展示。
  *
- * 微信编译会把 class 降级到 ES5（`project.config.json` 的 `es6 + enhance`），
- * 届时 `extends Error` 会丢原型链；这里显式 setPrototypeOf 保证 instanceof 可靠
- * （与 `@yansongda/miniprogram-otp` 的 OtpError 同一处理）。
+ * 与 `@yansongda/miniprogram-otp` 的 `OtpError` 同构（`as const` 字符串码），
+ * 原型链修复与 `readonly code` 由 `models/error.ts` 的 `AppError` 基类统一承担。
  */
-export class BackupParseError extends Error {
-  readonly code: BackupParseErrorCode;
-
+export class BackupParseError extends AppError<BackupParseErrorCode> {
   constructor(code: BackupParseErrorCode, message: string) {
-    super(message);
+    super(code, message);
     this.name = "BackupParseError";
-    Object.setPrototypeOf(this, BackupParseError.prototype);
-    this.code = code;
   }
 }
 
