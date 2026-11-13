@@ -22,12 +22,13 @@ import { PageTitle } from '../../components/index/PageTitle';
 import { FormBridge } from '../../models/form/FormBridge';
 import { FormIntent } from '../../models/form/FormIntent';
 import { FormRoute } from '../../models/form/FormRoute';
-import { Authorization } from '../../models/Auth';
+import { Authorization, State } from '../../models/Auth';
 import { AppLock } from '../../models/security/AppLock';
 import { ListViewState } from '../../models/totp/ListViewState';
 import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
 import { OTPAuthURI } from '@yansongda/otp';
 import { ItemFilterKind } from '../../utils/ItemFilter';
+import { AuthExpiredError } from '../../utils/Errors';
 
 @Builder
 export function builder() {
@@ -183,8 +184,19 @@ export struct Index {
       // 先消费卡片意图（冷启动时 want 已到达，「添加账号」需立即跳转），再常规刷新
       this.consumeFormIntent();
 
-      this.refresh().catch(() => {
-        // 失败已由重试对话框提示，仅避免 unhandled rejection
+      // 登录页在栈中 / 本地已判定需要重新认证：认证一律交给登录页。
+      // 此时刷新只会让两个页面各自开 loading，叠加成「正在关联华为账号 + 加载中」来回闪
+      if (this.pages.getAllPathName().includes(AppPagesName.LOGIN.toString())) {
+        return;
+      }
+
+      if (State.NORMAL !== this.authorization.state()) {
+        return;
+      }
+
+      // 已有条目时静默刷新：不弹 loading，避免从登录页/详情页返回时与其它弹窗抢窗口
+      this.refresh(true).catch(() => {
+        // 失败已在 refresh 内部处理，仅避免 unhandled rejection
       });
     })
     .onHidden(() => {
@@ -233,8 +245,8 @@ export struct Index {
     if (!this.itemsRuntime.ids.includes(id)) {
       hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '忽略已失效的删除请求: %{public}s，改为刷新列表', id);
 
-      this.refresh().catch(() => {
-        // 失败已由重试对话框提示，仅避免 unhandled rejection
+      this.refresh(true).catch(() => {
+        // 失败已在 refresh 内部处理，仅避免 unhandled rejection
       });
 
       return;
@@ -242,7 +254,7 @@ export struct Index {
 
     this.swipeActionId = id;
 
-    Dialog.open(() => this.deleteDialog());
+    Dialog.openAlert(() => this.deleteDialog());
   }
 
   // 手动输入添加
@@ -286,7 +298,7 @@ export struct Index {
         content: $r('app.string.index_index_page_delete_name'),
         role: ButtonRole.ERROR,
         action: async () => {
-          // 先拷成局部常量并立即清空页面级字段：Dialog.open 之后还有 await，
+          // 先拷成局部常量并立即清空页面级字段：Dialog.openAlert 之后还有 await，
           // 并发/重入的 action 如果读字段会拿到被改写的 id
           const id: string | undefined = this.swipeActionId;
 
@@ -304,7 +316,7 @@ export struct Index {
             this.itemsRuntime.delete(id);
             this.syncCards();
           } catch (e) {
-            await Dialog.open(() => this.deleteFailedDialog(e.message));
+            await Dialog.openAlert(() => this.deleteFailedDialog(e.message));
           }
         }
       }),
@@ -382,7 +394,7 @@ export struct Index {
       this.itemsRuntime.add(data);
       this.syncCards();
     } catch (e) {
-      await Dialog.open(() => this.addFailedDialog(e.message));
+      await Dialog.openAlert(() => this.addFailedDialog(e.message));
     }
   }
 
@@ -459,27 +471,62 @@ export struct Index {
     }
   }
 
-  private async refresh(): Promise<void> {
+  // silent：自动刷新（onActive 返回首页等）时已有数据就不弹 loading；
+  // 首屏（本地无条目）与下拉刷新仍走 loading，避免空态/失败时没有任何反馈。
+  private async refresh(silent: boolean = false): Promise<void> {
     if (this.isFetching) {
       return;
     }
 
     this.isFetching = true;
 
+    const withDialog: boolean = !silent || this.itemsRuntime.ids.length <= 0;
+
     try {
-      const items =
-        await Dialog.execute(() => this.loadingDialog($r('app.string.loading')), () => Totp.all(),
-          () => this.fetchFailedDialog(() => this.refresh()));
-
-      this.itemsRuntime.reload(items.values());
-
-      // 数据变了，已失效的筛选（标签被删、置顶被取消）要一并回写，否则下次启动会再加载一遍；
-      // 分组不再失效：没有标签时所有条目归入「未分类」
-      if (this.listState.syncView(this.itemsRuntime.snapshot())) {
-        this.saveListState();
+      if (withDialog) {
+        await Dialog.openLoading(() => this.loadingDialog($r('app.string.loading')));
       }
 
-      this.syncCards();
+      try {
+        const items = await Totp.all();
+
+        this.itemsRuntime.reload(items.values());
+
+        // 数据变了，已失效的筛选（标签被删、置顶被取消）要一并回写，否则下次启动会再加载一遍；
+        // 分组不再失效：没有标签时所有条目归入「未分类」
+        if (this.listState.syncView(this.itemsRuntime.snapshot())) {
+          this.saveListState();
+        }
+
+        this.syncCards();
+      } finally {
+        // 必须等 loading 退场后再走失败分支：否则重试框会与 loading 同屏
+        if (withDialog) {
+          await Dialog.closeLoading();
+        }
+      }
+    } catch (e) {
+      // 认证失效：拦截器已跳转登录页；这里再弹重试框只会挂在登录页上方
+      if (e instanceof AuthExpiredError) {
+        hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '加载列表认证失效，交由登录页处理');
+
+        return;
+      }
+
+      if (silent) {
+        hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '静默刷新失败: %{public}s', JSON.stringify(e));
+
+        return;
+      }
+
+      await Dialog.openAlert(() => this.fetchFailedDialog(() => {
+        // 重试按钮 action 是同步回调：延迟一拍，等重试框关闭动画结束再开 loading
+        setTimeout(() => {
+          this.refresh().catch(() => {
+            // 失败已在 refresh 内部处理，仅避免 unhandled rejection
+          });
+        }, 200);
+      }));
     } finally {
       this.isFetching = false;
     }

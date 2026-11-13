@@ -1,6 +1,7 @@
 import { AxiosResponse } from '@ohos/axios';
 import { IItem } from '../types/Item';
-import http, { HttpError, Response } from '../utils/Http';
+import http, { Response } from '../utils/Http';
+import { HttpError } from '../utils/Errors';
 
 export interface AllResponse extends IItem {}
 
