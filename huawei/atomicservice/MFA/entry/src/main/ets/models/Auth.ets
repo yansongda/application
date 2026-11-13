@@ -5,16 +5,8 @@ import { App, LogDomain } from '../App';
 import { dateformat } from '@developers/dateformat';
 import { AccessToken } from '../api/AccessToken';
 import { Context } from '@kit.AbilityKit';
-
-export enum State {
-  EMPTY_AUTHORIZATION = 0,
-
-  NEED_REFRESH = 1,
-
-  REFRESH_TOKEN_EXPIRED = 2,
-
-  NORMAL = 3,
-}
+import { AuthExpiredError, HttpError } from '../utils/Errors';
+import { State } from '../types/Session';
 
 @ObservedV2
 export class Authorization {
@@ -128,6 +120,37 @@ export class Authorization {
     return State.NORMAL;
   }
 
+  // 统一认证入口：调用方只声明「目标状态」，不再自己写 refresh → login 的降级分支。
+  // - NORMAL：空操作
+  // - NEED_REFRESH：先刷新；只有 refresh_token 本身失效（AuthExpiredError）才降级完整登录，
+  //   网络 / 服务端错误直接抛给页面重试（不强制拉起华为账号授权）
+  // - EMPTY_AUTHORIZATION / REFRESH_TOKEN_EXPIRED：完整登录
+  async ensure(target?: State): Promise<void> {
+    const state: State = 'undefined' === typeof target ? this.state() : target;
+
+    if (State.NORMAL === state) {
+      return;
+    }
+
+    if (State.NEED_REFRESH === state) {
+      try {
+        await this.refresh(this.refreshToken);
+
+        return;
+      } catch (e) {
+        const error: Error = e as Error;
+
+        if (!(error instanceof AuthExpiredError)) {
+          throw error;
+        }
+
+        // refresh_token 失效：降级为完整登录
+      }
+    }
+
+    await this.login();
+  }
+
   async login(): Promise<Authorization> {
     const credential = await Authorization.loginWithHuaweiID();
 
@@ -137,7 +160,7 @@ export class Authorization {
     if ('undefined' === typeof credential) {
       hilog.error(LogDomain.MODELS, 'models/auth', '获取到的认证信息为空');
 
-      return Promise.reject();
+      return Promise.reject(new HttpError('华为账号授权失败，请重试'));
     }
 
     const response = await AccessToken.login(App.clientId, credential?.authorizationCode!);
@@ -154,7 +177,7 @@ export class Authorization {
     if ('undefined' === typeof refreshToken) {
       hilog.error(LogDomain.MODELS, 'models/auth', '传递的 refresh_token 参数错误');
 
-      return Promise.reject();
+      return Promise.reject(new HttpError('登录状态已失效，请重新登录'));
     }
 
     const response = await AccessToken.loginRefresh(App.clientId, refreshToken!);

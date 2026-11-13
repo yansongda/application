@@ -122,13 +122,16 @@ MFA/
 
 ## 弹窗与认证跳转（防重叠）
 
-- **loading 必须走 `utils/PromptAction.ets` 的 `Dialog.openLoading/closeLoading`**（模块级引用计数 + 全局单飞 + 代号）：同一时刻只允许一个 loading 窗口，多个页面并发打开时复用同一 id，引用归零才真正关闭。**不要**再用 `Dialog.open` 直接承载 loading（会新开窗口，两个 loading 同屏）。`closeAll()` 会自增代号并清空看门狗，打开中的旧窗口会自行关闭，禁止绕过它重置内部状态。
-- **重试 / 失败框走 `Dialog.openAlert`**（单槽位 + 串行化）；关闭后必须等 `Dialog.settle()` 的退场间隙（`closeCustomDialog(dialogId)` 只有同步 void 形态），再开下一个窗口。失败分支顺序固定：`await closeLoading()` → `openAlert()`。
-- **认证失效是 `AuthExpiredError`（`utils/Errors.ets`）**：响应拦截器命中 `1000/1001/1002/1004/1005/1006` 时先 `redirectLoginPage(...)` 再 reject。`Dialog.execute` / `Toast.execute` 已统一跳过重试框与失败 toast；页面 catch 到它时只记日志，**不得**再弹任何框（user/detail 等使用 `Dialog.execute` 的页面无需再逐页判断）。
-- **错误分类统一用 `HttpError.kind`（`ErrorKind`）**：`network` / `timeout` / `server` / `auth` / `business`。禁止用 message 文案做分支。`utils/Errors.ets` 是叶子模块，不依赖任何业务模块（防止 `Http` 与 `PromptAction` 互相 import 形成循环）。
-- **登录页**：整个认证流程只开 1 个 loading；refresh 失败在同一窗口内降级 `login()`；`isAuthenticating` 为重入锁（`finally` 必复位）；成功路径先 `await Dialog.closeLoading()` 再 `popIfSelf()`（只关栈顶的登录页，避免用户返回手势后误关下层页面）。
-- **首页 `pages/index/Index.ets` 的 `onActive` 刷新有门禁**：登录页在栈中或 `Authorization.state() !== NORMAL` 直接返回；已有条目时 `refresh(true)` 静默刷新（不弹 loading），首屏与下拉刷新才用 loading。
-- **`utils/Nav.ets#redirectLoginPage` 有节流**（`utils/AuthGate.ets`）：1s 去抖 + 60s 内最多自动跳 3 次；跳转前 `Dialog.closeAll()`（入栈前再清一次），并延迟 200ms 入栈，让调用方的失败清理先跑完。登录成功只复位去抖/单飞标记，**不重置 60s 计数**（否则异常场景会无限跳转）。
+- **窗口层与策略层分离**：`utils/PromptAction.ets` 只负责「开 / 关 / 等退场」；`utils/SessionGuard.ets` 只负责「认证失效 → 是否跳登录页、跳几次、何时跳」；页面只调用门面方法。
+- **loading 必须走 `Dialog.openLoading/closeLoading`**（内部 `Busy`：引用计数 + 全局单飞 + 打开代号）：同一时刻只允许一个 loading 窗口，引用归零才真正关闭。`closeAll/closeAllAsync` 会自增代号并清空看门狗，打开中的旧窗口会因代号不匹配自行关闭，避免「清场后旧窗口复活」导致无法关闭的孤儿遮罩。**不要**用 `Dialog.open` 直接承载 loading（会新开窗口，两个 loading 同屏）。
+- **重试 / 失败框走 `Dialog.openAlert`**（内部 `Alert`：单槽位 + 并发串行化 + 打开代号）。
+- **等待退场不要用固定时间片**：`Dialog.open` 在打开时注册 `onDidDisappear`（API 19+，本项目 compatibleSdkVersion 23），`closeAndWait` / `waitClosed` 按真实回调返回，仅在回调缺失时用 500ms 兜底。`Busy.open` 打开前会先 `Alert.waitDismissed()`，因此**页面重试按钮的 action 里直接调用即可，禁止再写 `setTimeout` 延迟**。
+- **认证失效统一是 `AuthExpiredError`**（`utils/Errors.ets`，`HttpError.kind = auth`）：Http 拦截器命中 `1000/1001/1002/1004/1005/1006` 时只调用 `configureHttp` 注入的 `authExpired` 回调并 reject；**Http 不得 import 模型 / 导航 / 提示等 UI 模块**。跳转策略集中在 `SessionGuard`（1s 去抖 + 60s/3 次上限 + 先 `Dialog.closeAllAsync()` 再入栈）。`Dialog.execute` / `Toast.execute` 已统一跳过重试框与失败 toast，页面 catch 到它只记日志。
+- **错误分类统一用 `HttpError.kind`（`ErrorKind`）**：`network` / `timeout` / `server` / `auth` / `business`，禁止用 message 文案做分支。`utils/Errors.ets` 是叶子模块，不得 import 业务模块。
+- **接口统一走 `api/request.ets`** 的 `request` / `requestNoBody` / `requestVoid` / `requestVoidNoBody`：成功判定（`code === 0`）与 `HttpError` 构造不再散落在各 api 文件；新增接口只声明路径与入参/出参。
+- **认证状态**：`State` 定义在 `types/Session.ets`（叶子），`LoginPageParams` 定义在 `types/Login.ets`。登录页只调用 `Authorization.ensure(state)`：NORMAL 空操作、NEED_REFRESH 先 refresh（仅 refresh_token 失效才降级 login）、其余完整登录；`isAuthenticating` 为重入锁（`finally` 必复位）；成功路径先 `await Dialog.closeLoading()` 再 `popIfSelf()`（只关栈顶登录页，避免返回手势后误关下层页）。
+- **导航栈读取统一走 `utils/NavState.ets`**（`navPages` / `loginInStack` / `topPageName`），禁止各页面自行 `AppStorageV2.connect(NavPathStack)` 后判断登录页。
+- **首页 `pages/index/Index.ets` 的 `onActive` 刷新有门禁**：`SessionGuard.isLoginVisible()` 或 `Authorization.state() !== NORMAL` 直接返回；已有条目时 `refresh(true)` 静默刷新（不弹 loading），首屏与下拉刷新才用 loading；`refresh` 用 in-flight Promise 单飞（不是布尔锁），下拉刷新会真正等待同一次请求。
 
 ## 服务卡片（`pages/form/`）
 

@@ -22,13 +22,15 @@ import { PageTitle } from '../../components/index/PageTitle';
 import { FormBridge } from '../../models/form/FormBridge';
 import { FormIntent } from '../../models/form/FormIntent';
 import { FormRoute } from '../../models/form/FormRoute';
-import { Authorization, State } from '../../models/Auth';
+import { Authorization } from '../../models/Auth';
+import { State } from '../../types/Session';
 import { AppLock } from '../../models/security/AppLock';
 import { ListViewState } from '../../models/totp/ListViewState';
 import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
 import { OTPAuthURI } from '@yansongda/otp';
 import { ItemFilterKind } from '../../utils/ItemFilter';
 import { AuthExpiredError } from '../../utils/Errors';
+import { SessionGuard } from '../../utils/SessionGuard';
 
 @Builder
 export function builder() {
@@ -47,7 +49,8 @@ export struct Index {
   private pinningId: string | undefined = undefined;
   private snapshotIds: string[] = [];
   // 请求去重：避免 onActive 与下拉刷新并发发起 Totp.all()
-  private isFetching: boolean = false;
+  // 请求去重：保留在飞的 Promise（不是布尔锁），让 onActive 静默刷新与下拉刷新共享同一次请求
+  private inflightRefresh: Promise<void> | undefined = undefined;
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
   @Local
@@ -186,7 +189,7 @@ export struct Index {
 
       // 登录页在栈中 / 本地已判定需要重新认证：认证一律交给登录页。
       // 此时刷新只会让两个页面各自开 loading，叠加成「正在关联华为账号 + 加载中」来回闪
-      if (this.pages.getAllPathName().includes(AppPagesName.LOGIN.toString())) {
+      if (SessionGuard.isLoginVisible()) {
         return;
       }
 
@@ -473,13 +476,28 @@ export struct Index {
 
   // silent：自动刷新（onActive 返回首页等）时已有数据就不弹 loading；
   // 首屏（本地无条目）与下拉刷新仍走 loading，避免空态/失败时没有任何反馈。
-  private async refresh(silent: boolean = false): Promise<void> {
-    if (this.isFetching) {
-      return;
+  private refresh(silent: boolean = false): Promise<void> {
+    // 单飞：在飞时返回同一个 Promise，调用方会真正等待本次刷新结束
+    if ('undefined' !== typeof this.inflightRefresh) {
+      return this.inflightRefresh;
     }
 
-    this.isFetching = true;
+    const task: Promise<void> = this.doRefresh(silent);
 
+    this.inflightRefresh = task;
+
+    const clear = (): void => {
+      if (this.inflightRefresh === task) {
+        this.inflightRefresh = undefined;
+      }
+    };
+
+    task.then(clear, clear);
+
+    return task;
+  }
+
+  private async doRefresh(silent: boolean): Promise<void> {
     const withDialog: boolean = !silent || this.itemsRuntime.ids.length <= 0;
 
     try {
@@ -506,7 +524,7 @@ export struct Index {
         }
       }
     } catch (e) {
-      // 认证失效：拦截器已跳转登录页；这里再弹重试框只会挂在登录页上方
+      // 认证失效：SessionGuard 已跳转登录页；这里再弹重试框只会挂在登录页上方
       if (e instanceof AuthExpiredError) {
         hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '加载列表认证失效，交由登录页处理');
 
@@ -520,15 +538,11 @@ export struct Index {
       }
 
       await Dialog.openAlert(() => this.fetchFailedDialog(() => {
-        // 重试按钮 action 是同步回调：延迟一拍，等重试框关闭动画结束再开 loading
-        setTimeout(() => {
-          this.refresh().catch(() => {
-            // 失败已在 refresh 内部处理，仅避免 unhandled rejection
-          });
-        }, 200);
+        // 重试按钮 action 是同步回调：Dialog.openLoading 会先等重试框真正退场再开 loading
+        this.refresh().catch(() => {
+          // 失败已在 refresh 内部处理，仅避免 unhandled rejection
+        });
       }));
-    } finally {
-      this.isFetching = false;
     }
   }
 

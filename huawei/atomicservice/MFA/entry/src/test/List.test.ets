@@ -3,6 +3,7 @@ import appLockPolicyTest from './AppLockPolicy.test';
 import itemFilterTest from './ItemFilter.test';
 import listViewStateTest from './ListViewState.test';
 import otpSecretStrictTest from './OtpSecretStrict.test';
+import sessionThrottleTest from './SessionThrottle.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -10,4 +11,5 @@ export default function testsuite() {
   itemFilterTest();
   listViewStateTest();
   otpSecretStrictTest();
+  sessionThrottleTest();
 }
