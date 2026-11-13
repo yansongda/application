@@ -13,6 +13,7 @@ import { Dialog, Toast } from '../../utils/PromptAction';
 import { User as UserApi } from '../../api/User';
 import { App, AppPagesName, LogDomain } from '../../App';
 import { displayOr } from '../../utils/Display';
+import { BackupPageMode, BackupPageParams } from '../../types/Backup';
 
 @Builder
 export function builder() {
@@ -116,6 +117,28 @@ struct Detail {
                 },
               },
             },
+          ]
+        })
+
+        InfoCard({
+          title: $r('app.string.backup_page_title'),
+          items: [
+            new InfoCardItem({
+              title: $r('app.string.user_detail_page_backup_export'),
+              value: '',
+              eventClick: {
+                action: AppPagesName.USER_BACKUP,
+                params: new BackupPageParams(BackupPageMode.EXPORT)
+              },
+            }),
+            new InfoCardItem({
+              title: $r('app.string.user_detail_page_backup_import'),
+              value: '',
+              eventClick: {
+                action: AppPagesName.USER_BACKUP,
+                params: new BackupPageParams(BackupPageMode.IMPORT)
+              },
+            }),
           ]
         })
 
