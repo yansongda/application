@@ -31,7 +31,8 @@ export class SessionGuard {
     if (!throttle.allow(Date.now())) {
       // 不提示、不再弹框：这类信号通常来自同一轮抖动的多个请求，提示只会叠在页面上
       hilog.warn(LogDomain.UTILS, 'utils/session_guard',
-        '忽略本次自动跳转登录页（去抖中或 60s 内已达 %{public}d 次）', throttle.count);
+        '忽略本次自动跳转登录页（原因: %{public}s），60s 内已自动跳转: %{public}d 次',
+        throttle.denyReason.toString(), throttle.count);
 
       return;
     }

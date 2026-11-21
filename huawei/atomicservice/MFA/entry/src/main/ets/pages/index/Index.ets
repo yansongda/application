@@ -48,9 +48,10 @@ export struct Index {
   private listState: ListViewState = new ListViewState();
   private pinningId: string | undefined = undefined;
   private snapshotIds: string[] = [];
-  // 请求去重：避免 onActive 与下拉刷新并发发起 Totp.all()
-  // 请求去重：保留在飞的 Promise（不是布尔锁），让 onActive 静默刷新与下拉刷新共享同一次请求
+  // 请求去重：保留在飞的 Promise（不是布尔锁），让 onActive 静默刷新与下拉刷新共享同一次请求；
+  // inflightSilent 记录本次在飞的是否静默，供后来者判断要不要补一次带 loading 的刷新
   private inflightRefresh: Promise<void> | undefined = undefined;
+  private inflightSilent: boolean = false;
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
   @Local
@@ -477,18 +478,31 @@ export struct Index {
   // silent：自动刷新（onActive 返回首页等）时已有数据就不弹 loading；
   // 首屏（本地无条目）与下拉刷新仍走 loading，避免空态/失败时没有任何反馈。
   private refresh(silent: boolean = false): Promise<void> {
-    // 单飞：在飞时返回同一个 Promise，调用方会真正等待本次刷新结束
-    if ('undefined' !== typeof this.inflightRefresh) {
-      return this.inflightRefresh;
+    const inflight: Promise<void> | undefined = this.inflightRefresh;
+
+    // 单飞：在飞时返回同一个 Promise，调用方会真正等待本次刷新结束。
+    // 要不要弹 loading 由**首个**调用者决定（静默刷新失败是无声的）。
+    if ('undefined' !== typeof inflight) {
+      if (silent || !this.inflightSilent) {
+        return inflight;
+      }
+
+      // 非静默调用方（下拉刷新 / 重试按钮）撞上在飞的静默刷新：等它结束后再补一次带 loading 的刷新，
+      // 否则用户点了「重试」却看不到任何反馈（静默分支失败不弹框）
+      const again = (): Promise<void> => this.refresh();
+
+      return inflight.then(again, again);
     }
 
     const task: Promise<void> = this.doRefresh(silent);
 
     this.inflightRefresh = task;
+    this.inflightSilent = silent;
 
     const clear = (): void => {
       if (this.inflightRefresh === task) {
         this.inflightRefresh = undefined;
+        this.inflightSilent = false;
       }
     };
 

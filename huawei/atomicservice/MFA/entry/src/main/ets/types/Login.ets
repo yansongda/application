@@ -3,5 +3,6 @@
 import { State } from './Session';
 
 export interface LoginPageParams {
-  forceAuthorizationState: State;
+  // 缺省时由登录页自己读 `Authorization.state()`：`pushPathByName(LOGIN, null)` 的调用方不传
+  forceAuthorizationState?: State;
 }

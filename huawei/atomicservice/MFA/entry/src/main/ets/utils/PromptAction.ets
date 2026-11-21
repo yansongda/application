@@ -49,12 +49,10 @@ export class Dialog extends PromptAction {
     const onDidDisappear = (): void => {
       token.closed = true;
 
-      const id: number | undefined = token.id;
-
-      if ('undefined' !== typeof id) {
-        Dialog._tokens.delete(id);
-      }
-
+      // 令牌**不在**这里删：`AlertDialogV2` 点按钮后框架会自动关框，此时槽位（`Busy._id` / `Alert._id`）
+      // 仍指向该 id。保留 closed 标记，下一次 `closeAndWait` / `waitClosed` 才能立刻判定「已退场」；
+      // 若在这里删掉，它会退化成 500ms 兜底 + 对一个已不存在的 id 再调一次 `closeCustomDialog`（多一条错误日志）。
+      // 条目数上界就是「当前 loading + 当前 alert + 上一个自关闭的 alert」，不会无限增长。
       const waiters: Array<() => void> = token.waiters;
 
       token.waiters = [];
@@ -101,12 +99,21 @@ export class Dialog extends PromptAction {
       return;
     }
 
+    const token: ClosedToken | undefined = Dialog._tokens.get(dialogId);
+
+    // 窗口已自行退场（用户点了 alert 按钮 / 被系统取消）：不用再关，也不用等兜底
+    if ('undefined' !== typeof token && token.closed) {
+      Dialog._tokens.delete(dialogId);
+
+      return;
+    }
+
     Dialog.close(dialogId);
 
     await Dialog.waitClosed(dialogId);
   }
 
-  // 等指定窗口退场（不主动关闭）：重试框按钮的同步 action 里会用到
+  // 等指定窗口退场（不主动关闭）；拿不到令牌（窗口已清理或从未登记）时按兜底超时返回
   static async waitClosed(dialogId: number | undefined): Promise<void> {
     if ('undefined' === typeof dialogId) {
       return;
@@ -115,6 +122,9 @@ export class Dialog extends PromptAction {
     const token: ClosedToken | undefined = Dialog._tokens.get(dialogId);
 
     if ('undefined' === typeof token) {
+      // 令牌缺失：窗口可能在登记前就被清场。作为「令牌表清理逻辑漏了」的探针，日志里留一条 warn。
+      hilog.warn(LogDomain.UTILS, 'utils/dialog', '等待窗口退场时找不到令牌，按兜底超时返回: id=%{public}d', dialogId);
+
       await Dialog.fallback();
       return;
     }
@@ -152,22 +162,13 @@ export class Dialog extends PromptAction {
     return Alert.open(builder);
   }
 
-  // 同步清场：不等待退场（给同步调用方 / 兜底用）
-  static closeAll(): void {
-    Dialog.close(Busy.reset());
-    Dialog.close(Alert.reset());
-  }
-
   // 强制清场并等待全部退场（跳登录页 / 打开重试框前使用）
   static async closeAllAsync(): Promise<void> {
     const loadingId: number | undefined = Busy.reset();
     const alertId: number | undefined = Alert.reset();
 
-    Dialog.close(loadingId);
-    Dialog.close(alertId);
-
-    await Dialog.waitClosed(loadingId);
-    await Dialog.waitClosed(alertId);
+    await Dialog.closeAndWait(loadingId);
+    await Dialog.closeAndWait(alertId);
   }
 
   static async execute<T>(openBuilder: CustomBuilder, callback: () => Promise<T>,
@@ -227,9 +228,15 @@ export class Busy {
 
     const gen: number = Busy._gen;
     const opening: Promise<number | undefined> = (async (): Promise<number | undefined> => {
-      // 重试框按钮的同步 action 会立刻调用 open：先等上一个 alert 真正退场，避免两个窗口同屏。
+      // 重试框按钮的同步 action 会立刻调用 open：先关掉上一个 alert 并等它真正退场，避免两个窗口同屏。
       // 这一步取代了各页面各自 setTimeout(200) 的写法。
-      await Alert.waitDismissed();
+      await Alert.dismissAndWait();
+
+      // 等待期间可能发生清场（跳登录页）或调用方已全部释放：此时不要再开窗，
+      // 否则窗口会先真的显示出来、再因代号不匹配被关掉，表现为「登录页上闪一下 loading」。
+      if (gen !== Busy._gen || Busy._refs <= 0) {
+        return undefined;
+      }
 
       const id: number | undefined = await Dialog.open(builder);
 
@@ -362,6 +369,11 @@ export class Alert {
         await Dialog.closeAndWait(previous);
       }
 
+      // 等旧框期间可能发生了清场：不要再开新窗（同 Busy.open 的说明）
+      if (gen !== Alert._gen) {
+        return undefined;
+      }
+
       const id: number | undefined = await Dialog.open(builder);
 
       if ('undefined' === typeof id) {
@@ -400,17 +412,20 @@ export class Alert {
     return id;
   }
 
-  // 当前 alert 是否正在退场：打开 loading 前等待它，替代页面里的 setTimeout 延迟
-  static async waitDismissed(): Promise<void> {
+  // 打开 loading 前调用：关掉当前 alert 并等它真正退场，替代页面里的 setTimeout 延迟。
+  // 必须**主动关闭**而不是只等待：alert 可能仍在等用户操作（此时它并没有在退场），只等待会让槽位
+  // 提前清空、窗口却留在屏幕上，`closeAllAsync()` 之后也再关不掉它（孤儿窗口）。
+  // 用「读并清空槽位」而不是 `reset()`：`reset()` 会自增代号，把正在打开中的重试框一并取消掉。
+  static async dismissAndWait(): Promise<void> {
     const id: number | undefined = Alert._id;
+
+    Alert._id = undefined;
 
     if ('undefined' === typeof id) {
       return;
     }
 
-    Alert._id = undefined;
-
-    await Dialog.waitClosed(id);
+    await Dialog.closeAndWait(id);
   }
 }
 

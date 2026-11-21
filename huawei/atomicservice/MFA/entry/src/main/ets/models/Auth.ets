@@ -122,9 +122,11 @@ export class Authorization {
 
   // 统一认证入口：调用方只声明「目标状态」，不再自己写 refresh → login 的降级分支。
   // - NORMAL：空操作
-  // - NEED_REFRESH：先刷新；只有 refresh_token 本身失效（AuthExpiredError）才降级完整登录，
+  // - NEED_REFRESH 且本地有 refresh_token：先刷新；只有 refresh_token 本身失效（AuthExpiredError）才降级完整登录，
   //   网络 / 服务端错误直接抛给页面重试（不强制拉起华为账号授权）
-  // - EMPTY_AUTHORIZATION / REFRESH_TOKEN_EXPIRED：完整登录
+  // - 其余（EMPTY_AUTHORIZATION / REFRESH_TOKEN_EXPIRED / NEED_REFRESH 但本地无 refresh_token）：完整登录
+  //   最后一个分支不能漏：强制 NEED_REFRESH（拦截器按响应码给的）遇到本地刚 clear 过 token 时，
+  //   refresh 必然失败，若还 rethrow 给页面，用户点重试会永远停在登录页、走不到 login()。
   async ensure(target?: State): Promise<void> {
     const state: State = 'undefined' === typeof target ? this.state() : target;
 
@@ -132,7 +134,7 @@ export class Authorization {
       return;
     }
 
-    if (State.NEED_REFRESH === state) {
+    if (State.NEED_REFRESH === state && 'undefined' !== typeof this.refreshToken) {
       try {
         await this.refresh(this.refreshToken);
 
@@ -177,7 +179,9 @@ export class Authorization {
     if ('undefined' === typeof refreshToken) {
       hilog.error(LogDomain.MODELS, 'models/auth', '传递的 refresh_token 参数错误');
 
-      return Promise.reject(new HttpError('登录状态已失效，请重新登录'));
+      // 本地已无 refresh_token，属「认证失效」而非业务错误：用 AuthExpiredError，
+      // `ensure()` 据此降级为完整登录（用它当普通 HttpError 会让调用方停在失败重试上）。
+      return Promise.reject(new AuthExpiredError('登录状态已失效，请重新登录'));
     }
 
     const response = await AccessToken.loginRefresh(App.clientId, refreshToken!);

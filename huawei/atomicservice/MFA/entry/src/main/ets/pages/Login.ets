@@ -96,11 +96,20 @@ struct Login {
     this.lastState = state;
     this.failed = false;
 
-    // 整个认证流程只开一个 loading：refresh 失败时的 login 降级由 Authorization.ensure 在同一窗口内完成，
-    // 不再「关闭 → 重开 → 递归 auth」，否则接口在超时边界抖动时会在两个 loading 之间来回闪
-    await Dialog.openLoading(() => this.loadingDialog());
-
     try {
+      // 认证状态已被其它流程恢复（延迟入栈期间 refresh 已成功）：直接关掉登录页，
+      // 不再白开一次「正在关联华为账号」的 loading
+      if (State.NORMAL === state) {
+        this.popIfSelf();
+
+        return;
+      }
+
+      // 整个认证流程只开一个 loading：refresh 失败时的 login 降级由 Authorization.ensure 在同一窗口内完成，
+      // 不再「关闭 → 重开 → 递归 auth」，否则接口在超时边界抖动时会在两个 loading 之间来回闪。
+      // 必须放在 try 内：这里一旦抛错，finally 也要能把 isAuthenticating 复位，否则登录页变成点不动的死页
+      await Dialog.openLoading(() => this.loadingDialog());
+
       // 目标状态 → 具体动作（空操作 / refresh / refresh 失败降级 login / 完整登录）全部收敛在模型里
       await this.authorization.ensure(state);
 

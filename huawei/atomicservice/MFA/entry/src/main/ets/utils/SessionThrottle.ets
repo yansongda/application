@@ -6,23 +6,37 @@
 // 2) 时间窗上限：60s 内最多自动跳 3 次，超出只记日志（避免服务端持续判失效时的死循环）；
 // 3) 登录成功后 resetAfterLogin()：清掉单飞与去抖标记，不重置 60s 计数
 //    （正常使用中窗口会自然过期；若清零，异常场景会重新形成无限跳转）。
+// 拒绝时通过 `denyReason` 带回原因，日志能区分「去抖 / 单飞 / 达上限」，否则排查时只能看到「被忽略」。
 export const DEBOUNCE_MS: number = 1000;
 export const WINDOW_MS: number = 60000;
 export const LIMIT: number = 3;
+
+// 拒绝原因：日志里要能区分「去抖 / 单飞 / 达上限」
+export enum ThrottleDeny {
+  NONE = 'none',
+  IN_FLIGHT = 'in-flight',
+  DEBOUNCE = 'debounce',
+  LIMIT = 'limit',
+}
 
 export class SessionThrottle {
   private _redirecting: boolean = false;
   private _lastAt: number = 0;
   private _windowAt: number = 0;
   private _count: number = 0;
+  private _deny: ThrottleDeny = ThrottleDeny.NONE;
 
   // 是否允许本次自动跳转；返回 true 后调用方必须在跳转结束时调用 finish()
   allow(now: number): boolean {
     if (this._redirecting) {
+      this._deny = ThrottleDeny.IN_FLIGHT;
+
       return false;
     }
 
     if (this._lastAt > 0 && now - this._lastAt < DEBOUNCE_MS) {
+      this._deny = ThrottleDeny.DEBOUNCE;
+
       return false;
     }
 
@@ -32,9 +46,12 @@ export class SessionThrottle {
     }
 
     if (this._count >= LIMIT) {
+      this._deny = ThrottleDeny.LIMIT;
+
       return false;
     }
 
+    this._deny = ThrottleDeny.NONE;
     this._count++;
     this._lastAt = now;
     this._redirecting = true;
@@ -56,5 +73,10 @@ export class SessionThrottle {
   // 供日志/测试观察当前窗口内已自动跳转的次数
   get count(): number {
     return this._count;
+  }
+
+  // 最近一次 allow() 被拒绝的原因（允许时为 NONE）
+  get denyReason(): ThrottleDeny {
+    return this._deny;
   }
 }
