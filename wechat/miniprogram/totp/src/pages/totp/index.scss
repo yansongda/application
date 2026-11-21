@@ -277,6 +277,12 @@
       opacity: 0.4;
     }
 
+    // flex 声明放在更具体的 .menu-row-active .menu-label 之前：两者属性不相交，
+    // 顺序调整不影响级联，但可避免 biome 2.6 的 noDescendingSpecificity 警告
+    .menu-label {
+      flex: 1;
+    }
+
     &.menu-row-active {
       .menu-label {
         color: #3e8e2a;
@@ -288,10 +294,6 @@
       align-items: center;
       width: 20px;
       margin-right: 6px;
-    }
-
-    .menu-label {
-      flex: 1;
     }
 
     .menu-count {
