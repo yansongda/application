@@ -117,6 +117,30 @@ Page({
     const period = Number(e.detail.value.period);
     const digits = this.data.digits;
 
+    // @yansongda/miniprogram-otp v2 起 otpauth label 必须有「非空且不含冒号」的 account：
+    // 空值 / 含冒号会抛 INVALID_OTPAUTH_URI（该文案面向扫码场景，手动创建时误导），故前置拦截。
+    if (account.length === 0) {
+      Toast({
+        message: "请填写用户名",
+        theme: "error",
+        duration: 1500,
+        direction: "column",
+      });
+
+      return;
+    }
+
+    if (account.includes(":")) {
+      Toast({
+        message: "用户名不能包含冒号",
+        theme: "error",
+        duration: 1500,
+        direction: "column",
+      });
+
+      return;
+    }
+
     if (secret.length === 0) {
       Toast({
         message: "请填写密钥",

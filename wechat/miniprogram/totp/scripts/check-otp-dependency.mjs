@@ -20,10 +20,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const PACKAGE = "@yansongda/miniprogram-otp";
 /** 依赖基线：升级包版本时必须同步改这里（caret 范围 + dist 指纹 + 便于人工确认）。 */
-const EXPECTED_VERSION = "1.0.1";
+const EXPECTED_VERSION = "2.0.0";
 /** `dist/index.js` 的 sha512（base64），随版本锁定；升级后由 `npm pack` 产物重新计算。 */
 const EXPECTED_DIST_SHA512 =
-  "4WjuiaSv7WNYs5/9ANeE2OTMvgphZtXr48nYJKJIzPM67kxEKXvMt7sMUfGaOguxfJDWaVj8u1buGJx1xXj6Eg==";
+  "y/qHzGQhp9ZihqrhwpARgodWWrKV30Yt1cpuQN1vErgAtGI77YpaY3eS6WT9nkLM3wZ5Q3guYw24+xVOaTvu6Q==";
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -182,6 +182,30 @@ if (otp !== null) {
       run: () => otp.Secret.fromBase32("jbswy3dpehpk3pxp").toBase32(),
       expected: "JBSWY3DPEHPK3PXP",
     },
+    {
+      // v2 新增的公开常量：window 上限从「无界」收敛为 10 步
+      name: "MAX_VERIFY_WINDOW 上限",
+      run: () => otp.MAX_VERIFY_WINDOW,
+      expected: 10,
+    },
+    {
+      // v2 起 label 必须能还原出 account（build 与 parse 同口径）
+      name: "otpauth URI label 往返",
+      run: () => {
+        const p = otp.OTPAuthURI.parse(
+          `otpauth://totp/ACME:alice?secret=${SHA1_SEED}&issuer=ACME`,
+          { strict: true },
+        );
+        const rebuilt = otp.OTPAuthURI.build(p);
+
+        return [p.account, p.issuer, rebuilt];
+      },
+      expected: [
+        "alice",
+        "ACME",
+        `otpauth://totp/ACME:alice?secret=${SHA1_SEED}&issuer=ACME&algorithm=SHA1`,
+      ],
+    },
   ];
 
   for (const { name, run, expected } of smoke) {
@@ -202,6 +226,35 @@ if (otp !== null) {
     { name: "digits 非 6/7/8", run: () => new otp.TOTP({ secret: SHA1_SEED, digits: 5 }), code: "INVALID_DIGITS" },
     { name: "空密钥", run: () => new otp.TOTP({ secret: "" }), code: "EMPTY_SECRET" },
     { name: "微信端无同步随机源", run: () => otp.Secret.generate(20), code: "CRYPTO_NOT_INITIALIZED" },
+    {
+      // v2 起 account 必填：创建页在调用前已本地拦截，此处钉住库侧契约
+      name: "空 account",
+      run: () =>
+        otp.OTPAuthURI.build({
+          type: otp.OtpType.TOTP,
+          secret: SHA1_SEED,
+          algorithm: "SHA1",
+          digits: 6,
+          period: 30,
+          issuer: "",
+          account: "",
+        }),
+      code: "INVALID_OTPAUTH_URI",
+    },
+    {
+      name: "account 含冒号",
+      run: () =>
+        otp.OTPAuthURI.build({
+          type: otp.OtpType.TOTP,
+          secret: SHA1_SEED,
+          algorithm: "SHA1",
+          digits: 6,
+          period: 30,
+          issuer: "ACME",
+          account: "a:b",
+        }),
+      code: "INVALID_OTPAUTH_URI",
+    },
   ];
 
   for (const { name, run, code } of errorCases) {

@@ -84,6 +84,7 @@ describe("totp-uri", () => {
           algorithm: "SHA1",
           digits: 6,
           counter: 1,
+          account: "alice",
         }),
       OtpErrorCode.UNSUPPORTED_OTPAUTH_TYPE,
     );
@@ -148,6 +149,45 @@ describe("totp-uri", () => {
     );
   });
 
+  it("build_rejectsEmptyAccount", () => {
+    // v2 起 account 必填：创建页在调用前已本地拦截，此处钉住库侧契约
+    expectCode(
+      () =>
+        buildTotpUri({
+          issuer: "",
+          account: "",
+          secret: CANONICAL,
+          period: 30,
+          digits: 6,
+          algorithm: "SHA1",
+        }),
+      OtpErrorCode.INVALID_OTPAUTH_URI,
+    );
+  });
+
+  it("build_rejectsAccountWithColon", () => {
+    expectCode(
+      () =>
+        buildTotpUri({
+          issuer: "ACME",
+          account: "a:b",
+          secret: CANONICAL,
+          period: 30,
+          digits: 6,
+          algorithm: "SHA1",
+        }),
+      OtpErrorCode.INVALID_OTPAUTH_URI,
+    );
+  });
+
+  it("parse_rejectsMissingAccount", () => {
+    // 1.x 可能产出的无 account URI（如旧二维码）在 v2 一律拒收
+    expectCode(
+      () => parseTotpUri(`otpauth://totp/?secret=${CANONICAL}`),
+      OtpErrorCode.INVALID_OTPAUTH_URI,
+    );
+  });
+
   it("describeOtpError_mapsBase32Codes", () => {
     const expected = "密钥不符合 Base32 规范，请重新输入或扫码";
 
@@ -159,6 +199,15 @@ describe("totp-uri", () => {
     ]) {
       expect(describeOtpError(new OtpError(code, code))).toBe(expected);
     }
+  });
+
+  it("describeOtpError_mapsSecretContainerCode", () => {
+    // 入参非字符串的防御分支：微信侧不可达，但文案口径与 Base32 类错误保持一致
+    expect(
+      describeOtpError(
+        new OtpError(OtpErrorCode.INVALID_SECRET_CONTAINER, "x"),
+      ),
+    ).toBe("密钥不符合 Base32 规范，请重新输入或扫码");
   });
 
   it("describeOtpError_mapsTypeCode", () => {

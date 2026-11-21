@@ -5,7 +5,7 @@
     "": {
       "name": "totp",
       "dependencies": {
-        "@yansongda/miniprogram-otp": "^1.0.1",
+        "@yansongda/miniprogram-otp": "^2.0.0",
         "tdesign-miniprogram": "^1.15.2",
       },
       "devDependencies": {
@@ -34,7 +34,7 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.12", "", { "os": "win32", "cpu": "x64" }, "sha512-B1R/l+CwEpKFSuqiwePzPNRk1EiJN8kc0UhdafNz6MZN9v5OFP9HYP1irptvWzHrwVI4blVNGMbxc5zt70m3IA=="],
 
-    "@yansongda/miniprogram-otp": ["@yansongda/miniprogram-otp@1.0.1", "", {}, "sha512-4tFsrXKnyWPtJVtz198uasyPGUV6IvwfVZtGi2Dsyhh7xiwiIYk6+tv3eTJloY1cAvVlcNgxXS3eJSMF2QTGNg=="],
+    "@yansongda/miniprogram-otp": ["@yansongda/miniprogram-otp@2.0.0", "", {}, "sha512-CfSattm8mscVCOodmPyYLORb9XmsrcX8q+BbGv02o+QHpAz+c1gd6Y2SIANytjcrnmqVZDQ9BDe3w5uo5d2SBg=="],
 
     "miniprogram-api-typings": ["miniprogram-api-typings@5.3.1", "", {}, "sha512-2CirO+C1z5RmKXDqTUSNbuyouHf5d0/KJTt+Qqi1EsiQYs8jlYhq7yWjp6EdTcJpvZzjuefZQCcDixYbrgIqow=="],
 

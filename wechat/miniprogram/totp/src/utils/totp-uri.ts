@@ -69,15 +69,20 @@ const rebuildTotpUri = (p: OtpAuthParams): string => {
 // 错误文案映射：键穷尽（库新增码时编译期报错），值 `undefined` 表示回落通用文案；绝不打印 secret
 const OTP_ERROR_MESSAGES: Record<OtpErrorCode, string | undefined> = {
   EMPTY_SECRET: "密钥不符合 Base32 规范，请重新输入或扫码",
+  // 容器类型错（入参非字符串 / 非字节视图）：微信侧输入恒为字符串，属不可达防御分支
+  INVALID_SECRET_CONTAINER: "密钥不符合 Base32 规范，请重新输入或扫码",
   INVALID_BASE32_CHAR: "密钥不符合 Base32 规范，请重新输入或扫码",
   INVALID_BASE32_PADDING: "密钥不符合 Base32 规范，请重新输入或扫码",
   SECRET_TOO_SHORT: "密钥不符合 Base32 规范，请重新输入或扫码",
   SECRET_TOO_WEAK: "密钥不符合 Base32 规范，请重新输入或扫码",
+  INVALID_SECRET_LENGTH: undefined,
+  INVALID_MIN_SECRET_BITS: undefined,
   INVALID_ALGORITHM: "配置信息不合法",
   INVALID_DIGITS: "配置信息不合法",
   INVALID_PERIOD: "配置信息不合法",
   INVALID_T0: "配置信息不合法",
-  // 以下码当前应用流程不可达（verify / crypto 路径），保持原有通用文案
+  // 以下码当前应用流程不可达（verify / crypto / 时钟校准路径），保持原有通用文案
+  INVALID_CLOCK_OFFSET: undefined,
   INVALID_WINDOW: undefined,
   INVALID_COUNTER: undefined,
   INVALID_TIMESTAMP: undefined,

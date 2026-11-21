@@ -105,6 +105,7 @@ bun run check:otp-dependency    # OTP 依赖守卫（版本基线 / dist 指纹 
 - 与 `yansongda` 主小程序共享 `utils/error.ts`、`utils/logger.ts`、`utils/string.ts`、`models/error.ts`、`types/http.d.ts` 等代码，但当前无正式共享包，分别独立维护。
 - 当前 CI 已接入 `bun run biome:check`、`bun run typecheck`、`bun run test`（`tests/`）与 `bun run check:otp-dependency`（OTP 依赖守卫：caret 版本基线、dist 指纹、RFC 向量与错误码冒烟）。
 - OTP 算法实现来自 npm 包 `@yansongda/miniprogram-otp`（源码在上游 otp monorepo 的 `packages/core`，与鸿蒙 `@yansongda/otp` 同源）；**本仓库不再保留 OTP 源码与算法测试**，`utils/totp.ts` 是唯一算码调用点，`utils/totp-uri.ts` 是唯一 URI / 错误文案编排点。
+- `@yansongda/miniprogram-otp` 自 v2 起 `otpauth://` 的 label 必须有**非空且不含冒号**的 `account`（`OTPAuthURI.build` / `parse` 同口径，违者抛 `INVALID_OTPAUTH_URI`）；该码文案面向扫码（「二维码不是有效的 otpauth 链接」），因此创建页在调用 `buildTotpUri` 前必须本地校验用户名，不得把 `INVALID_OTPAUTH_URI` 直接抛给手动创建的用户。
 - 微信运行时只消费该包的 `dist/index.js`（CJS 单文件，包声明了 `miniprogram: dist`）：本地开发 / 真机调试前必须在微信开发者工具执行 **工具 → 构建 npm**；`src/miniprogram_npm/` 是本地产物，不入库。
 - 业务 OTP 解析 / 生成只经 `utils/totp-uri.ts` / `utils/totp.ts`，页面与组件不得直接 import `@yansongda/miniprogram-otp`。
 - 新增纯逻辑测试放 `tests/mfa/`。
