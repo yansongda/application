@@ -8,6 +8,10 @@
 
 - OTP 实现迁移到独立 npm 包 `@yansongda/miniprogram-otp@^1.0.1`（与本仓库共享同一份源码的产物，算法 / 错误码 / URI 行为不变）：删除本地 `src/otp/`（20 文件 / 1800 行）与 `tests/otp/`（242 项重复测试），`utils/totp.ts` / `utils/totp-uri.ts` 改为从包入口导入
 - `check:otp-invariants` 替换为 `check:otp-dependency`：校验依赖版本基线、`dist/index.js` 指纹、RFC 4226/6238 向量与关键错误码冒烟，并禁止业务代码深 import 已删除的 `src/otp`
+- 升级 OTP 依赖到 `@yansongda/miniprogram-otp@^2.0.0`（fail-closed 破坏性版本，`dist/index.js` 41.9KB → 37.7KB）：基线同步到 2.0.0 + 新 `dist` 指纹，并补钉 `MAX_VERIFY_WINDOW`、label 往返、空 / 含冒号 `account` 拒收三条 v2 契约
+- 手动创建改为**用户名必填且不得包含冒号**：v2 起 `otpauth://` 的 label 必须有非空 `account`，空值会抛 `INVALID_OTPAUTH_URI`，其文案（面向扫码）在创建场景误导，故前置拦截并给出「请填写用户名 / 用户名不能包含冒号」
+- 扫码添加同步收紧（v2 行为）：无 label 的 `otpauth://totp/?secret=…`（1.x 可产出）、重复查询参数、非十进制 `digits`/`period` 等畸形 URI 一律拒收并提示「二维码不是有效的 otpauth 链接」
+- `OtpError` 错误码表补齐 v2 新增的 4 个码（`INVALID_SECRET_CONTAINER` 沿用 Base32 文案；`INVALID_SECRET_LENGTH` / `INVALID_MIN_SECRET_BITS` / `INVALID_CLOCK_OFFSET` 微信流程不可达，回落通用文案）
 
 ## [1.3.1] - 2026-11-11
 

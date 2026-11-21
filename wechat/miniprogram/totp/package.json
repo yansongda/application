@@ -23,7 +23,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@yansongda/miniprogram-otp": "^1.0.1",
+    "@yansongda/miniprogram-otp": "^2.0.0",
     "tdesign-miniprogram": "^1.15.2"
   }
 }
