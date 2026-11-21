@@ -12,6 +12,8 @@
 - 手动创建改为**用户名必填且不得包含冒号**：v2 起 `otpauth://` 的 label 必须有非空 `account`，空值会抛 `INVALID_OTPAUTH_URI`，其文案（面向扫码）在创建场景误导，故前置拦截并给出「请填写用户名 / 用户名不能包含冒号」
 - 扫码添加同步收紧（v2 行为）：无 label 的 `otpauth://totp/?secret=…`（1.x 可产出）、重复查询参数、非十进制 `digits`/`period` 等畸形 URI 一律拒收并提示「二维码不是有效的 otpauth 链接」
 - `OtpError` 错误码表补齐 v2 新增的 4 个码（`INVALID_SECRET_CONTAINER` 沿用 Base32 文案；`INVALID_SECRET_LENGTH` / `INVALID_MIN_SECRET_BITS` / `INVALID_CLOCK_OFFSET` 微信流程不可达，回落通用文案）
+- 升级 `@biomejs/biome` `^2.5.1` → `^2.6.8`（锁文件解析 2.5.12 → 2.6.8）：`biome.json` 的 `$schema` 经 `biome migrate` 迁到 2.6.8；2.6 起 biome 纳入 `src/**/*.scss` 检查，`pages/totp/index.scss` 调整 `.menu-label` 声明顺序以消除 `noDescendingSpecificity` 警告（两者属性不相交，级联行为不变）
+- 升级 `tdesign-miniprogram` `^1.15.2` → `^1.18.0`（锁文件解析 1.16.0 → 1.18.0）：1.17 起组件间距 / 圆角 / 字号全量 token 化，1.18 起 Toast / Message / Popup / Overlay 等 `z-index` 改由样式表变量提供（默认值与旧硬编码一致，本项目仅覆盖品牌色，未自定义 `--td-spacer-*` / `--td-font-size-*` / `--td-radius-*`）；Radio / Checkbox 圆形图标描边统一 2px、Textarea placeholder 字号修正属视觉微调
 
 ## [1.3.1] - 2026-11-11
 
