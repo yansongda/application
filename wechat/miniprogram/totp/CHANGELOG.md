@@ -2,18 +2,16 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [1.4.0] - 2026-11-21
 
 ### Changed
 
-- OTP 实现迁移到独立 npm 包 `@yansongda/miniprogram-otp@^1.0.1`（与本仓库共享同一份源码的产物，算法 / 错误码 / URI 行为不变）：删除本地 `src/otp/`（20 文件 / 1800 行）与 `tests/otp/`（242 项重复测试），`utils/totp.ts` / `utils/totp-uri.ts` 改为从包入口导入
-- `check:otp-invariants` 替换为 `check:otp-dependency`：校验依赖版本基线、`dist/index.js` 指纹、RFC 4226/6238 向量与关键错误码冒烟，并禁止业务代码深 import 已删除的 `src/otp`
-- 升级 OTP 依赖到 `@yansongda/miniprogram-otp@^2.0.0`（fail-closed 破坏性版本，`dist/index.js` 41.9KB → 37.7KB）：基线同步到 2.0.0 + 新 `dist` 指纹，并补钉 `MAX_VERIFY_WINDOW`、label 往返、空 / 含冒号 `account` 拒收三条 v2 契约
-- 手动创建改为**用户名必填且不得包含冒号**：v2 起 `otpauth://` 的 label 必须有非空 `account`，空值会抛 `INVALID_OTPAUTH_URI`，其文案（面向扫码）在创建场景误导，故前置拦截并给出「请填写用户名 / 用户名不能包含冒号」
-- 扫码添加同步收紧（v2 行为）：无 label 的 `otpauth://totp/?secret=…`（1.x 可产出）、重复查询参数、非十进制 `digits`/`period` 等畸形 URI 一律拒收并提示「二维码不是有效的 otpauth 链接」
-- `OtpError` 错误码表补齐 v2 新增的 4 个码（`INVALID_SECRET_CONTAINER` 沿用 Base32 文案；`INVALID_SECRET_LENGTH` / `INVALID_MIN_SECRET_BITS` / `INVALID_CLOCK_OFFSET` 微信流程不可达，回落通用文案）
-- 升级 `@biomejs/biome` `^2.5.1` → `^2.6.8`（锁文件解析 2.5.12 → 2.6.8）：`biome.json` 的 `$schema` 经 `biome migrate` 迁到 2.6.8；2.6 起 biome 纳入 `src/**/*.scss` 检查，`pages/totp/index.scss` 调整 `.menu-label` 声明顺序以消除 `noDescendingSpecificity` 警告（两者属性不相交，级联行为不变）
-- 升级 `tdesign-miniprogram` `^1.15.2` → `^1.18.0`（锁文件解析 1.16.0 → 1.18.0）：1.17 起组件间距 / 圆角 / 字号全量 token 化，1.18 起 Toast / Message / Popup / Overlay 等 `z-index` 改由样式表变量提供（默认值与旧硬编码一致，本项目仅覆盖品牌色，未自定义 `--td-spacer-*` / `--td-font-size-*` / `--td-radius-*`）；Radio / Checkbox 圆形图标描边统一 2px、Textarea placeholder 字号修正属视觉微调
+- 手动创建改为**用户名必填且不得包含冒号**：`otpauth://` 的 label 必须携带非空 `account`，原先留空会被 OTP 库以「二维码不是有效的 otpauth 链接」拒收（该文案面向扫码场景），现改为提交前拦截并分别提示「请填写用户名」/「用户名不能包含冒号」 (#211)
+- 扫码添加收紧：无 label 的 `otpauth://totp/?secret=…`、重复查询参数、非十进制 `digits` / `period` 等畸形 URI 一律拒收，提示「二维码不是有效的 otpauth 链接」 (#211)
+- 面向用户的错误文案统一：仅自建错误（`AppError` 子类）的 message 作为产品文案展示，微信接口 `wx.*` errMsg 与第三方库英文错误码不再直接展示，统一回落「操作失败，请重试」；`EE` / `WeixinError` / `HttpError` 改继承 `AppError`，保留 `instanceof Error` 与 stack 语义 (#206)
+- OTP 实现迁移到独立 npm 包 `@yansongda/miniprogram-otp@^2.0.0`（与本仓库零依赖自研实现同源，算法 / 码值不变）：删除本地 `src/otp/`（20 文件 / 约 1800 行）与 `tests/otp/`（242 项重复测试），`utils/totp.ts` / `utils/totp-uri.ts` 改为从包入口导入；错误码表按 `OtpErrorCode` 穷尽，库新增码时编译期报错 (#205, #211)
+- `check:otp-invariants` 替换为 `check:otp-dependency`：校验依赖版本基线、`dist/index.js` 指纹、RFC 4226 / 6238 向量与关键错误码冒烟，并禁止业务代码深 import 已删除的 `src/otp` (#205)
+- 升级 `@biomejs/biome` `^2.5.1` → `^2.6.8`、`tdesign-miniprogram` `^1.15.2` → `^1.18.0`：biome 2.6 纳入 `src/**/*.scss` 检查（`pages/totp/index.scss` 调整 `.menu-label` 声明顺序消除 `noDescendingSpecificity` 警告，级联行为不变）；tdesign 1.17 起组件间距 / 圆角 / 字号全量 token 化、1.18 起 Toast / Message / Popup / Overlay 等 `z-index` 改由样式表变量提供（默认值与旧硬编码一致，本项目仅覆盖品牌色）；Radio / Checkbox 圆形图标描边统一 2px、Textarea placeholder 字号修正属视觉微调 (#212)
 
 ## [1.3.1] - 2026-11-11
 
