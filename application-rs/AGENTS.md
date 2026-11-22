@@ -116,7 +116,7 @@ response.rs  Response<D>、ApiErr、Scribe 实现
 
 - 原生 SQL + `sqlx::query_as` / `sqlx::query`，不使用 ORM
 - 连接池：`LazyLock<HashMap<&str, SqlitePool>>`，通过 `Pool::sqlite("account")?` 访问
-- 建库脚本与迁移工具见 `database/sqlite/`（README 里有完整流程）
+- 建库脚本见 `database/sqlite/`（README 里有完整流程）
 - 主键/外键统一用 `i64`（SQLite 的 `INTEGER` 即有符号 64 位，与 `last_insert_rowid()` 返回类型一致）
 - 数据库宏自动记录 SQL、参数和耗时
 
