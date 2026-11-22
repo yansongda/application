@@ -3,7 +3,7 @@
 ## 项目概述
 
 Rust 后端 workspace，提供多因子认证（MFA）服务 API。
-使用 Salvo Web 框架、SQLx 原生 SQL 访问 MySQL。
+使用 Salvo Web 框架、SQLx 原生 SQL 访问 SQLite。
 
 ## 仓库结构
 
@@ -11,7 +11,7 @@ Rust 后端 workspace，提供多因子认证（MFA）服务 API。
 application-rs/
   application-api/       # HTTP API 二进制入口（src/bin/api.rs）
   application-kernel/    # 核心库：配置、日志、错误/结果类型
-  application-database/  # 数据库访问层（MySQL、SQLx）
+  application-database/  # 数据库访问层（SQLite、SQLx）
   application-http/     # HTTP 客户端、第三方平台对接
   database/              # SQL 迁移脚本
 ```
@@ -80,7 +80,7 @@ use tracing::{error, info};
 | 结构体/枚举  | `PascalCase`       | `AccessToken`、`LoginRequest` |
 | 函数名       | `snake_case`       | `fetch`、`update_or_insert`   |
 | 常量         | `SCREAMING_SNAKE`  | `MAX_LOG_LENGTH`              |
-| 全局静态变量 | `G_` 前缀          | `G_CONFIG`、`G_POOL_MYSQL`    |
+| 全局静态变量 | `G_` 前缀          | `G_CONFIG`、`G_POOL_SQLITE`   |
 
 ### 类型约定
 
@@ -115,7 +115,9 @@ response.rs  Response<D>、ApiErr、Scribe 实现
 ## 数据库层（application-database）
 
 - 原生 SQL + `sqlx::query_as` / `sqlx::query`，不使用 ORM
-- 连接池：`LazyLock<HashMap<&str, MySqlPool>>`，通过 `Pool::mysql("account")?` 访问
+- 连接池：`LazyLock<HashMap<&str, SqlitePool>>`，通过 `Pool::sqlite("account")?` 访问
+- 建库脚本与迁移工具见 `database/sqlite/`（README 里有完整流程）
+- 主键/外键统一用 `i64`（SQLite 的 `INTEGER` 即有符号 64 位，与 `last_insert_rowid()` 返回类型一致）
 - 数据库宏自动记录 SQL、参数和耗时
 
 ## 日志与异步

@@ -4,7 +4,7 @@ use application_database::account::user;
 use application_database::tool::totp;
 use application_kernel::result::{ErrorCode, Result};
 
-pub async fn detail(id: u64) -> Result<user::User> {
+pub async fn detail(id: i64) -> Result<user::User> {
     if id == 0 {
         return Err(ErrorCode::ParamsUserNotFound);
     }

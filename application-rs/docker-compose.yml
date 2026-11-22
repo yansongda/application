@@ -26,6 +26,8 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - ./config.toml:/www/config.toml:ro
+      # SQLite 库文件目录（宿主持久化，容器内需可写）
+      - ./data/prod:/www/data:rw
     environment:
       TZ: Asia/Shanghai
     security_opt:
@@ -44,6 +46,7 @@ services:
       - "127.0.0.1:8081:8080"
     volumes:
       - ./config.test.toml:/www/config.toml:ro
+      - ./data/test:/www/data:rw
     environment:
       TZ: Asia/Shanghai
     security_opt:

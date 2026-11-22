@@ -8,7 +8,7 @@
 
 前后端同仓库维护的 MFA（多因子认证）服务 monorepo。Rust 后端提供 HTTP API，微信/华为前端分别对接微信登录与华为帐号登录，共享同一套后端服务。
 
-核心栈：Rust / Salvo / SQLx / MySQL；微信原生小程序（TypeScript）；华为元服务（ArkTS/ETS）。
+核心栈：Rust / Salvo / SQLx / SQLite；微信原生小程序（TypeScript）；华为元服务（ArkTS/ETS）。
 
 ## STRUCTURE
 
@@ -50,7 +50,7 @@ yansongda-application/
 | `ApiErr` | struct | `application-rs/application-api/src/response.rs:61` | `Error` → Salvo 响应包装 |
 | `Error` | enum | `application-rs/application-kernel/src/result.rs` | 全局错误枚举（1000/2000/9800/9900） |
 | `G_CONFIG` | static | `application-rs/application-kernel/src/config.rs` | 全局运行时配置 |
-| `Pool` | struct | `application-rs/application-database/src/lib.rs` | MySQL 连接池管理 |
+| `Pool` | struct | `application-rs/application-database/src/lib.rs` | SQLite 连接池管理 |
 | `Platform` | enum | `application-rs/application-database/src/account/mod.rs` | 平台标识：wechat/huawei |
 | `request` | function | `application-rs/application-http/src/http.rs:27` | 通用第三方 HTTP 请求 |
 | `login` | function | `application-rs/application-http/src/wechat.rs` | 微信 jscode2session |

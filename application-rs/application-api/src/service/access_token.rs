@@ -57,7 +57,7 @@ pub async fn login_refresh(
 
 async fn login_wechat(
     request: &LoginRequestParams,
-) -> Result<(u64, access_token::AccessTokenData)> {
+) -> Result<(i64, access_token::AccessTokenData)> {
     let config = third_config::fetch(&Platform::Wechat, request.third_id.as_str()).await?;
 
     let app_secret = config
@@ -96,7 +96,7 @@ async fn login_wechat(
 
 async fn login_huawei(
     request: &LoginRequestParams,
-) -> Result<(u64, access_token::AccessTokenData)> {
+) -> Result<(i64, access_token::AccessTokenData)> {
     let config = third_config::fetch(&Platform::Huawei, request.third_id.as_str()).await?;
 
     let app_secret = config
@@ -137,7 +137,7 @@ async fn get_user_id(
     platform: &Platform,
     third_id: &str,
     config: Option<&third_user::ThirdUserConfig>,
-) -> Result<u64> {
+) -> Result<i64> {
     let result = third_user::fetch(platform, third_id).await;
 
     match result {

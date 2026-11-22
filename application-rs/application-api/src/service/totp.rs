@@ -25,8 +25,8 @@ pub async fn sort(
     items: Vec<SortItemParams>,
 ) -> Result<()> {
     let owned = totp::all(access_token.user_id).await?;
-    let owned_ids: BTreeSet<u64> = owned.iter().map(|t| t.id).collect();
-    let item_ids: BTreeSet<u64> = items.iter().map(|i| i.id).collect();
+    let owned_ids: BTreeSet<i64> = owned.iter().map(|t| t.id).collect();
+    let item_ids: BTreeSet<i64> = items.iter().map(|i| i.id).collect();
 
     if owned_ids.len() != items.len() || item_ids.len() != items.len() || owned_ids != item_ids {
         return Err(ErrorCode::AuthorizationPermissionUngranted);
@@ -43,7 +43,7 @@ pub async fn sort(
     totp::sort(access_token.user_id, &db_items).await
 }
 
-pub async fn detail(access_token: &access_token::AccessToken, id: u64) -> Result<DetailResponse> {
+pub async fn detail(access_token: &access_token::AccessToken, id: i64) -> Result<DetailResponse> {
     let totp = totp::fetch(id).await?;
 
     totp.ensure_permission(access_token.user_id)?;
@@ -145,7 +145,7 @@ pub async fn edit_pinned(
     totp::update_config(totp.id, &config).await
 }
 
-pub async fn delete(access_token: &access_token::AccessToken, id: u64) -> Result<()> {
+pub async fn delete(access_token: &access_token::AccessToken, id: i64) -> Result<()> {
     let totp = totp::fetch(id).await?;
 
     totp.ensure_permission(access_token.user_id)?;
@@ -253,7 +253,7 @@ impl Item for TotpBackupItem {
 
 impl TotpBackupItem {
     /// 已通过 [`Item::validate`] 的条目转换为入库对象（不再重复校验）。
-    fn into_created(self, user_id: u64) -> totp::CreatedTotp {
+    fn into_created(self, user_id: i64) -> totp::CreatedTotp {
         totp::CreatedTotp {
             user_id,
             sort: Some(self.sort),

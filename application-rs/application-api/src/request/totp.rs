@@ -37,12 +37,12 @@ pub struct DetailRequest {
 }
 
 impl Validator for DetailRequest {
-    type Data = u64;
+    type Data = i64;
 
     fn validate(&self) -> application_kernel::result::Result<Self::Data> {
         let id = self.id.as_deref().ok_or(ErrorCode::ParamsTotpIdEmpty)?;
 
-        id.parse::<u64>().map_err(|_| ErrorCode::ParamsTotpIdEmpty)
+        id.parse::<i64>().map_err(|_| ErrorCode::ParamsTotpIdEmpty)
     }
 }
 
@@ -122,7 +122,7 @@ pub struct EditIssuerRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct EditIssuerRequestParams {
-    pub id: u64,
+    pub id: i64,
     pub issuer: String,
 }
 
@@ -134,7 +134,7 @@ impl Validator for EditIssuerRequest {
             .id
             .as_deref()
             .ok_or(ErrorCode::ParamsTotpIdEmpty)?
-            .parse::<u64>()
+            .parse::<i64>()
             .map_err(|_| ErrorCode::ParamsTotpIdEmpty)?;
 
         if let Some(issuer) = &self.issuer
@@ -158,7 +158,7 @@ pub struct EditUsernameRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct EditUsernameRequestParams {
-    pub id: u64,
+    pub id: i64,
     pub username: String,
 }
 
@@ -170,7 +170,7 @@ pub struct EditTagsRequest {
 
 #[derive(Debug, Clone)]
 pub struct EditTagsRequestParams {
-    pub id: u64,
+    pub id: i64,
     pub tags: Vec<String>,
 }
 
@@ -182,7 +182,7 @@ impl Validator for EditTagsRequest {
             .id
             .as_deref()
             .ok_or(ErrorCode::ParamsTotpIdEmpty)?
-            .parse::<u64>()
+            .parse::<i64>()
             .map_err(|_| ErrorCode::ParamsTotpIdEmpty)?;
 
         let tags = normalize_tags(&self.tags).ok_or(ErrorCode::ParamsTotpTagsInvalid)?;
@@ -199,7 +199,7 @@ pub struct EditPinnedRequest {
 
 #[derive(Debug, Clone)]
 pub struct EditPinnedRequestParams {
-    pub id: u64,
+    pub id: i64,
     pub pinned: bool,
 }
 
@@ -211,7 +211,7 @@ impl Validator for EditPinnedRequest {
             .id
             .as_deref()
             .ok_or(ErrorCode::ParamsTotpIdEmpty)?
-            .parse::<u64>()
+            .parse::<i64>()
             .map_err(|_| ErrorCode::ParamsTotpIdEmpty)?;
 
         Ok(Self::Data {
@@ -229,7 +229,7 @@ impl Validator for EditUsernameRequest {
             .id
             .as_deref()
             .ok_or(ErrorCode::ParamsTotpIdEmpty)?
-            .parse::<u64>()
+            .parse::<i64>()
             .map_err(|_| ErrorCode::ParamsTotpIdEmpty)?;
 
         let username = self
@@ -254,12 +254,12 @@ pub struct DeleteRequest {
 }
 
 impl Validator for DeleteRequest {
-    type Data = u64;
+    type Data = i64;
 
     fn validate(&self) -> application_kernel::result::Result<Self::Data> {
         let id = self.id.as_deref().ok_or(ErrorCode::ParamsTotpIdEmpty)?;
 
-        id.parse::<u64>().map_err(|_| ErrorCode::ParamsTotpIdEmpty)
+        id.parse::<i64>().map_err(|_| ErrorCode::ParamsTotpIdEmpty)
     }
 }
 
@@ -276,7 +276,7 @@ pub struct SortRequestItem {
 
 #[derive(Debug, Clone)]
 pub struct SortItemParams {
-    pub id: u64,
+    pub id: i64,
     pub sort: u32,
 }
 
@@ -297,7 +297,7 @@ impl Validator for SortRequest {
                     .id
                     .as_deref()
                     .ok_or(ErrorCode::ParamsTotpIdEmpty)?
-                    .parse::<u64>()
+                    .parse::<i64>()
                     .map_err(|_| ErrorCode::ParamsTotpIdEmpty)?;
 
                 let sort = item.sort.ok_or(ErrorCode::ParamsTotpIdEmpty)?;

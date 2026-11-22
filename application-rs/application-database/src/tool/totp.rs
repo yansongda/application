@@ -31,14 +31,14 @@ fn default_algorithm() -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SortItem {
-    pub id: u64,
+    pub id: i64,
     pub sort: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Totp {
-    pub id: u64,
-    pub user_id: u64,
+    pub id: i64,
+    pub user_id: i64,
     pub sort: u32,
     pub username: String,
     pub issuer: Option<String>,
@@ -48,7 +48,7 @@ pub struct Totp {
 }
 
 impl Totp {
-    pub fn ensure_permission(&self, user_id: u64) -> Result<()> {
+    pub fn ensure_permission(&self, user_id: i64) -> Result<()> {
         if self.user_id == user_id {
             return Ok(());
         }
@@ -130,23 +130,23 @@ pub struct TotpConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreatedTotp {
-    pub user_id: u64,
+    pub user_id: i64,
     pub sort: Option<u32>,
     pub username: String,
     pub issuer: Option<String>,
     pub config: TotpConfig,
 }
 
-pub async fn all(user_id: u64) -> Result<Vec<Totp>> {
-    let sql = "select * from tool.totp where user_id = ? order by sort desc, id asc";
-    let pool_ref = Pool::mysql("tool")?;
+pub async fn all(user_id: i64) -> Result<Vec<Totp>> {
+    let sql = "select * from totp where user_id = ? order by sort desc, id asc";
+    let pool_ref = Pool::sqlite("tool")?;
 
     Ok(query_all!(pool_ref, sql, user_id))
 }
 
-pub async fn fetch(id: u64) -> Result<Totp> {
-    let sql = "select * from tool.totp where id = ? limit 1";
-    let pool_ref = Pool::mysql("tool")?;
+pub async fn fetch(id: i64) -> Result<Totp> {
+    let sql = "select * from totp where id = ? limit 1";
+    let pool_ref = Pool::sqlite("tool")?;
 
     let result: Option<Totp> = query_optional!(pool_ref, sql, id);
 
@@ -158,8 +158,9 @@ pub async fn fetch(id: u64) -> Result<Totp> {
 }
 
 pub async fn insert(totp: CreatedTotp) -> Result<Totp> {
-    let sql = "insert into tool.totp (user_id, username, issuer, config) values (?, ?, ?, ?)";
-    let pool_ref = Pool::mysql("tool")?;
+    let sql = "insert into totp (user_id, username, issuer, config, created_at, updated_at) values (?, ?, ?, ?, ?, ?)";
+    let now = Local::now();
+    let pool_ref = Pool::sqlite("tool")?;
 
     let result = insert!(
         pool_ref,
@@ -167,41 +168,46 @@ pub async fn insert(totp: CreatedTotp) -> Result<Totp> {
         totp.user_id,
         &totp.username,
         &totp.issuer,
-        Json(&(totp.config))
+        Json(&(totp.config)),
+        now,
+        now
     );
 
     Ok(Totp {
-        id: result.last_insert_id(),
+        id: result.last_insert_rowid(),
         user_id: totp.user_id,
         sort: 0,
         username: totp.username,
         issuer: totp.issuer,
         config: Json(totp.config),
-        created_at: Local::now(),
-        updated_at: Local::now(),
+        created_at: now,
+        updated_at: now,
     })
 }
 
 /// 批量插入（备份导入专用）：逐条复用 `insert!` 宏写入，任一条失败即返回 `9903`。
 /// 当前不做事务：失败时可能已写入部分条目（按需求接受）。
-pub async fn insert_many(user_id: u64, items: &[CreatedTotp]) -> Result<u64> {
+pub async fn insert_many(user_id: i64, items: &[CreatedTotp]) -> Result<u64> {
     if items.is_empty() {
         return Ok(0);
     }
 
-    let sql =
-        "insert into tool.totp (user_id, username, issuer, config, sort) values (?, ?, ?, ?, ?)";
+    let sql = "insert into totp (user_id, username, issuer, config, sort, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)";
     let mut affected = 0u64;
 
     for item in items {
+        let now = Local::now();
+
         let result = insert!(
-            Pool::mysql("tool")?,
+            Pool::sqlite("tool")?,
             sql,
             user_id,
             &item.username,
             &item.issuer,
             Json(&item.config),
-            item.sort.unwrap_or(0)
+            item.sort.unwrap_or(0),
+            now,
+            now
         );
 
         affected += result.rows_affected();
@@ -210,67 +216,67 @@ pub async fn insert_many(user_id: u64, items: &[CreatedTotp]) -> Result<u64> {
     Ok(affected)
 }
 
-pub async fn update_issuer(id: u64, issuer: &str) -> Result<()> {
-    let sql = "update tool.totp set issuer = ? where id = ?";
-    let pool_ref = Pool::mysql("tool")?;
+pub async fn update_issuer(id: i64, issuer: &str) -> Result<()> {
+    let sql = "update totp set issuer = ?, updated_at = ? where id = ?";
+    let pool_ref = Pool::sqlite("tool")?;
 
-    let _ = update!(pool_ref, sql, issuer, id);
+    let _ = update!(pool_ref, sql, issuer, Local::now(), id);
 
     Ok(())
 }
 
-pub async fn update_username(id: u64, username: &str) -> Result<()> {
-    let sql = "update tool.totp set username = ? where id = ?";
-    let pool_ref = Pool::mysql("tool")?;
+pub async fn update_username(id: i64, username: &str) -> Result<()> {
+    let sql = "update totp set username = ?, updated_at = ? where id = ?";
+    let pool_ref = Pool::sqlite("tool")?;
 
-    let _ = update!(pool_ref, sql, username, id);
+    let _ = update!(pool_ref, sql, username, Local::now(), id);
 
     Ok(())
 }
 
 /// 更新整份 `config`：标签/置顶与算码参数共处一列，采用读-改-写。
 /// 单用户 MFA 场景下标签/置顶并发编辑概率极低，接受 last-write-wins。
-pub async fn update_config(id: u64, config: &TotpConfig) -> Result<()> {
-    let sql = "update tool.totp set config = ? where id = ?";
-    let pool_ref = Pool::mysql("tool")?;
+pub async fn update_config(id: i64, config: &TotpConfig) -> Result<()> {
+    let sql = "update totp set config = ?, updated_at = ? where id = ?";
+    let pool_ref = Pool::sqlite("tool")?;
     let config = Json(config);
 
-    let _ = update!(pool_ref, sql, &config, id);
+    let _ = update!(pool_ref, sql, &config, Local::now(), id);
 
     Ok(())
 }
 
-pub async fn delete(id: u64) -> Result<()> {
-    let sql = "delete from tool.totp where id = ?";
-    let pool_ref = Pool::mysql("tool")?;
+pub async fn delete(id: i64) -> Result<()> {
+    let sql = "delete from totp where id = ?";
+    let pool_ref = Pool::sqlite("tool")?;
 
     let _ = delete!(pool_ref, sql, id);
 
     Ok(())
 }
 
-pub async fn delete_by_user(user_id: u64) -> Result<()> {
-    let sql = "delete from tool.totp where user_id = ?";
-    let pool_ref = Pool::mysql("tool")?;
+pub async fn delete_by_user(user_id: i64) -> Result<()> {
+    let sql = "delete from totp where user_id = ?";
+    let pool_ref = Pool::sqlite("tool")?;
 
     let _ = delete!(pool_ref, sql, user_id);
 
     Ok(())
 }
 
-pub async fn sort(user_id: u64, items: &[SortItem]) -> Result<()> {
+pub async fn sort(user_id: i64, items: &[SortItem]) -> Result<()> {
     if items.is_empty() {
         return Ok(());
     }
 
     let started_at = Instant::now();
-    let pool_ref = Pool::mysql("tool")?;
+    let pool_ref = Pool::sqlite("tool")?;
 
-    let mut sql = String::from("UPDATE tool.totp SET sort = CASE id ");
+    let mut sql = String::from("UPDATE totp SET sort = CASE id ");
     for _ in items {
         sql.push_str("WHEN ? THEN ? ");
     }
-    sql.push_str("ELSE sort END WHERE id IN (");
+    sql.push_str("ELSE sort END, updated_at = ? WHERE id IN (");
     for i in 0..items.len() {
         if i > 0 {
             sql.push(',');
@@ -284,6 +290,7 @@ pub async fn sort(user_id: u64, items: &[SortItem]) -> Result<()> {
     for item in items {
         query = query.bind(item.id).bind(item.sort);
     }
+    query = query.bind(Local::now());
     for item in items {
         query = query.bind(item.id);
     }
@@ -294,8 +301,8 @@ pub async fn sort(user_id: u64, items: &[SortItem]) -> Result<()> {
         ErrorCode::InternalDatabaseUpdate
     })?;
 
-    // 依赖 sqlx 默认在 MySQL 握手开启 CLIENT_FOUND_ROWS：affected_rows 为匹配行数（含值未变的行），
-    // 重复提交相同排序不会误判为越权；若驱动默认行为变化需重新评估此校验。
+    // SQLite 的 `changes()` 对「值未变」的 UPDATE 同样计入匹配行数，
+    // 因此重复提交相同排序不会误判为越权。
     if result.rows_affected() != items.len() as u64 {
         return Err(ErrorCode::AuthorizationPermissionUngranted);
     }

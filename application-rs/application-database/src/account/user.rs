@@ -7,7 +7,7 @@ use sqlx::types::Json;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
-    pub id: u64,
+    pub id: i64,
     pub phone: Option<String>,
     pub config: Option<Json<Config>>,
     pub created_at: DateTime<Local>,
@@ -43,9 +43,9 @@ pub struct MfaConfigSecurity {
     pub app_lock: Option<bool>,
 }
 
-pub async fn fetch(user_id: u64) -> application_kernel::result::Result<User> {
-    let sql = "select * from account.user where id = ? limit 1";
-    let pool_ref = Pool::mysql("account")?;
+pub async fn fetch(user_id: i64) -> application_kernel::result::Result<User> {
+    let sql = "select * from user where id = ? limit 1";
+    let pool_ref = Pool::sqlite("account")?;
 
     let result: Option<User> = query_optional!(pool_ref, sql, user_id);
 
@@ -59,66 +59,77 @@ pub async fn fetch(user_id: u64) -> application_kernel::result::Result<User> {
 pub async fn insert(
     phone: Option<&str>,
     config: Config,
-) -> application_kernel::result::Result<u64> {
-    let sql = "insert into account.user (phone, config) values (?, ?)";
-    let pool_ref = Pool::mysql("account")?;
+) -> application_kernel::result::Result<i64> {
+    let sql = "insert into user (phone, config, created_at, updated_at) values (?, ?, ?, ?)";
+    let now = Local::now();
+    let pool_ref = Pool::sqlite("account")?;
 
-    let result = insert!(pool_ref, sql, phone, Json(&config));
+    let result = insert!(pool_ref, sql, phone, Json(&config), now, now);
 
-    Ok(result.last_insert_id())
+    Ok(result.last_insert_rowid())
 }
 
-pub async fn update_avatar(id: u64, avatar: &str) -> application_kernel::result::Result<()> {
-    let sql = "update account.user set config = json_set(config, '$.avatar', ?) where id = ?";
-    let pool_ref = Pool::mysql("account")?;
+pub async fn update_avatar(id: i64, avatar: &str) -> application_kernel::result::Result<()> {
+    let sql =
+        "update user set config = json_set(config, '$.avatar', ?), updated_at = ? where id = ?";
+    let pool_ref = Pool::sqlite("account")?;
 
-    let _ = update!(pool_ref, sql, avatar, id);
+    let _ = update!(pool_ref, sql, avatar, Local::now(), id);
 
     Ok(())
 }
 
-pub async fn update_nickname(id: u64, nickname: &str) -> application_kernel::result::Result<()> {
-    let sql = "update account.user set config = json_set(config, '$.nickname', ?) where id = ?";
-    let pool_ref = Pool::mysql("account")?;
+pub async fn update_nickname(id: i64, nickname: &str) -> application_kernel::result::Result<()> {
+    let sql =
+        "update user set config = json_set(config, '$.nickname', ?), updated_at = ? where id = ?";
+    let pool_ref = Pool::sqlite("account")?;
 
-    let _ = update!(pool_ref, sql, nickname, id);
-
-    Ok(())
-}
-
-pub async fn update_slogan(id: u64, slogan: &str) -> application_kernel::result::Result<()> {
-    let sql = "update account.user set config = json_set(config, '$.slogan', ?) where id = ?";
-    let pool_ref = Pool::mysql("account")?;
-
-    let _ = update!(pool_ref, sql, slogan, id);
+    let _ = update!(pool_ref, sql, nickname, Local::now(), id);
 
     Ok(())
 }
 
-pub async fn update_phone(id: u64, phone: &str) -> application_kernel::result::Result<()> {
-    let sql = "update account.user set phone = ? where id = ?";
-    let pool_ref = Pool::mysql("account")?;
+pub async fn update_slogan(id: i64, slogan: &str) -> application_kernel::result::Result<()> {
+    let sql =
+        "update user set config = json_set(config, '$.slogan', ?), updated_at = ? where id = ?";
+    let pool_ref = Pool::sqlite("account")?;
 
-    let _ = update!(pool_ref, sql, phone, id);
+    let _ = update!(pool_ref, sql, slogan, Local::now(), id);
 
     Ok(())
 }
 
-pub async fn update_config(id: u64, config: &Config) -> application_kernel::result::Result<()> {
-    let sql = "update account.user set config = ? where id = ?";
-    let pool_ref = Pool::mysql("account")?;
+pub async fn update_phone(id: i64, phone: &str) -> application_kernel::result::Result<()> {
+    let sql = "update user set phone = ?, updated_at = ? where id = ?";
+    let pool_ref = Pool::sqlite("account")?;
+
+    let _ = update!(pool_ref, sql, phone, Local::now(), id);
+
+    Ok(())
+}
+
+pub async fn update_config(id: i64, config: &Config) -> application_kernel::result::Result<()> {
+    let sql = "update user set config = ?, updated_at = ? where id = ?";
+    let pool_ref = Pool::sqlite("account")?;
     let config = Json(config);
 
-    let _ = update!(pool_ref, sql, &config, id);
+    let _ = update!(pool_ref, sql, &config, Local::now(), id);
 
     Ok(())
 }
 
-pub async fn flush(id: u64) -> application_kernel::result::Result<()> {
-    let sql = "update account.user set phone = ?, config = ? where id = ?";
-    let pool_ref = Pool::mysql("account")?;
+pub async fn flush(id: i64) -> application_kernel::result::Result<()> {
+    let sql = "update user set phone = ?, config = ?, updated_at = ? where id = ?";
+    let pool_ref = Pool::sqlite("account")?;
 
-    let _ = update!(pool_ref, sql, None::<&str>, Json(&Config::default()), id);
+    let _ = update!(
+        pool_ref,
+        sql,
+        None::<&str>,
+        Json(&Config::default()),
+        Local::now(),
+        id
+    );
 
     Ok(())
 }

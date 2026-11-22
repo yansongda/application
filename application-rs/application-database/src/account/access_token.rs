@@ -11,8 +11,8 @@ use ulid::Ulid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct AccessToken {
-    pub id: u64,
-    pub user_id: u64,
+    pub id: i64,
+    pub user_id: i64,
     pub platform: Platform,
     pub third_id: String,
     pub access_token: String,
@@ -66,8 +66,8 @@ pub struct HuaweiAccessTokenData {
 }
 
 pub async fn fetch(access_token: &str) -> Result<AccessToken> {
-    let sql = "select * from account.access_token where access_token = ? limit 1";
-    let pool_ref = Pool::mysql("account")?;
+    let sql = "select * from access_token where access_token = ? limit 1";
+    let pool_ref = Pool::sqlite("account")?;
 
     let result: Option<AccessToken> = query_optional!(pool_ref, sql, access_token);
 
@@ -78,9 +78,9 @@ pub async fn fetch(access_token: &str) -> Result<AccessToken> {
     Err(ErrorCode::ParamsAccessTokenNotFound)
 }
 
-pub async fn fetch_by_id(id: u64) -> Result<AccessToken> {
-    let sql = "select * from account.access_token where id = ? limit 1";
-    let pool_ref = Pool::mysql("account")?;
+pub async fn fetch_by_id(id: i64) -> Result<AccessToken> {
+    let sql = "select * from access_token where id = ? limit 1";
+    let pool_ref = Pool::sqlite("account")?;
 
     let result: Option<AccessToken> = query_optional!(pool_ref, sql, id);
 
@@ -91,9 +91,9 @@ pub async fn fetch_by_id(id: u64) -> Result<AccessToken> {
     Err(ErrorCode::ParamsAccessTokenNotFound)
 }
 
-pub async fn fetch_by_user_id(platform: &Platform, user_id: u64) -> Result<AccessToken> {
-    let sql = "select * from account.access_token where user_id = ? and platform = ? limit 1";
-    let pool_ref = Pool::mysql("account")?;
+pub async fn fetch_by_user_id(platform: &Platform, user_id: i64) -> Result<AccessToken> {
+    let sql = "select * from access_token where user_id = ? and platform = ? limit 1";
+    let pool_ref = Pool::sqlite("account")?;
 
     let result: Option<AccessToken> = query_optional!(pool_ref, sql, user_id, platform);
 
@@ -107,7 +107,7 @@ pub async fn fetch_by_user_id(platform: &Platform, user_id: u64) -> Result<Acces
 pub async fn update_or_insert(
     platform: &Platform,
     third_id: &str,
-    user_id: u64,
+    user_id: i64,
     data: AccessTokenData,
 ) -> Result<AccessToken> {
     match fetch_by_user_id(platform, user_id).await {
@@ -119,14 +119,15 @@ pub async fn update_or_insert(
 pub async fn insert(
     platform: &Platform,
     third_id: &str,
-    user_id: u64,
+    user_id: i64,
     data: AccessTokenData,
 ) -> Result<AccessToken> {
-    let sql = "insert into account.access_token (user_id, access_token, data, platform, third_id, expired_at) values (?, ?, ?, ?, ?, ?)";
+    let sql = "insert into access_token (user_id, access_token, data, platform, third_id, expired_at, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)";
     let access_token = Ulid::generate().to_string();
     let expired_at = Some(G_CONFIG.access_token.get_expired_at());
+    let now = Local::now();
 
-    let pool_ref = Pool::mysql("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
     let result = insert!(
         pool_ref,
@@ -136,29 +137,31 @@ pub async fn insert(
         Json(&data),
         platform,
         third_id,
-        expired_at
+        expired_at,
+        now,
+        now
     );
 
     Ok(AccessToken {
-        id: result.last_insert_id(),
+        id: result.last_insert_rowid(),
         user_id,
         platform: platform.to_owned(),
         third_id: third_id.to_string(),
         access_token,
         data: Json(data),
         expired_at,
-        created_at: Local::now(),
-        updated_at: Local::now(),
+        created_at: now,
+        updated_at: now,
     })
 }
 
 pub async fn update(mut access_token: AccessToken, data: AccessTokenData) -> Result<AccessToken> {
-    let sql =
-        "update account.access_token set access_token = ?, data = ?, expired_at = ? where id = ?";
+    let sql = "update access_token set access_token = ?, data = ?, expired_at = ?, updated_at = ? where id = ?";
     let access_token_value = Ulid::generate().to_string();
     let expired_at = Some(G_CONFIG.access_token.get_expired_at());
+    let now = Local::now();
 
-    let pool_ref = Pool::mysql("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
     let _ = update!(
         pool_ref,
@@ -166,13 +169,14 @@ pub async fn update(mut access_token: AccessToken, data: AccessTokenData) -> Res
         &access_token_value,
         Json(&data),
         expired_at,
+        now,
         access_token.id
     );
 
     access_token.access_token = access_token_value;
     access_token.data = Json(data);
     access_token.expired_at = expired_at;
-    access_token.updated_at = Local::now();
+    access_token.updated_at = now;
 
     Ok(access_token)
 }

@@ -36,7 +36,7 @@
 
 ```
 【改造前：TOTP 小程序】
-扫码 URI ──POST /totp/create──▶ MySQL(tool.totp: secret+period)
+扫码 URI ──POST /totp/create──▶ SQLite(tool.totp: secret+period)
 每周期末 ──POST /totp/detail──▶ 后端 totp-rs 算 code ──▶ 倒计时展示
 
 【改造后：TOTP 小程序】
