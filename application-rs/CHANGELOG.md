@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Changed
+
+- chore(deploy): `docker-compose.yml` 每环境数据目录改为独立子目录，宿主机挂载由 `./prod`、`./test` 调整为 `./prod/data`、`./test/data`（容器内 `/www/data` 不变），使库文件与 `config.toml` 分离；`database/sqlite/README.md` 部署布局与「静默坑」检查命令同步更新，并补充 `mkdir -p prod/data test/data` 前置步骤
+
 ## [1.26.0] - 2026-11-23
 
 ### Added

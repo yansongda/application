@@ -46,23 +46,26 @@ idle-timeout = 300
 
 ## 部署布局
 
-`docker-compose.yml` 按环境把宿主机目录挂进去（库目录需可写，且**不要**用 `:ro`；`config.toml` 单独只读挂载）：
+`docker-compose.yml` 按环境把宿主机目录挂进去（库目录为每个环境独立的 `data/` 子目录，需可写，且**不要**用 `:ro`；
+`config.toml` 与库目录分离，单独只读挂载）：
 
 ```
-application-rs/prod/{account.db,tool.db}   ->  /www/data           (api)
-application-rs/prod/config.toml            ->  /www/config.toml   (api, ro)
-application-rs/test/{account.db,tool.db}   ->  /www/data           (api-test)
-application-rs/test/config.toml            ->  /www/config.toml   (api-test, ro)
+application-rs/prod/data/{account.db,tool.db} ->  /www/data          (api)
+application-rs/prod/config.toml               ->  /www/config.toml  (api, ro)
+application-rs/test/data/{account.db,tool.db} ->  /www/data          (api-test)
+application-rs/test/config.toml               ->  /www/config.toml  (api-test, ro)
 ```
 
 容器 `WORKDIR=/www`，后端固定读 `./config.toml`，所以配置文件必须挂到 `/www/config.toml`；
 `url` 写成 `sqlite:///www/data/*.db` 才能对上 `/www/data` 挂载点。
 
 **静默坑**：宿主机 `prod/config.toml` 不存在时，docker 会把该路径建成**同名目录**，后端读不到配置后
-回落默认值 —— `databases` 为空 map，服务能启动但所有接口返回 `9901`（不是启动报错）。部署前先确认：
+回落默认值 —— `databases` 为空 map，服务能启动但所有接口返回 `9901`（不是启动报错）；
+`prod/data` 不存在时 docker 会以 root 建空目录，库文件缺失同样是 `9901`/`9902`。部署前先建目录并确认：
 
 ```bash
-ls -l prod/config.toml prod/account.db prod/tool.db
+mkdir -p prod/data test/data
+ls -l prod/config.toml prod/data/account.db prod/data/tool.db
 docker compose exec api ls -l /www/config.toml /www/data
 ```
 
