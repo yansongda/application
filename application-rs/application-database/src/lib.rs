@@ -11,12 +11,11 @@ use tracing::error;
 mod macros;
 
 pub mod account;
-pub mod id;
 pub mod tool;
 
 /// 携带名称的数据库连接池引用。
 ///
-/// 由 [`Pool::get`] 返回，供 SQL 宏内部解构后获取 pool 名称用于指标 label。
+/// 由 [`Pool::sqlite`] 返回，供 SQL 宏内部解构后获取 pool 名称用于指标 label。
 pub struct PoolRef<'a> {
     pub name: &'a str,
     pub pool: &'a SqlitePool,
@@ -34,7 +33,7 @@ static G_POOL_SQLITE: LazyLock<HashMap<&'static str, SqlitePool>> = LazyLock::ne
 });
 
 impl Pool {
-    pub fn get(pool: &str) -> Result<PoolRef<'_>> {
+    pub fn sqlite(pool: &str) -> Result<PoolRef<'_>> {
         let p = G_POOL_SQLITE.get(pool).ok_or_else(|| {
             error!("获取数据库连接失败: {}", pool);
 

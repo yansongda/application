@@ -1,4 +1,3 @@
-use crate::id::{bind, from_rowid};
 use crate::{Pool, delete, insert, query_all, query_optional, update};
 use application_kernel::result::{ErrorCode, Result};
 use chrono::{DateTime, Local};
@@ -32,14 +31,14 @@ fn default_algorithm() -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SortItem {
-    pub id: u64,
+    pub id: i64,
     pub sort: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Totp {
-    pub id: u64,
-    pub user_id: u64,
+    pub id: i64,
+    pub user_id: i64,
     pub sort: u32,
     pub username: String,
     pub issuer: Option<String>,
@@ -49,7 +48,7 @@ pub struct Totp {
 }
 
 impl Totp {
-    pub fn ensure_permission(&self, user_id: u64) -> Result<()> {
+    pub fn ensure_permission(&self, user_id: i64) -> Result<()> {
         if self.user_id == user_id {
             return Ok(());
         }
@@ -131,25 +130,25 @@ pub struct TotpConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreatedTotp {
-    pub user_id: u64,
+    pub user_id: i64,
     pub sort: Option<u32>,
     pub username: String,
     pub issuer: Option<String>,
     pub config: TotpConfig,
 }
 
-pub async fn all(user_id: u64) -> Result<Vec<Totp>> {
+pub async fn all(user_id: i64) -> Result<Vec<Totp>> {
     let sql = "select * from totp where user_id = ? order by sort desc, id asc";
-    let pool_ref = Pool::get("tool")?;
+    let pool_ref = Pool::sqlite("tool")?;
 
-    Ok(query_all!(pool_ref, sql, bind(user_id)?))
+    Ok(query_all!(pool_ref, sql, user_id))
 }
 
-pub async fn fetch(id: u64) -> Result<Totp> {
+pub async fn fetch(id: i64) -> Result<Totp> {
     let sql = "select * from totp where id = ? limit 1";
-    let pool_ref = Pool::get("tool")?;
+    let pool_ref = Pool::sqlite("tool")?;
 
-    let result: Option<Totp> = query_optional!(pool_ref, sql, bind(id)?);
+    let result: Option<Totp> = query_optional!(pool_ref, sql, id);
 
     if let Some(user) = result {
         return Ok(user);
@@ -161,12 +160,12 @@ pub async fn fetch(id: u64) -> Result<Totp> {
 pub async fn insert(totp: CreatedTotp) -> Result<Totp> {
     let sql = "insert into totp (user_id, username, issuer, config, created_at, updated_at) values (?, ?, ?, ?, ?, ?)";
     let now = Local::now();
-    let pool_ref = Pool::get("tool")?;
+    let pool_ref = Pool::sqlite("tool")?;
 
     let result = insert!(
         pool_ref,
         sql,
-        bind(totp.user_id)?,
+        totp.user_id,
         &totp.username,
         &totp.issuer,
         Json(&(totp.config)),
@@ -175,7 +174,7 @@ pub async fn insert(totp: CreatedTotp) -> Result<Totp> {
     );
 
     Ok(Totp {
-        id: from_rowid(result.last_insert_rowid())?,
+        id: result.last_insert_rowid(),
         user_id: totp.user_id,
         sort: 0,
         username: totp.username,
@@ -188,7 +187,7 @@ pub async fn insert(totp: CreatedTotp) -> Result<Totp> {
 
 /// 批量插入（备份导入专用）：逐条复用 `insert!` 宏写入，任一条失败即返回 `9903`。
 /// 当前不做事务：失败时可能已写入部分条目（按需求接受）。
-pub async fn insert_many(user_id: u64, items: &[CreatedTotp]) -> Result<u64> {
+pub async fn insert_many(user_id: i64, items: &[CreatedTotp]) -> Result<u64> {
     if items.is_empty() {
         return Ok(0);
     }
@@ -200,9 +199,9 @@ pub async fn insert_many(user_id: u64, items: &[CreatedTotp]) -> Result<u64> {
         let now = Local::now();
 
         let result = insert!(
-            Pool::get("tool")?,
+            Pool::sqlite("tool")?,
             sql,
-            bind(user_id)?,
+            user_id,
             &item.username,
             &item.issuer,
             Json(&item.config),
@@ -217,61 +216,61 @@ pub async fn insert_many(user_id: u64, items: &[CreatedTotp]) -> Result<u64> {
     Ok(affected)
 }
 
-pub async fn update_issuer(id: u64, issuer: &str) -> Result<()> {
+pub async fn update_issuer(id: i64, issuer: &str) -> Result<()> {
     let sql = "update totp set issuer = ?, updated_at = ? where id = ?";
-    let pool_ref = Pool::get("tool")?;
+    let pool_ref = Pool::sqlite("tool")?;
 
-    let _ = update!(pool_ref, sql, issuer, Local::now(), bind(id)?);
+    let _ = update!(pool_ref, sql, issuer, Local::now(), id);
 
     Ok(())
 }
 
-pub async fn update_username(id: u64, username: &str) -> Result<()> {
+pub async fn update_username(id: i64, username: &str) -> Result<()> {
     let sql = "update totp set username = ?, updated_at = ? where id = ?";
-    let pool_ref = Pool::get("tool")?;
+    let pool_ref = Pool::sqlite("tool")?;
 
-    let _ = update!(pool_ref, sql, username, Local::now(), bind(id)?);
+    let _ = update!(pool_ref, sql, username, Local::now(), id);
 
     Ok(())
 }
 
 /// 更新整份 `config`：标签/置顶与算码参数共处一列，采用读-改-写。
 /// 单用户 MFA 场景下标签/置顶并发编辑概率极低，接受 last-write-wins。
-pub async fn update_config(id: u64, config: &TotpConfig) -> Result<()> {
+pub async fn update_config(id: i64, config: &TotpConfig) -> Result<()> {
     let sql = "update totp set config = ?, updated_at = ? where id = ?";
-    let pool_ref = Pool::get("tool")?;
+    let pool_ref = Pool::sqlite("tool")?;
     let config = Json(config);
 
-    let _ = update!(pool_ref, sql, &config, Local::now(), bind(id)?);
+    let _ = update!(pool_ref, sql, &config, Local::now(), id);
 
     Ok(())
 }
 
-pub async fn delete(id: u64) -> Result<()> {
+pub async fn delete(id: i64) -> Result<()> {
     let sql = "delete from totp where id = ?";
-    let pool_ref = Pool::get("tool")?;
+    let pool_ref = Pool::sqlite("tool")?;
 
-    let _ = delete!(pool_ref, sql, bind(id)?);
+    let _ = delete!(pool_ref, sql, id);
 
     Ok(())
 }
 
-pub async fn delete_by_user(user_id: u64) -> Result<()> {
+pub async fn delete_by_user(user_id: i64) -> Result<()> {
     let sql = "delete from totp where user_id = ?";
-    let pool_ref = Pool::get("tool")?;
+    let pool_ref = Pool::sqlite("tool")?;
 
-    let _ = delete!(pool_ref, sql, bind(user_id)?);
+    let _ = delete!(pool_ref, sql, user_id);
 
     Ok(())
 }
 
-pub async fn sort(user_id: u64, items: &[SortItem]) -> Result<()> {
+pub async fn sort(user_id: i64, items: &[SortItem]) -> Result<()> {
     if items.is_empty() {
         return Ok(());
     }
 
     let started_at = Instant::now();
-    let pool_ref = Pool::get("tool")?;
+    let pool_ref = Pool::sqlite("tool")?;
 
     let mut sql = String::from("UPDATE totp SET sort = CASE id ");
     for _ in items {
@@ -289,13 +288,13 @@ pub async fn sort(user_id: u64, items: &[SortItem]) -> Result<()> {
     // 动态部分仅为占位符结构（CASE WHEN / IN 的数量），无用户输入进入 SQL 文本。
     let mut query = sqlx::query(sqlx::AssertSqlSafe(sql.clone()));
     for item in items {
-        query = query.bind(bind(item.id)?).bind(item.sort);
+        query = query.bind(item.id).bind(item.sort);
     }
     query = query.bind(Local::now());
     for item in items {
-        query = query.bind(bind(item.id)?);
+        query = query.bind(item.id);
     }
-    query = query.bind(bind(user_id)?);
+    query = query.bind(user_id);
 
     let result = query.execute(pool_ref.pool).await.map_err(|e| {
         error!("批量更新 TOTP 排序失败: {:?}", e);

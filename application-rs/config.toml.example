@@ -6,8 +6,11 @@ debug = false
 
 [databases.account]
 url = "sqlite:///www/data/account.db"
+# SQLite 同一时刻只允许一个写者，连接数多并不会提升写吞吐，只会多占内存与文件句柄；
+# 4 已足够覆盖并发读 + 单写者排队。单机小流量场景 1~4 均可。
 max-connections = 4
 min-connections = 1
+# 同时用作 SQLite 的 busy_timeout：拿不到写锁时最多等这么久再报错
 acquire-timeout = 5
 idle-timeout = 300
 

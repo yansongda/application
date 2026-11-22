@@ -1,6 +1,5 @@
 use crate::Pool;
 use crate::account::Platform;
-use crate::id::{bind, from_rowid};
 use crate::{insert, query_optional, update};
 use application_kernel::config::G_CONFIG;
 use application_kernel::result::{ErrorCode, Result};
@@ -12,8 +11,8 @@ use ulid::Ulid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct AccessToken {
-    pub id: u64,
-    pub user_id: u64,
+    pub id: i64,
+    pub user_id: i64,
     pub platform: Platform,
     pub third_id: String,
     pub access_token: String,
@@ -68,7 +67,7 @@ pub struct HuaweiAccessTokenData {
 
 pub async fn fetch(access_token: &str) -> Result<AccessToken> {
     let sql = "select * from access_token where access_token = ? limit 1";
-    let pool_ref = Pool::get("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
     let result: Option<AccessToken> = query_optional!(pool_ref, sql, access_token);
 
@@ -79,11 +78,11 @@ pub async fn fetch(access_token: &str) -> Result<AccessToken> {
     Err(ErrorCode::ParamsAccessTokenNotFound)
 }
 
-pub async fn fetch_by_id(id: u64) -> Result<AccessToken> {
+pub async fn fetch_by_id(id: i64) -> Result<AccessToken> {
     let sql = "select * from access_token where id = ? limit 1";
-    let pool_ref = Pool::get("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
-    let result: Option<AccessToken> = query_optional!(pool_ref, sql, bind(id)?);
+    let result: Option<AccessToken> = query_optional!(pool_ref, sql, id);
 
     if let Some(data) = result {
         return Ok(data);
@@ -92,11 +91,11 @@ pub async fn fetch_by_id(id: u64) -> Result<AccessToken> {
     Err(ErrorCode::ParamsAccessTokenNotFound)
 }
 
-pub async fn fetch_by_user_id(platform: &Platform, user_id: u64) -> Result<AccessToken> {
+pub async fn fetch_by_user_id(platform: &Platform, user_id: i64) -> Result<AccessToken> {
     let sql = "select * from access_token where user_id = ? and platform = ? limit 1";
-    let pool_ref = Pool::get("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
-    let result: Option<AccessToken> = query_optional!(pool_ref, sql, bind(user_id)?, platform);
+    let result: Option<AccessToken> = query_optional!(pool_ref, sql, user_id, platform);
 
     if let Some(data) = result {
         return Ok(data);
@@ -108,7 +107,7 @@ pub async fn fetch_by_user_id(platform: &Platform, user_id: u64) -> Result<Acces
 pub async fn update_or_insert(
     platform: &Platform,
     third_id: &str,
-    user_id: u64,
+    user_id: i64,
     data: AccessTokenData,
 ) -> Result<AccessToken> {
     match fetch_by_user_id(platform, user_id).await {
@@ -120,7 +119,7 @@ pub async fn update_or_insert(
 pub async fn insert(
     platform: &Platform,
     third_id: &str,
-    user_id: u64,
+    user_id: i64,
     data: AccessTokenData,
 ) -> Result<AccessToken> {
     let sql = "insert into access_token (user_id, access_token, data, platform, third_id, expired_at, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)";
@@ -128,12 +127,12 @@ pub async fn insert(
     let expired_at = Some(G_CONFIG.access_token.get_expired_at());
     let now = Local::now();
 
-    let pool_ref = Pool::get("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
     let result = insert!(
         pool_ref,
         sql,
-        bind(user_id)?,
+        user_id,
         &access_token,
         Json(&data),
         platform,
@@ -144,7 +143,7 @@ pub async fn insert(
     );
 
     Ok(AccessToken {
-        id: from_rowid(result.last_insert_rowid())?,
+        id: result.last_insert_rowid(),
         user_id,
         platform: platform.to_owned(),
         third_id: third_id.to_string(),
@@ -162,7 +161,7 @@ pub async fn update(mut access_token: AccessToken, data: AccessTokenData) -> Res
     let expired_at = Some(G_CONFIG.access_token.get_expired_at());
     let now = Local::now();
 
-    let pool_ref = Pool::get("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
     let _ = update!(
         pool_ref,
@@ -171,7 +170,7 @@ pub async fn update(mut access_token: AccessToken, data: AccessTokenData) -> Res
         Json(&data),
         expired_at,
         now,
-        bind(access_token.id)?
+        access_token.id
     );
 
     access_token.access_token = access_token_value;

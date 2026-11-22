@@ -115,9 +115,9 @@ response.rs  Response<D>、ApiErr、Scribe 实现
 ## 数据库层（application-database）
 
 - 原生 SQL + `sqlx::query_as` / `sqlx::query`，不使用 ORM
-- 连接池：`LazyLock<HashMap<&str, SqlitePool>>`，通过 `Pool::get("account")?` 访问
+- 连接池：`LazyLock<HashMap<&str, SqlitePool>>`，通过 `Pool::sqlite("account")?` 访问
 - 建库脚本与迁移工具见 `database/sqlite/`（README 里有完整流程）
-- SQLite 只有 i64，绑定时 `u64` 必须走 `application_database::id::bind()`
+- 主键/外键统一用 `i64`（SQLite 的 `INTEGER` 即有符号 64 位，与 `last_insert_rowid()` 返回类型一致）
 - 数据库宏自动记录 SQL、参数和耗时
 
 ## 日志与异步

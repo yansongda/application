@@ -1,7 +1,6 @@
 use crate::Pool;
 use crate::account::access_token;
 use crate::account::access_token::AccessToken;
-use crate::id::{bind, from_rowid};
 use crate::{insert, query_optional, update};
 use application_kernel::config::G_CONFIG;
 use application_kernel::result::{ErrorCode, Result};
@@ -12,8 +11,8 @@ use ulid::Ulid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct RefreshToken {
-    pub id: u64,
-    pub access_token_id: u64,
+    pub id: i64,
+    pub access_token_id: i64,
     pub refresh_token: String,
     pub expired_at: DateTime<Local>,
     pub created_at: DateTime<Local>,
@@ -30,7 +29,7 @@ impl RefreshToken {
     }
 }
 
-pub async fn update_or_insert(access_token_id: u64) -> Result<RefreshToken> {
+pub async fn update_or_insert(access_token_id: i64) -> Result<RefreshToken> {
     match fetch_by_access_token_id(access_token_id).await {
         Ok(refresh_token) => update(refresh_token).await,
         Err(_) => insert(access_token_id).await,
@@ -39,7 +38,7 @@ pub async fn update_or_insert(access_token_id: u64) -> Result<RefreshToken> {
 
 pub async fn fetch(refresh_token: &str) -> Result<RefreshToken> {
     let sql = "select * from refresh_token where refresh_token = ? limit 1";
-    let pool_ref = Pool::get("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
     let result: Option<RefreshToken> = query_optional!(pool_ref, sql, refresh_token);
 
@@ -50,11 +49,11 @@ pub async fn fetch(refresh_token: &str) -> Result<RefreshToken> {
     Err(ErrorCode::ParamsRefreshTokenNotFound)
 }
 
-pub async fn fetch_by_access_token_id(access_token_id: u64) -> Result<RefreshToken> {
+pub async fn fetch_by_access_token_id(access_token_id: i64) -> Result<RefreshToken> {
     let sql = "select * from refresh_token where access_token_id = ? limit 1";
-    let pool_ref = Pool::get("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
-    let result: Option<RefreshToken> = query_optional!(pool_ref, sql, bind(access_token_id)?);
+    let result: Option<RefreshToken> = query_optional!(pool_ref, sql, access_token_id);
 
     if let Some(data) = result {
         return Ok(data);
@@ -63,17 +62,17 @@ pub async fn fetch_by_access_token_id(access_token_id: u64) -> Result<RefreshTok
     Err(ErrorCode::ParamsRefreshTokenNotFound)
 }
 
-pub async fn insert(access_token_id: u64) -> Result<RefreshToken> {
+pub async fn insert(access_token_id: i64) -> Result<RefreshToken> {
     let sql = "insert into refresh_token (access_token_id, refresh_token, expired_at, created_at, updated_at) values (?, ?, ?, ?, ?)";
     let refresh_token = Ulid::generate().to_string();
     let expired_at = G_CONFIG.access_token.get_refresh_expired_at();
     let now = Local::now();
-    let pool_ref = Pool::get("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
     let result = insert!(
         pool_ref,
         sql,
-        bind(access_token_id)?,
+        access_token_id,
         &refresh_token,
         expired_at,
         now,
@@ -81,7 +80,7 @@ pub async fn insert(access_token_id: u64) -> Result<RefreshToken> {
     );
 
     Ok(RefreshToken {
-        id: from_rowid(result.last_insert_rowid())?,
+        id: result.last_insert_rowid(),
         access_token_id,
         refresh_token,
         expired_at,
@@ -96,7 +95,7 @@ pub async fn update(mut refresh_token: RefreshToken) -> Result<RefreshToken> {
     let refresh_token_value = Ulid::generate().to_string();
     let expired_at = G_CONFIG.access_token.get_refresh_expired_at();
     let now = Local::now();
-    let pool_ref = Pool::get("account")?;
+    let pool_ref = Pool::sqlite("account")?;
 
     let _ = update!(
         pool_ref,
@@ -104,7 +103,7 @@ pub async fn update(mut refresh_token: RefreshToken) -> Result<RefreshToken> {
         &refresh_token_value,
         expired_at,
         now,
-        bind(refresh_token.id)?
+        refresh_token.id
     );
 
     refresh_token.refresh_token = refresh_token_value;
