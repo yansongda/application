@@ -19,15 +19,13 @@ x-healthcheck: &default-healthcheck
 
 services:
   api:
-    image: ghcr.io/yansongda/application:application-api-v1.22.0
+    image: swr.cn-south-1.myhuaweicloud.com/yansongda-app/application:application-api-v1.26.0
     container_name: application-api
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      - ./config.toml:/www/config.toml:ro
-      # SQLite 库文件目录（宿主持久化，容器内需可写）
-      - ./data/prod:/www/data:rw
+      - ./prod:/www/data:rw
     environment:
       TZ: Asia/Shanghai
     security_opt:
@@ -39,14 +37,13 @@ services:
       - prod
 
   api-test:
-    image: ghcr.io/yansongda/application:application-api-v1.22.0
+    image: swr.cn-south-1.myhuaweicloud.com/yansongda-app/application:application-api-v1.26.0
     container_name: application-api-test
     restart: unless-stopped
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
-      - ./config.test.toml:/www/config.toml:ro
-      - ./data/test:/www/data:rw
+      - ./test:/www/data:rw
     environment:
       TZ: Asia/Shanghai
     security_opt:

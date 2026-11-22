@@ -10,7 +10,7 @@
 - refactor(database): 主键/外键由 `u64` 统一改为 `i64`（SQLite `INTEGER` 为有符号 64 位，与 `last_insert_rowid()` 一致）；HTTP 路径与请求/响应字段不变 (#214) ([471aa3d](https://github.com/yansongda/application/commit/471aa3d))
 - refactor(database): 时间列 `created_at` / `updated_at` 改由应用层显式写入（SQLite 无 `ON UPDATE CURRENT_TIMESTAMP`），对外行为不变 (#214) ([471aa3d](https://github.com/yansongda/application/commit/471aa3d))
 - refactor(kernel): 配置默认值与示例改为 `sqlite:///www/data/{account,tool}.db`，`max-connections` 建议 4 / `min-connections` 1 / `acquire-timeout` 5（兼作 SQLite busy_timeout）(#214) ([471aa3d](https://github.com/yansongda/application/commit/471aa3d))
-- chore(deploy): `docker-compose.yml` 为 api / api-test 增加 `./data/prod`、`./data/test` → `/www/data` 读写挂载；`.gitignore` 忽略 `*.db` / `*.db-wal` / `*.db-shm` / `/data/` (#214) ([471aa3d](https://github.com/yansongda/application/commit/471aa3d))
+- chore(deploy): `docker-compose.yml` 镜像改为华为 SWR `swr.cn-south-1.myhuaweicloud.com/yansongda-app/application:application-api-v1.26.0`，SQLite 库目录挂载为 `./prod`、`./test` → `/www/data`（读写）；`.gitignore` 忽略 `*.db` / `*.db-wal` / `*.db-shm` / `/data/` (#214) ([471aa3d](https://github.com/yansongda/application/commit/471aa3d))
 
 ## [1.25.0] - 2026-11-10
 
