@@ -9,4 +9,6 @@ config.toml
 *.db-wal
 *.db-shm
 /data/
+/prod/
+/test/
 /database/sqlite/migrate/dump/

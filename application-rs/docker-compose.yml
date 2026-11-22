@@ -25,6 +25,7 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
+      - ./prod/config.toml:/www/config.toml:ro
       - ./prod:/www/data:rw
     environment:
       TZ: Asia/Shanghai
@@ -43,6 +44,7 @@ services:
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
+      - ./test/config.toml:/www/config.toml:ro
       - ./test:/www/data:rw
     environment:
       TZ: Asia/Shanghai
