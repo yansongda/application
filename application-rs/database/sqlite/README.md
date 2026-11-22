@@ -11,7 +11,7 @@ sqlite/
 ```
 
 两个库文件的划分沿用原 TiDB 的 `account` / `tool` 两套 schema；SQLite 没有 schema 概念，
-表名已去掉前缀。**库文件不要提交到仓库**（已在 `.gitignore` 忽略 `*.db` 与 `/data/`）。
+表名已去掉前缀。**库文件不要提交到仓库**（已在 `.gitignore` 忽略 `*.db` 与 `/data/`、`/prod/`、`/test/`）。
 
 从 TiDB 抽数的一次性迁移脚本仅用于 2026-11 的那次切换，用完即删，不再保留在仓库里。
 
@@ -46,11 +46,24 @@ idle-timeout = 300
 
 ## 部署布局
 
-`docker-compose.yml` 按环境挂载库文件目录（宿主目录需可写，且**不要**用 `:ro`）：
+`docker-compose.yml` 按环境把宿主机目录挂进去（库目录需可写，且**不要**用 `:ro`；`config.toml` 单独只读挂载）：
 
 ```
-application-rs/data/prod/{account.db,tool.db}   ->  /www/data   (api)
-application-rs/data/test/{account.db,tool.db}   ->  /www/data   (api-test)
+application-rs/prod/{account.db,tool.db}   ->  /www/data           (api)
+application-rs/prod/config.toml            ->  /www/config.toml   (api, ro)
+application-rs/test/{account.db,tool.db}   ->  /www/data           (api-test)
+application-rs/test/config.toml            ->  /www/config.toml   (api-test, ro)
+```
+
+容器 `WORKDIR=/www`，后端固定读 `./config.toml`，所以配置文件必须挂到 `/www/config.toml`；
+`url` 写成 `sqlite:///www/data/*.db` 才能对上 `/www/data` 挂载点。
+
+**静默坑**：宿主机 `prod/config.toml` 不存在时，docker 会把该路径建成**同名目录**，后端读不到配置后
+回落默认值 —— `databases` 为空 map，服务能启动但所有接口返回 `9901`（不是启动报错）。部署前先确认：
+
+```bash
+ls -l prod/config.toml prod/account.db prod/tool.db
+docker compose exec api ls -l /www/config.toml /www/data
 ```
 
 ## 迁移时做过什么（备查）
