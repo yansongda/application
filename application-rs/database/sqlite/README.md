@@ -43,7 +43,7 @@ acquire-timeout = 5
 idle-timeout = 300
 ```
 
-`create_if_missing = false`：**库文件不存在时服务启动即失败**，不会静默创建空库。
+`create_if_missing = false`：不会静默创建空库。库文件缺失时服务仍能启动，但首个查询会失败并返回 `9901`/`9902`。
 
 ## 从 TiDB 迁移（一次性）
 

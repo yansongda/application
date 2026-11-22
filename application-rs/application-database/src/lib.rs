@@ -46,22 +46,6 @@ impl Pool {
         })
     }
 
-    /// 启动期自检：确保每个已配置的库都能取到可用连接。
-    ///
-    /// 数据库文件缺失（`create_if_missing = false`）或表未初始化时在此处 fail-fast，
-    /// 避免带着坏连接对外提供服务。
-    pub async fn check() -> Result<()> {
-        for (name, pool) in G_POOL_SQLITE.iter() {
-            sqlx::query("select 1").execute(pool).await.map_err(|e| {
-                error!("数据库自检失败: pool = {}, err = {:?}", name, e);
-
-                ErrorCode::InternalDatabaseAcquire
-            })?;
-        }
-
-        Ok(())
-    }
-
     fn connect(config: &Database) -> SqlitePool {
         #[allow(clippy::expect_used)]
         let options = SqliteConnectOptions::from_str(config.url.as_str())
