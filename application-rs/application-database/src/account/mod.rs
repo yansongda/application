@@ -2,8 +2,8 @@ use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::encode::IsNull;
 use sqlx::error::BoxDynError;
-use sqlx::mysql::{MySqlTypeInfo, MySqlValueRef};
-use sqlx::{Decode, Encode, MySql, Type};
+use sqlx::sqlite::{SqliteArgumentsBuffer, SqliteTypeInfo, SqliteValueRef};
+use sqlx::{Decode, Encode, Sqlite, Type};
 use std::fmt::{Display, Formatter};
 
 pub mod access_token;
@@ -57,25 +57,21 @@ impl From<Platform> for String {
     }
 }
 
-impl Type<MySql> for Platform {
-    fn type_info() -> <MySql as sqlx::Database>::TypeInfo {
-        <&str as Type<MySql>>::type_info()
-    }
-
-    fn compatible(_: &MySqlTypeInfo) -> bool {
-        true
+impl Type<Sqlite> for Platform {
+    fn type_info() -> SqliteTypeInfo {
+        <&str as Type<Sqlite>>::type_info()
     }
 }
 
-impl sqlx::Encode<'_, MySql> for Platform {
-    fn encode_by_ref(&self, buf: &mut Vec<u8>) -> Result<IsNull, BoxDynError> {
-        <&str as Encode<MySql>>::encode(self.into(), buf)
+impl sqlx::Encode<'_, Sqlite> for Platform {
+    fn encode_by_ref(&self, buf: &mut SqliteArgumentsBuffer) -> Result<IsNull, BoxDynError> {
+        <&str as Encode<Sqlite>>::encode(self.into(), buf)
     }
 }
 
-impl sqlx::Decode<'_, MySql> for Platform {
-    fn decode(value: MySqlValueRef<'_>) -> Result<Self, BoxDynError> {
-        let s = <&str as Decode<MySql>>::decode(value)?;
+impl sqlx::Decode<'_, Sqlite> for Platform {
+    fn decode(value: SqliteValueRef<'_>) -> Result<Self, BoxDynError> {
+        let s = <&str as Decode<Sqlite>>::decode(value)?;
 
         Ok(s.into())
     }

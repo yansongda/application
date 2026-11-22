@@ -75,7 +75,7 @@ pub struct Database {
 impl Default for Database {
     fn default() -> Self {
         Self {
-            url: "mysql://root:root@127.0.0.1:3306/test".to_string(),
+            url: "sqlite:///www/data/account.db".to_string(),
             max_connections: 20,
             min_connections: 2,
             acquire_timeout: 3,
@@ -225,7 +225,7 @@ mod tests {
     fn config_with_databases_section_deserializes() {
         let toml = r#"
             [databases.default]
-            url = "mysql://user:pass@host:3306/db"
+            url = "sqlite:///www/data/account.db"
             max-connections = 10
             min-connections = 1
             acquire-timeout = 5
@@ -234,7 +234,7 @@ mod tests {
         let cfg = build_config_from_toml(toml).expect("反序列化应成功");
         assert!(cfg.databases.contains_key("default"));
         let db = cfg.databases.get("default").expect("default 连接应存在");
-        assert_eq!(db.url, "mysql://user:pass@host:3306/db");
+        assert_eq!(db.url, "sqlite:///www/data/account.db");
         assert_eq!(db.max_connections, 10);
         assert_eq!(db.min_connections, 1);
         assert_eq!(db.acquire_timeout, 5);
@@ -324,7 +324,7 @@ mod tests {
     #[test]
     fn database_default_seeds_fields() {
         let db = Database::default();
-        assert_eq!(db.url, "mysql://root:root@127.0.0.1:3306/test");
+        assert_eq!(db.url, "sqlite:///www/data/account.db");
         assert_eq!(db.max_connections, 20);
         assert_eq!(db.min_connections, 2);
         assert_eq!(db.acquire_timeout, 3);

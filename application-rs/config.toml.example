@@ -5,18 +5,18 @@ port = 8080
 debug = false
 
 [databases.account]
-url = "mysql://root:root@127.0.0.1:3306/account"
-max-connections = 20
-min-connections = 2
-acquire-timeout = 3
+url = "sqlite:///www/data/account.db"
+max-connections = 4
+min-connections = 1
+acquire-timeout = 5
 idle-timeout = 300
 
 [databases.tool]
-url = "mysql://root:root@127.0.0.1:3306/tool"
-min-connections = 2
-max-connections = 20
+url = "sqlite:///www/data/tool.db"
+min-connections = 1
+max-connections = 4
 idle-timeout = 300
-acquire-timeout = 3
+acquire-timeout = 5
 
 [short-url]
 domain = "https://u.ysdor.cn"

@@ -1,6 +1,5 @@
 use crate::account::Platform;
 use crate::{Pool, query_optional};
-
 use application_kernel::result::ErrorCode;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
@@ -39,8 +38,8 @@ pub async fn fetch(
     platform: &Platform,
     third_id: &str,
 ) -> application_kernel::result::Result<ThirdConfig> {
-    let sql = "select * from account.third_config where platform = ? and third_id = ? limit 1";
-    let pool_ref = Pool::mysql("account")?;
+    let sql = "select * from third_config where platform = ? and third_id = ? limit 1";
+    let pool_ref = Pool::get("account")?;
 
     let result: Option<ThirdConfig> = query_optional!(pool_ref, sql, platform, third_id);
 

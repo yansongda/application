@@ -1,4 +1,5 @@
 use crate::account::Platform;
+use crate::id::{bind, from_rowid};
 use crate::{Pool, insert, query_optional};
 use application_kernel::result::ErrorCode;
 use chrono::{DateTime, Local};
@@ -26,8 +27,8 @@ pub async fn fetch(
     platform: &Platform,
     third_id: &str,
 ) -> application_kernel::result::Result<ThirdUser> {
-    let sql = "select * from account.third_user where platform = ? and third_id = ? limit 1";
-    let pool_ref = Pool::mysql("account")?;
+    let sql = "select * from third_user where platform = ? and third_id = ? limit 1";
+    let pool_ref = Pool::get("account")?;
 
     let result: Option<ThirdUser> = query_optional!(pool_ref, sql, platform, third_id);
 
@@ -44,11 +45,20 @@ pub async fn insert(
     user_id: u64,
     config: Option<&ThirdUserConfig>,
 ) -> application_kernel::result::Result<u64> {
-    let sql =
-        "insert into account.third_user (platform, third_id, user_id, config) values (?, ?, ?, ?)";
-    let pool_ref = Pool::mysql("account")?;
+    let sql = "insert into third_user (platform, third_id, user_id, config, created_at, updated_at) values (?, ?, ?, ?, ?, ?)";
+    let now = Local::now();
+    let pool_ref = Pool::get("account")?;
 
-    let result = insert!(pool_ref, sql, platform, third_id, user_id, config.map(Json));
+    let result = insert!(
+        pool_ref,
+        sql,
+        platform,
+        third_id,
+        bind(user_id)?,
+        config.map(Json),
+        now,
+        now
+    );
 
-    Ok(result.last_insert_id())
+    from_rowid(result.last_insert_rowid())
 }

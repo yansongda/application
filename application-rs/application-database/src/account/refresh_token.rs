@@ -1,6 +1,8 @@
+use crate::Pool;
 use crate::account::access_token;
 use crate::account::access_token::AccessToken;
-use crate::{Pool, insert, query_optional, update};
+use crate::id::{bind, from_rowid};
+use crate::{insert, query_optional, update};
 use application_kernel::config::G_CONFIG;
 use application_kernel::result::{ErrorCode, Result};
 use chrono::{DateTime, Local};
@@ -36,8 +38,8 @@ pub async fn update_or_insert(access_token_id: u64) -> Result<RefreshToken> {
 }
 
 pub async fn fetch(refresh_token: &str) -> Result<RefreshToken> {
-    let sql = "select * from account.refresh_token where refresh_token = ? limit 1";
-    let pool_ref = Pool::mysql("account")?;
+    let sql = "select * from refresh_token where refresh_token = ? limit 1";
+    let pool_ref = Pool::get("account")?;
 
     let result: Option<RefreshToken> = query_optional!(pool_ref, sql, refresh_token);
 
@@ -49,10 +51,10 @@ pub async fn fetch(refresh_token: &str) -> Result<RefreshToken> {
 }
 
 pub async fn fetch_by_access_token_id(access_token_id: u64) -> Result<RefreshToken> {
-    let sql = "select * from account.refresh_token where access_token_id = ? limit 1";
-    let pool_ref = Pool::mysql("account")?;
+    let sql = "select * from refresh_token where access_token_id = ? limit 1";
+    let pool_ref = Pool::get("account")?;
 
-    let result: Option<RefreshToken> = query_optional!(pool_ref, sql, access_token_id);
+    let result: Option<RefreshToken> = query_optional!(pool_ref, sql, bind(access_token_id)?);
 
     if let Some(data) = result {
         return Ok(data);
@@ -62,40 +64,52 @@ pub async fn fetch_by_access_token_id(access_token_id: u64) -> Result<RefreshTok
 }
 
 pub async fn insert(access_token_id: u64) -> Result<RefreshToken> {
-    let sql = "insert into account.refresh_token (access_token_id, refresh_token, expired_at) values (?, ?, ?)";
+    let sql = "insert into refresh_token (access_token_id, refresh_token, expired_at, created_at, updated_at) values (?, ?, ?, ?, ?)";
     let refresh_token = Ulid::generate().to_string();
     let expired_at = G_CONFIG.access_token.get_refresh_expired_at();
-    let pool_ref = Pool::mysql("account")?;
+    let now = Local::now();
+    let pool_ref = Pool::get("account")?;
 
-    let result = insert!(pool_ref, sql, access_token_id, &refresh_token, expired_at);
+    let result = insert!(
+        pool_ref,
+        sql,
+        bind(access_token_id)?,
+        &refresh_token,
+        expired_at,
+        now,
+        now
+    );
 
     Ok(RefreshToken {
-        id: result.last_insert_id(),
+        id: from_rowid(result.last_insert_rowid())?,
         access_token_id,
         refresh_token,
         expired_at,
-        created_at: Local::now(),
-        updated_at: Local::now(),
+        created_at: now,
+        updated_at: now,
     })
 }
 
 pub async fn update(mut refresh_token: RefreshToken) -> Result<RefreshToken> {
-    let sql = "update account.refresh_token set refresh_token = ?, expired_at = ? where id = ?";
+    let sql =
+        "update refresh_token set refresh_token = ?, expired_at = ?, updated_at = ? where id = ?";
     let refresh_token_value = Ulid::generate().to_string();
     let expired_at = G_CONFIG.access_token.get_refresh_expired_at();
-    let pool_ref = Pool::mysql("account")?;
+    let now = Local::now();
+    let pool_ref = Pool::get("account")?;
 
     let _ = update!(
         pool_ref,
         sql,
         &refresh_token_value,
         expired_at,
-        refresh_token.id
+        now,
+        bind(refresh_token.id)?
     );
 
     refresh_token.refresh_token = refresh_token_value;
     refresh_token.expired_at = expired_at;
-    refresh_token.updated_at = Local::now();
+    refresh_token.updated_at = now;
 
     Ok(refresh_token)
 }
