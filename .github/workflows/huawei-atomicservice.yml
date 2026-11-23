@@ -1,0 +1,59 @@
+name: Huawei Atomic Service
+
+# 华为元服务（ArkTS / hvigor）编译门禁。
+#
+# 为什么不跑在 GitHub 托管 runner 上：ArkTS 编译需要 HarmonyOS SDK + hvigor + ohpm（DevEco Studio
+# 自带），GitHub 托管 runner 上既没有、也无法无交互安装（需要接受许可协议）。所以这里要求一台
+# 自带 DevEco Studio 的 **self-hosted** runner，并打上 `harmonyos` 标签。
+#
+# runner 需要具备：
+# - `hvigorw`、`ohpm` 在 PATH 上（DevEco 自带：Contents/tools/hvigor/bin、Contents/tools/ohpm/bin）；
+# - `DEVECO_SDK_HOME` 指向 SDK 目录（Contents/sdk）；
+# - 若要跑 release 包，还需 build-profile.json5 里配置的签名材料（不在仓库内）。
+#
+# 触发方式：目前**只手动触发**——runner 就绪前接入 pull_request 会让每个 PR 永久排队。
+# 有了 runner 之后，把下面的 `on:` 改成：
+#   pull_request:
+#     paths: [ "huawei/atomicservice/MFA/**" ]
+on:
+  workflow_dispatch:
+    inputs:
+      buildMode:
+        description: "构建模式"
+        required: true
+        type: choice
+        options:
+          - debug
+          - release
+        default: "debug"
+
+jobs:
+  assemble:
+    name: "ArkTS: assembleHap"
+    runs-on: [self-hosted, harmonyos]
+    defaults:
+      run:
+        working-directory: huawei/atomicservice/MFA
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+      - name: Show toolkit
+        run: |
+          hvigorw --version
+          ohpm --version
+      - name: Install dependencies
+        run: ohpm install --all
+      - name: Assemble HAP
+        run: |
+          hvigorw --mode module \
+            -p product=default \
+            -p buildMode=${{ inputs.buildMode }} \
+            -p module=entry@default \
+            assembleHap --no-daemon
+      - name: Upload hvigor log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hvigor-log
+          path: huawei/atomicservice/MFA/.hvigor/**/*.log
+          if-no-files-found: ignore

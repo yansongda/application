@@ -28,7 +28,7 @@ MFA/
 - `components/`：公共组件；页面级组件按 feature 分子目录（如 `components/index/`）
 - `api/`：接口调用
 - `models/`：模型；按 feature 分子目录（`models/form/` 服务卡片相关、`models/totp/` TOTP 运行时、`models/security/` 安全设置与应用锁）
-- `utils/`：工具函数（`utils/Prefs.ets` 为 **preferences 唯一入口**，见「本地存储」节）
+- `utils/`：工具函数（`utils/Prefs.ets` 为 **preferences 唯一入口**，见「本地存储」节；`utils/dialog/` 为弹窗窗口协调器，纯逻辑 + 单测，见「弹窗与认证跳转」节；纯策略类工具 `AppLockPolicy` / `AuthStatePolicy` / `SessionThrottle` / `SingleFlight` / `ItemFilter` / `ListViewState` 一律无 ArkUI 依赖，可单测）
 - `themes/`：主题定义
 - `types/`：类型定义
 
@@ -42,10 +42,9 @@ MFA/
 已确认的依赖包括：
 
 - `@ohos/axios`
-- `@developers/dateformat`
 - `@yansongda/otp`（ArkTS 端内 TOTP/HOTP 算码库，字节码 HAR）
 
-依赖声明层级约定：**新增依赖声明在「使用它的模块」的 `oh-package.json5`**（`@yansongda/otp` 声明在 `entry/oh-package.json5`，ohpm 会生成模块级 `entry/oh-package-lock.json5`）。工程级 `oh-package.json5` 的既有依赖（`@ohos/axios`、`@developers/dateformat`）保持不变，不迁移。官方依据见「字节码 HAR」节。
+依赖声明层级约定：**新增依赖声明在「使用它的模块」的 `oh-package.json5`**（`@yansongda/otp` 声明在 `entry/oh-package.json5`，ohpm 会生成模块级 `entry/oh-package-lock.json5`）。工程级 `oh-package.json5` 的既有依赖（`@ohos/axios`）保持不变，不迁移。官方依据见「字节码 HAR」节。新增/删除依赖后必须跑一次 `ohpm install --all` 让 `oh-package-lock.json5` 同步（锁文件要一起提交）。
 
 ## 环境与构建模式（ENV / BuildProfile）
 
@@ -122,20 +121,25 @@ MFA/
 
 ## 弹窗与认证跳转（防重叠）
 
-- **窗口层与策略层分离**：`utils/PromptAction.ets` 只负责「开 / 关 / 等退场」；`utils/SessionGuard.ets` 只负责「认证失效 → 是否跳登录页、跳几次、何时跳」；页面只调用门面方法。
-- **loading 必须走 `Dialog.openLoading/closeLoading`**（内部 `Busy`：引用计数 + 全局单飞 + 打开代号）：同一时刻只允许一个 loading 窗口，引用归零才真正关闭。`Dialog.closeAllAsync()` 会自增代号并清空看门狗，打开中的旧窗口会因代号不匹配自行关闭，避免「清场后旧窗口复活」导致无法关闭的孤儿遮罩；代号检查在 `Dialog.open` **之前**（不是之后），否则窗口会先真的显示再被关掉，表现为登录页上闪一下 loading。**不要**用 `Dialog.open` 直接承载 loading（会新开窗口，两个 loading 同屏）。
-- **重试 / 失败框走 `Dialog.openAlert`**（内部 `Alert`：单槽位 + 并发串行化 + 打开代号）。
-- **等待退场不要用固定时间片**：`Dialog.open` 在打开时注册 `onDidDisappear`（`promptAction.BaseDialogOptions`，**@since 12**，`CustomDialogOptions` 继承自它；本项目 compatibleSdkVersion 23）并存下「已退场令牌」，`closeAndWait` / `waitClosed` 按真实回调返回，仅在回调缺失时用 500ms 兜底。两个必须遵守的细节：
-  - SDK 明确写了「消失动画被打断（例如页面导航）时 `onDidDisappear` 不回调」：`SessionGuard.redirectAsync` 正是「关框后立即 `pushPathByName`」，属于该场景，**真机上 500ms 兜底会比预期更常被走到**（不阻塞、不卡死，但别把它当异常）。
-  - 令牌在 `onDidDisappear` 里**只标记 `closed`、不删除**：`AlertDialogV2` / `LoadingDialogV2` 的按钮 action 执行完框架会自动关框，此时 `Busy._id` / `Alert._id` 仍指向该 id，删掉令牌会让下一次 `closeAndWait` 白等 500ms 并对已不存在的 id 再关一次（多一条错误日志）。
-  - `Busy.open` 打开前会先 `Alert.dismissAndWait()`（主动关框 + 等真实退场，不是干等），因此**页面重试按钮的 action 里直接调用即可，禁止再写 `setTimeout` 延迟**。
-- **`AlertDialogV2` / `LoadingDialogV2` 的按钮 action 执行完毕就由框架自动关框**：不要在 action 里自己 `Dialog.close(...)`，也不要在 action 里同步开新窗口（用 `Dialog.openLoading` / `Dialog.execute`，它们会先等旧框真正退场）。`Alert.dismissAndWait()` 的正确性依赖这个前提，若将来改用其他弹窗承载方式需重新验证 `onDidDisappear` 仍会触发。
-- **认证失效统一是 `AuthExpiredError`**（`utils/Errors.ets`，`HttpError.kind = auth`）：Http 拦截器命中 `1000/1001/1002/1004/1005/1006` 时只调用 `configureHttp` 注入的 `authExpired` 回调并 reject；**Http 不得 import 模型 / 导航 / 提示等 UI 模块**。跳转策略集中在 `SessionGuard`（1s 去抖 + 60s/3 次上限 + 先 `Dialog.closeAllAsync()` 再入栈），被忽略时日志带 `SessionThrottle.denyReason`（`in-flight` / `debounce` / `limit`），排查时不必再改代码加日志。`Dialog.execute` / `Toast.execute` 已统一跳过重试框与失败 toast，页面 catch 到它只记日志。**注意门面方法的跳过不覆盖页面级 catch**：自己写 `try/catch` 再 `Dialog.openAlert(...)` 的页面（见 `pages/index/Index.ets` 的删除、扫码添加分支）必须自己判 `!(e instanceof AuthExpiredError)`，否则失败框会落在最后一次 `closeAllAsync()` 之后、压在登录页上方。
-- **错误分类统一用 `HttpError.kind`（`ErrorKind`）**：`network` / `timeout` / `server` / `auth` / `business`，禁止用 message 文案做分支。`utils/Errors.ets` 是叶子模块，不得 import 业务模块。
-- **接口统一走 `api/request.ets`** 的 `request` / `requestNoBody` / `requestVoid` / `requestVoidNoBody`：成功判定（`code === 0`）与 `HttpError` 构造不再散落在各 api 文件；新增接口只声明路径与入参/出参。**`code === 0` 不等于 data 可用**：像 `access-token/login` 这类关键接口仍要在 api 层校验必填字段（见 `api/AccessToken.ets` 的 `assertUsable`：`access_token` / `refresh_token` / `expired_in` 三个字段），否则空 token 会写进 `Authorization` 让 `state()` 退化成 `EMPTY_AUTHORIZATION`，表现为「登录成功却反复回登录页」。
-- **认证状态**：`State` 定义在 `types/Session.ets`（叶子），`LoginPageParams` 定义在 `types/Login.ets`（`forceAuthorizationState` 可选，`null` 表示由登录页自己读当前状态）。登录页只调用 `Authorization.ensure(state)`：NORMAL 空操作、NEED_REFRESH 先 refresh（仅 refresh_token 失效才降级 login）、**NEED_REFRESH 但本地已无 refresh_token 时直接完整登录**（否则 `refresh()` 必失败，用户点重试也永远走不到 `login()`）、其余完整登录；`isAuthenticating` 为重入锁（`finally` 必复位，`openLoading` 必须在 `try` 内）；成功路径先 `await Dialog.closeLoading()` 再 `popIfSelf()`（只关栈顶登录页，避免返回手势后误关下层页）。**非登录页只允许在「本地有 `refresh_token`」时以 `NEED_REFRESH` 调用 `ensure()`**（首页静默续期就是这种用法）；没有 `refresh_token` 时它一定会跑到 `login()`，等于从任意页面拉起华为账号授权。
-- **导航栈读取统一走 `utils/NavState.ets`**（`navPages` / `loginInStack` / `topPageName`），禁止各页面自行 `AppStorageV2.connect(NavPathStack)` 后判断登录页。
-- **首页 `pages/index/Index.ets` 的 `onActive` 刷新有门禁**：`SessionGuard.isLoginVisible()` 或 `Authorization.state() !== NORMAL` 直接返回；**例外**是 `NEED_REFRESH` 且本地还有 `refresh_token` → `renewThenRefresh()` 静默续期后再静默刷新（避免「回到首页既不刷新也不续期」，要等第一个请求拿到 1000 才闪一下登录页）。已有条目时 `refresh(true)` 静默刷新（不弹 loading），首屏与下拉刷新才用 loading；`refresh` 用 in-flight Promise 单飞（不是布尔锁，`runRefresh` 统一占用/释放），下拉刷新会真正等待同一次请求。**是否弹 loading 由首个调用者决定**：非静默调用方撞上在飞的静默刷新时会等它结束后再补一次带 loading 的刷新（链子必须**立即**写回 `inflightRefresh`，否则 clear 与 again 之间的微任务缝隙会让第三个调用方另起一次并发请求）。
+- **三层职责**：`utils/dialog/WindowCoordinator.ets`（**纯逻辑**：单飞 / 租约 / 打开代号 / 等真实退场 / 打开超时 / 看门狗；ArkUI 调用与定时器全部注入，可在 `entry/src/test` 单测）→ `utils/PromptAction.ets`（唯一门面 `Dialog` / `Toast`，只负责把 ArkUI 的 `openCustomDialog` / `closeCustomDialog` 注入协调器）→ 页面 / `utils/SessionGuard.ets`（只决定「认证失效 → 是否跳登录页、跳几次、何时跳」）。**页面不要直接调 `promptAction`**，也不要绕过门面使用协调器。
+- **loading 用租约**：`const lease = await Dialog.openLoading(builder)` → 必须 `await lease.release()`（`Dialog.execute` / `Toast.execute` 内部已配对）。同一时刻全局只有一个 loading 窗口，引用归零才真正关闭；租约带打开代号，`closeAllAsync()` 之后迟到的 release 是空操作，**不会误关下一轮窗口**。禁止再引入「页面自己开 / 自己关」的第二套计数。
+- **重试 / 失败框走 `Dialog.openAlert`**（单槽位 + 并发串行化）。打开 loading 前协调器会先**主动关掉** alert 并等它真正退场，因此重试按钮的 action 里直接调用即可，**禁止再写 `setTimeout` 延迟**。
+- **等待退场不要用固定时间片**：打开时注册 `onDidDisappear`（`promptAction.BaseDialogOptions`，**@since 12**；本项目 compatibleSdkVersion 23），按真实回调返回，仅在回调缺失时用 500ms 兜底。四个必须遵守的细节：
+  - SDK 明确写了「消失动画被打断（例如同时触发弹窗关闭和页面切换）时 `onDidDisappear` 不回调」：`SessionGuard.redirectAsync` 正是「关框后立即 `pushPathByName`」，**真机上 500ms 兜底会比预期更常被走到**（不阻塞、不卡死，别当异常）。
+  - 令牌在 `onDidDisappear` 里**只标记 `closed`、不删除**：`AlertDialogV2` / `LoadingDialogV2` 的按钮 action 执行完框架会自动关框，此时槽位仍指向该 id，删掉令牌会让下一次等待白等兜底超时、并对已不存在的 id 再关一次。
+  - 打开窗口有 3s 超时：`openCustomDialog` 一旦不 settle，全局串行化锁会永久卡住，之后整个 App 开不出任何弹窗（兜底是「放弃本次窗口 + 记 error」）。
+  - loading 有 45s 看门狗（必须大于最长请求超时），任何异常分支漏关时强关窗口，否则 `autoCancel: false` 的遮罩会永久挡住页面。
+- **`AlertDialogV2` / `LoadingDialogV2` 的按钮 action 执行完毕就由框架自动关框**：不要在 action 里自己关闭窗口，也不要在 action 里同步开新窗口（用 `Dialog.openLoading` / `Dialog.execute` / `Dialog.openAlert`，它们会先等旧框真正退场）。这条前提若变化，需重新验证 `onDidDisappear` 仍会触发。
+- **认证失效统一是 `AuthExpiredError`**（`utils/Errors.ets`）：Http 拦截器命中 `1000/1001/1002/1004/1005/1006` 时只调用 `configureHttp` 注入的 `authExpired` 回调并 reject；**Http 不得 import 模型 / 导航 / 提示等 UI 模块**。`Errors.ets` 只有 `HttpError`（可带后端业务码）与 `AuthExpiredError`，并用 `toError` / `errorMessage` 归一捕获值（catch 的运行时值可能不是 `Error`）。**不要再建错误分类枚举**——曾经有过 `ErrorKind`（network/timeout/server/auth/business），但没有一个读取方。
+- **跳转登录页只走 `SessionGuard.redirect(state?, { throttle })`**：自动跳转走默认节流（1s 去抖 + 60s/3 次上限 + 先 `closeAllAsync()` 再入栈）；**显式跳转**（如注销账号后回登录页）传 `{ throttle: false }`——节流只该拦「同一个异常信号引起的重复跳转」。被忽略时日志带 `SessionThrottle.denyReason`（`in-flight` / `debounce` / `limit`），排查不必改代码加日志。页面**不得**自己 `pages.clear()` + `pushPathByName(LOGIN)`。`Dialog.execute` / `Toast.execute` 已统一跳过重试框与失败 toast，但**门面的跳过不覆盖页面级 catch**：自己 `try/catch` 后 `Dialog.openAlert(...)` 的页面（见 `pages/index/Index.ets` 的删除、扫码添加分支）必须自己判 `!(e instanceof AuthExpiredError)`。
+- **接口统一走 `api/request.ets`** 的 `request` / `requestNoBody` / `requestVoid` / `requestVoidNoBody`：响应体形状校验（不是 `{ code, message, data? }` 形状按「服务器响应异常」处理，不留假业务码）、成功判定（`code === 0`）与 `HttpError` 构造只写一次。**无 body 的接口必须传 `undefined`**：`headers.post` 的 `Content-Type` 是 `application/json`，axios 会把 `null` 序列化成字面量 `"null"` 发出去。**`code === 0` 不等于 data 可用**：`access-token/login` 这类关键接口仍要在 api 层校验必填字段（`api/AccessToken.ets` 的 `assertUsable`），否则空 token 会写进 `Authorization` 让 `state()` 退化成 `EMPTY_AUTHORIZATION`，表现为「登录成功却反复回登录页」。
+- **认证状态**：`State` 在 `types/Session.ets`（叶子），`LoginPageParams` 在 `types/Login.ets`；本地判定抽在 `utils/AuthStatePolicy.ets`（纯逻辑 + 单测）：只判「access_token 是否进入 5 分钟续期窗口」，**不再猜 refresh_token 的有效期**（曾经的「29 天」魔法常量是服务端契约的重复猜测）。`REFRESH_TOKEN_EXPIRED` **只可能来自拦截器**（1005/1006）。
+  - `Authorization.refreshOnly()`：**非登录页只能用这个**（只续期，绝不拉起华为账号授权）。
+  - `Authorization.ensure(state)`：**只允许登录页调用**——它在 `refresh_token` 失效时会降级 `login()`，也就是会拉起华为账号授权；从别的页面调用会与 `SessionGuard` 的跳转形成两条并发登录链路（两次 `loginWithHuaweiID` + 两次 `access-token/login`，服务端 upsert 互相覆盖）。
+  - 登录页用 `SingleFlight` 做重入锁；成功路径 `await lease.release()` 之后再 `popIfSelf()`（只关栈顶登录页，避免返回手势后误关下层页）。
+- **导航栈读取统一走 `utils/NavState.ets`**（`navPages` / `loginInStack` / `topPageName`），禁止自行 `AppStorageV2.connect(NavPathStack)` 后判断登录页。
+- **首页 `pages/index/Index.ets` 的 `onActive` 刷新有门禁**：`SessionGuard.isLoginVisible()` 或 `Authorization.state() !== NORMAL` 直接返回；**例外**是 `NEED_REFRESH` 且本地还有 `refresh_token` → `renewThenRefresh()` 用 `refreshOnly()` 静默续期后再静默刷新（避免「回到首页既不刷新也不续期」，要等第一个请求拿到 1000 才闪一下登录页）。已有条目时 `refresh(true)` 静默刷新（不弹 loading），首屏与下拉刷新才用 loading；`refresh` 用 `SingleFlight`（`run` 共享在飞任务、`enqueue` 补一次带 loading 的刷新），下拉刷新会真正等待同一次请求。**`interactive` 与 `silent` 是两件事**：本地无条目时即使静默刷新也要弹 loading，失败也必须给提示（否则是「空列表 + 一次 loading + 什么都没有」）。
+- **单飞统一用 `utils/SingleFlight.ets`**（`busy` / `run` / `enqueue`），不要再手写布尔位：布尔位靠 `finally` 或每个分支手动复位，漏一处就永久卡住。
 
 ## 服务卡片（`pages/form/`）
 
@@ -166,9 +170,25 @@ MFA/
 
 ## 测试
 
-- 本地测试目录：`entry/src/test/`
+- 本地测试目录：`entry/src/test/`（`List.test.ets` 是唯一入口，新增文件必须注册进去）
 - Ohos 测试目录：`entry/src/ohosTest/`
 - 修改公共组件、页面跳转、接口调用或运行时模型时，应同步检查相关测试是否需要更新
+- **纯逻辑必须可单测**：`AppLockPolicy` / `AuthStatePolicy` / `SessionThrottle` / `SingleFlight` / `ItemFilter` / `ListViewState` / `WindowCoordinator` 都不 import ArkUI，改动这些逻辑要补/改用例。窗口层与认证判定的历史 bug（孤儿弹窗、误关新窗口、登录态退化）都是靠「把决策抽成纯函数」才变得可验证的，不要再把并发/状态判定直接写进页面或 ArkUI 回调里。
+- 命令行自检（无需 DevEco 界面，签名材料缺失也不影响编译）：
+  ```bash
+  cd huawei/atomicservice/MFA
+  export DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk   # 按本机 DevEco 安装路径调整
+  HVIGORW=/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw
+
+  # ArkTS 编译 + 打包（debug / release 都跑）
+  "$HVIGORW" --mode module -p product=default -p buildMode=debug  -p module=entry@default  assembleHap --no-daemon
+  "$HVIGORW" --mode module -p product=default -p buildMode=release -p module=entry@default assembleHap --no-daemon
+
+  # 测试代码编译校验：Local Test 只能在 DevEco 里跑，但可以临时把用例复制到
+  # entry/src/ohosTest/ets/test/ 并在那边的 List.test.ets 里 import（复制时把 import 路径
+  # 的 `../main/ets/` 改成 `../../../main/ets/`），跑完即删
+  "$HVIGORW" --mode module -p product=default -p buildMode=debug -p module=entry@ohosTest assembleHap --no-daemon
+  ```
 - 端内算码的真 crypto 路径**只在设备侧可验证**：官方「本地测试（Local Test）」明载不支持测试系统 API；库 barrel 顶层值导入 `internal/CryptoSource`（库内唯一 import kit 的文件）→ 真 crypto 用例放 `entry/src/ohosTest/ets/test/`（如 `TotpDevice.test.ets`，运行需真机/模拟器）
 
 ## 提交约束
@@ -186,4 +206,4 @@ MFA/
 - `entry/src/main/ets/ability/` 目录包含 `EntryAbility.ets`（UIAbility 入口），上表已补充。
 - `code-linter.json5` 包含 `@security/no-unsafe-*` 系列规则，修改加密/安全相关逻辑前请先确认不会触发 lint 错误。
 - `build-profile.json5` 中的签名配置使用本机绝对路径引用证书/Profile/密钥库，签名口令为 DevEco 加密后的**密文**（非明文，换机通常不可直接复用）；证书与密钥库本体不入库，仅用于本地开发，禁止用于生产。
-- 当前仓库 CI 未包含华为前端的构建/lint 检查。
+- 仓库 CI 目前**没有**华为前端的必跑门禁：`.github/workflows/huawei-atomicservice.yml` 是手动触发的脚手架（需要一台自带 DevEco 的 self-hosted runner，标签 `harmonyos`），接入常规 PR 门禁前请先按上面的「命令行自检」在本机跑一遍。
