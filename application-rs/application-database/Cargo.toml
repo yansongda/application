@@ -17,7 +17,7 @@ tracing = { workspace = true }
 
 ulid = { workspace = true }
 
-sqlx = { version = "0.9.0", features = [ "runtime-tokio", "sqlite", "chrono", "json" ] }
+sqlx = { version = "0.9.1", features = [ "runtime-tokio", "sqlite", "chrono", "json" ] }
 
 totp-rs = { version = "6.0.0", features = ["otpauth"] }
 
