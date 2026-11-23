@@ -1,7 +1,5 @@
-import { AxiosResponse } from '@ohos/axios';
 import { IItem } from '../types/Item';
-import http, { Response } from '../utils/Http';
-import { HttpError } from '../utils/Errors';
+import { request, requestNoBody, requestVoid } from './request';
 
 export interface AllResponse extends IItem {}
 
@@ -52,129 +50,38 @@ export interface SortRequestItem {
 
 export class Totp {
   static async all(): Promise<AllResponse[]> {
-    const response: AxiosResponse<Response<AllResponse[]>> =
-      await http.post<AllResponse[], AxiosResponse<Response<AllResponse[]>>, null>('api/v1/totp/all');
-
-    if (0 === response.data?.code && response.data.data) {
-      return response.data.data;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestNoBody<AllResponse[]>('api/v1/totp/all');
   }
 
   static async create(uri: string): Promise<CreateResponse> {
-    const response: AxiosResponse<Response<CreateResponse>> =
-      await http.post<CreateResponse, AxiosResponse<Response<CreateResponse>>, CreateRequest>('api/v1/totp/create',
-        {
-          uri,
-        });
-
-    if (response.data?.data?.id) {
-      return response.data.data;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return request<CreateResponse, CreateRequest>('api/v1/totp/create', { uri });
   }
 
   static async detail(id: string): Promise<DetailResponse> {
-    const response: AxiosResponse<Response<DetailResponse>> =
-      await http.post<DetailResponse, AxiosResponse<Response<DetailResponse>>, DetailRequest>('api/v1/totp/detail',
-        {
-          id,
-        });
-
-    if (response.data?.data?.id) {
-      return response.data.data;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return request<DetailResponse, DetailRequest>('api/v1/totp/detail', { id });
   }
 
   static async editIssuer(id: string, issuer: string): Promise<void> {
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, EditIssuerRequest>('api/v1/totp/edit/issuer',
-        {
-          id,
-          issuer,
-        });
-
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoid<EditIssuerRequest>('api/v1/totp/edit/issuer', { id, issuer });
   }
 
   static async editUsername(id: string, username: string): Promise<void> {
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, EditUsernameRequest>('api/v1/totp/edit/username',
-        {
-          id,
-          username,
-        });
-
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoid<EditUsernameRequest>('api/v1/totp/edit/username', { id, username });
   }
 
   static async editTags(id: string, tags: string[]): Promise<void> {
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, EditTagsRequest>('api/v1/totp/edit/tags',
-        {
-          id,
-          tags,
-        });
-
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoid<EditTagsRequest>('api/v1/totp/edit/tags', { id, tags });
   }
 
   static async editPinned(id: string, pinned: boolean): Promise<void> {
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, EditPinnedRequest>('api/v1/totp/edit/pinned',
-        {
-          id,
-          pinned,
-        });
-
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoid<EditPinnedRequest>('api/v1/totp/edit/pinned', { id, pinned });
   }
 
   static async delete(id: string): Promise<void> {
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, DeleteRequest>('api/v1/totp/delete',
-        {
-          id,
-        });
-
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoid<DeleteRequest>('api/v1/totp/delete', { id });
   }
 
   static async sort(items: Array<SortRequestItem>): Promise<void> {
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, SortRequest>('api/v1/totp/sort',
-        {
-          items,
-        });
-
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoid<SortRequest>('api/v1/totp/sort', { items });
   }
 }

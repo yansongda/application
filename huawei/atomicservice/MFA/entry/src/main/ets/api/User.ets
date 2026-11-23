@@ -1,7 +1,5 @@
-import { AxiosResponse } from '@ohos/axios';
 import { IMfaConfigSecurity, IUser } from '../models/User';
-import http, { Response } from '../utils/Http';
-import { HttpError } from '../utils/Errors';
+import { request, requestNoBody, requestVoid, requestVoidNoBody } from './request';
 
 export interface EditAvatarRequest {
   avatar: string;
@@ -25,79 +23,29 @@ export interface EditSloganRequest {
 
 export class User {
   static async detail(): Promise<IUser> {
-    const response: AxiosResponse<Response<IUser>> =
-      await http.post<IUser, AxiosResponse<Response<IUser>>, void>('api/v1/users/detail');
-
-    if (0 === response.data?.code && response.data.data) {
-      return response.data.data;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestNoBody<IUser>('api/v1/users/detail');
   }
 
   static async editAvatar(avatar: string): Promise<void> {
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, EditAvatarRequest>('api/v1/users/edit/avatar',
-        {
-          avatar,
-        });
-
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoid<EditAvatarRequest>('api/v1/users/edit/avatar', { avatar });
   }
 
   static async editNickname(nickname: string): Promise<void> {
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, EditNicknameRequest>('api/v1/users/edit/nickname',
-        {
-          nickname,
-        });
-
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoid<EditNicknameRequest>('api/v1/users/edit/nickname', { nickname });
   }
 
   static async editSlogan(slogan: string): Promise<void> {
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, EditSloganRequest>('api/v1/users/edit/slogan',
-        {
-          slogan,
-        });
-
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoid<EditSloganRequest>('api/v1/users/edit/slogan', { slogan });
   }
 
   // 安全设置云端副本：`config.mfa.security`（后端按叶子 merge，未传的字段保持原值）
   static async editConfigMfa(security: IMfaConfigSecurity): Promise<void> {
     const body: EditConfigMfaRequest = { mfa: { security: security } };
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, EditConfigMfaRequest>('api/v1/users/edit/config/mfa', body);
 
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoid<EditConfigMfaRequest>('api/v1/users/edit/config/mfa', body);
   }
 
   static async delete(): Promise<void> {
-    const response: AxiosResponse<Response<void>> =
-      await http.post<void, AxiosResponse<Response<void>>, void>('api/v1/users/delete');
-
-    if (0 === response.data?.code) {
-      return;
-    }
-
-    return Promise.reject(new HttpError(response.data?.message ?? '请求失败'));
+    return requestVoidNoBody('api/v1/users/delete');
   }
 }

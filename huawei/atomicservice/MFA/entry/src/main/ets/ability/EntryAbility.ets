@@ -11,11 +11,27 @@ import { MainTheme } from '../themes/Main';
 import { AppLock } from '../models/security/AppLock';
 import { PrivacyWindow } from '../models/security/PrivacyWindow';
 import { SecuritySync } from '../models/security/Sync';
+import { configureHttp } from '../utils/Http';
+import { SessionGuard } from '../utils/SessionGuard';
+import { State } from '../types/Session';
 
 export default class EntryAbility extends UIAbility {
   // 冷启动：卡片点击拉起时 want 可能携带快捷意图，写入共享状态供 Index 页消费
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     this.handleFormIntent(want);
+
+    // 网络层只负责发现认证失效并通过回调通知；token 也从这里注入，Http 不再 import 模型/UI
+    configureHttp({
+      token: (): string | undefined => {
+        const authorization: Authorization =
+          PersistenceV2.globalConnect({ type: Authorization, defaultCreator: () => new Authorization() })!;
+
+        return authorization.accessToken;
+      },
+      authExpired: (state: State): void => {
+        SessionGuard.onAuthExpired(state);
+      },
+    });
   }
 
   // 热启动：元服务已在后台时点卡，不重建 Ability，新 want 直接到达

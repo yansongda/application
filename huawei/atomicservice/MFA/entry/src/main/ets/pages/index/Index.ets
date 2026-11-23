@@ -22,13 +22,17 @@ import { PageTitle } from '../../components/index/PageTitle';
 import { FormBridge } from '../../models/form/FormBridge';
 import { FormIntent } from '../../models/form/FormIntent';
 import { FormRoute } from '../../models/form/FormRoute';
-import { Authorization, State } from '../../models/Auth';
+import { Authorization } from '../../models/Auth';
+import { State } from '../../types/Session';
 import { AppLock } from '../../models/security/AppLock';
 import { ListViewState } from '../../models/totp/ListViewState';
 import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
 import { OTPAuthURI } from '@yansongda/otp';
 import { ItemFilterKind } from '../../utils/ItemFilter';
-import { AuthExpiredError } from '../../utils/Errors';
+import { AuthExpiredError, errorMessage } from '../../utils/Errors';
+import { SingleFlight } from '../../utils/SingleFlight';
+import { LoadingLease } from '../../utils/dialog/WindowCoordinator';
+import { SessionGuard } from '../../utils/SessionGuard';
 
 @Builder
 export function builder() {
@@ -46,8 +50,13 @@ export struct Index {
   private listState: ListViewState = new ListViewState();
   private pinningId: string | undefined = undefined;
   private snapshotIds: string[] = [];
-  // 请求去重：避免 onActive 与下拉刷新并发发起 Totp.all()
-  private isFetching: boolean = false;
+  // 请求单飞：onActive 静默刷新与下拉刷新共享同一次请求（保留在飞 Promise，不是布尔锁，
+  // 后来者会真正等待本次刷新结束）；inflightSilent 记录本次在飞的是否静默，
+  // 供后来者判断要不要补一次带 loading 的刷新
+  private refreshFlight: SingleFlight<void> = new SingleFlight<void>();
+  private inflightSilent: boolean = false;
+  // 静默续期单飞：onActive 可能被连续触发（切前后台 / 弹窗收起），重复续期会连打两次 refresh
+  private renewing: boolean = false;
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
   @Local
@@ -186,11 +195,20 @@ export struct Index {
 
       // 登录页在栈中 / 本地已判定需要重新认证：认证一律交给登录页。
       // 此时刷新只会让两个页面各自开 loading，叠加成「正在关联华为账号 + 加载中」来回闪
-      if (this.pages.getAllPathName().includes(AppPagesName.LOGIN.toString())) {
+      if (SessionGuard.isLoginVisible()) {
         return;
       }
 
-      if (State.NORMAL !== this.authorization.state()) {
+      const state: State = this.authorization.state();
+
+      if (State.NORMAL !== state) {
+        // NEED_REFRESH（access_token 只剩 5 分钟内有效期）且本地还有 refresh_token：静默续期后再刷新，
+        // 避开「回到首页既不刷新也不续期」→ 要等第一个请求拿到 1000 才闪一下登录页。
+        // 必须先判 refresh_token：没有它时 ensure() 会走**完整登录**，等于从首页拉起华为账号授权。
+        if (State.NEED_REFRESH === state && 'undefined' !== typeof this.authorization.refreshToken) {
+          this.renewThenRefresh();
+        }
+
         return;
       }
 
@@ -316,7 +334,11 @@ export struct Index {
             this.itemsRuntime.delete(id);
             this.syncCards();
           } catch (e) {
-            await Dialog.openAlert(() => this.deleteFailedDialog(e.message));
+            // 认证失效已由 SessionGuard 跳转登录页：再弹失败框只会压在登录页上方
+            // （Dialog.execute 内部只跳过 retryBuilder，页面自己的 catch 必须再判一次）
+            if (!(e instanceof AuthExpiredError)) {
+              await Dialog.openAlert(() => this.deleteFailedDialog(errorMessage(e)));
+            }
           }
         }
       }),
@@ -394,7 +416,10 @@ export struct Index {
       this.itemsRuntime.add(data);
       this.syncCards();
     } catch (e) {
-      await Dialog.openAlert(() => this.addFailedDialog(e.message));
+      // 认证失效已由 SessionGuard 跳转登录页：再弹失败框只会压在登录页上方
+      if (!(e instanceof AuthExpiredError)) {
+        await Dialog.openAlert(() => this.addFailedDialog(errorMessage(e)));
+      }
     }
   }
 
@@ -473,18 +498,40 @@ export struct Index {
 
   // silent：自动刷新（onActive 返回首页等）时已有数据就不弹 loading；
   // 首屏（本地无条目）与下拉刷新仍走 loading，避免空态/失败时没有任何反馈。
-  private async refresh(silent: boolean = false): Promise<void> {
-    if (this.isFetching) {
-      return;
+  private refresh(silent: boolean = false): Promise<void> {
+    const pending: Promise<void> | undefined = this.refreshFlight.pending;
+
+    // 单飞：在飞时返回同一个 Promise，调用方会真正等待本次刷新结束。
+    // 要不要弹 loading 由**首个**调用者决定（静默刷新失败是无声的）。
+    if ('undefined' === typeof pending) {
+      this.inflightSilent = silent;
+
+      return this.refreshFlight.run(() => this.doRefresh(silent));
     }
 
-    this.isFetching = true;
+    if (silent || !this.inflightSilent) {
+      return pending;
+    }
 
-    const withDialog: boolean = !silent || this.itemsRuntime.ids.length <= 0;
+    // 非静默调用方（下拉刷新 / 重试按钮）撞上在飞的静默刷新：等它结束后再补一次带 loading 的刷新，
+    // 否则用户点了「重试」却看不到任何反馈（静默分支失败不弹框）。
+    // `enqueue` 会同步占位，不会留下「旧任务结束到新任务登记」之间的并发缝隙。
+    this.inflightSilent = false;
+
+    return this.refreshFlight.enqueue(() => this.doRefresh(false));
+  }
+
+  private async doRefresh(silent: boolean): Promise<void> {
+    // interactive：要不要给用户反馈（loading + 失败提示）。
+    // 不能只用 silent 一个布尔表达两件事：静默刷新在「本地没有条目」时也必须弹 loading，
+    // 此时若失败仍静默返回，用户看到的是「空列表 + 一次 loading + 什么都没有」。
+    const interactive: boolean = !silent || this.itemsRuntime.ids.length <= 0;
+
+    let lease: LoadingLease | undefined = undefined;
 
     try {
-      if (withDialog) {
-        await Dialog.openLoading(() => this.loadingDialog($r('app.string.loading')));
+      if (interactive) {
+        lease = await Dialog.openLoading(() => this.loadingDialog($r('app.string.loading')));
       }
 
       try {
@@ -501,35 +548,59 @@ export struct Index {
         this.syncCards();
       } finally {
         // 必须等 loading 退场后再走失败分支：否则重试框会与 loading 同屏
-        if (withDialog) {
-          await Dialog.closeLoading();
+        if ('undefined' !== typeof lease) {
+          await lease.release();
         }
       }
     } catch (e) {
-      // 认证失效：拦截器已跳转登录页；这里再弹重试框只会挂在登录页上方
+      // 认证失效：SessionGuard 已跳转登录页；这里再弹重试框只会挂在登录页上方
       if (e instanceof AuthExpiredError) {
         hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '加载列表认证失效，交由登录页处理');
 
         return;
       }
 
-      if (silent) {
+      if (!interactive) {
         hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '静默刷新失败: %{public}s', JSON.stringify(e));
 
         return;
       }
 
       await Dialog.openAlert(() => this.fetchFailedDialog(() => {
-        // 重试按钮 action 是同步回调：延迟一拍，等重试框关闭动画结束再开 loading
-        setTimeout(() => {
-          this.refresh().catch(() => {
-            // 失败已在 refresh 内部处理，仅避免 unhandled rejection
-          });
-        }, 200);
+        // 重试按钮 action 是同步回调：Dialog.openLoading 会先等重试框真正退场再开 loading
+        this.refresh().catch(() => {
+          // 失败已在 refresh 内部处理，仅避免 unhandled rejection
+        });
       }));
-    } finally {
-      this.isFetching = false;
     }
+  }
+
+  // 静默续期（NEED_REFRESH）：只刷 token，**不走完整登录**；成功后补一次静默刷新。
+  // 必须用 `refreshOnly()` 而不是 `ensure(State.NEED_REFRESH)`：后者在 refresh_token 失效时会降级
+  // `login()`，等于**从首页拉起华为账号授权**，而与此同时 SessionGuard 也正把用户送去登录页，
+  // 会形成「首页登录 + 登录页登录」两条并发链路（两次 loginWithHuaweiID / 两次 access-token/login，
+  // 服务端 upsert 互相覆盖 → 本地与服务端 token 可能不一致 → 再触发一次失效跳转）。
+  // 失败分两类：AuthExpiredError（refresh_token 也失效，SessionGuard 已跳登录页，这里只记日志，
+  // **不得**再弹任何框）、其它（网络 / 服务端）保持现状等下一次 onActive 自然重试。
+  private renewThenRefresh(): void {
+    if (this.renewing) {
+      return;
+    }
+
+    this.renewing = true;
+
+    this.authorization.refreshOnly()
+      .then((): void => {
+        this.refresh(true).catch(() => {
+          // 失败已在 refresh 内部处理，仅避免 unhandled rejection
+        });
+      })
+      .catch((e: Error): void => {
+        hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '静默续期失败: %{public}s', JSON.stringify(e));
+      })
+      .finally((): void => {
+        this.renewing = false;
+      });
   }
 
   // 卡片快照同步（单入口）：账号列表变化后写 preferences 并主动推送最新数据到已添加的卡片

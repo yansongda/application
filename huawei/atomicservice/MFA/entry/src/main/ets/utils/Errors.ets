@@ -1,31 +1,20 @@
-// 统一错误模型：网络层只产出「可分类」的错误，UI 层按 kind 决定提示方式与是否重试。
+// 统一错误模型：网络层只产出两类错误——
+// - `HttpError`：请求/服务端/业务码错误，可带后端业务码；
+// - `AuthExpiredError`：认证失效（1000 系码），Http 拦截器已触发跳登录页，业务层据此跳过重试框与失败 toast。
 //
 // 本文件是叶子模块（不 import 任何业务模块），PromptAction / api / 页面都从这里取错误类型，
-// 避免 `Http ⇄ PromptAction` 这类循环依赖。新增错误类别时只在这里加枚举值。
-export enum ErrorKind {
-  // 请求未到达服务端（断网、DNS、连接被拒）
-  NETWORK = 'network',
-  // 请求超时（axios 的 ECONNABORTED / ETIMEDOUT / message 含 timeout）
-  TIMEOUT = 'timeout',
-  // 服务端响应异常（5xx / 网关错误）
-  SERVER = 'server',
-  // 认证失效（后端 1000/1001/1002/1004/1005/1006）：Http 拦截器已触发跳登录页
-  AUTH = 'auth',
-  // 业务错误（后端返回非 0 业务码）
-  BUSINESS = 'business',
-}
-
+// 避免 `Http ⇔ PromptAction` 这类循环依赖。
+//
+// 注意：这里**不建错误分类枚举**。曾经有过 `ErrorKind`（network/timeout/server/auth/business），
+// 但除了 `Http.ets` 在构造时赋值外没有任何读取方——分类体系没人用就只是噪音，
+// 需要区分场景时请用 `instanceof AuthExpiredError` 或各自的错误文案。
 export class HttpError extends Error {
   // 后端业务码（认证失效时为 1000 系码），无则为 undefined
   code?: number;
 
-  // 错误分类：调用方按 kind 分支，不要依赖 message 文案
-  kind: ErrorKind;
-
-  constructor(message: string, code?: number, kind: ErrorKind = ErrorKind.BUSINESS) {
+  constructor(message: string, code?: number) {
     super(message);
     this.code = code;
-    this.kind = kind;
   }
 }
 
@@ -33,6 +22,24 @@ export class HttpError extends Error {
 // 业务层据此跳过「重试弹窗」与「失败 Toast」（否则会叠在登录页上方，形成弹窗来回跳）。
 export class AuthExpiredError extends HttpError {
   constructor(message: string, code?: number) {
-    super(message, code, ErrorKind.AUTH);
+    super(message, code);
   }
 }
+
+// 捕获值归一：`catch (e)` 的静态类型是 Error，但运行时可能是 undefined / 字符串
+// （历史代码里有过空 `Promise.reject()`）。在 catch 里读 message 前必须先归一，
+// 否则会在错误处理里再抛一次 TypeError，把真实原因盖掉。
+export const toError = (caught: Error): Error => {
+  if (caught instanceof Error) {
+    return caught;
+  }
+
+  return new Error('未知错误');
+};
+
+// 取可展示文案：非 Error 的捕获值退化为兜底文案
+export const errorMessage = (caught: Error, fallback: string = '请求失败'): string => {
+  const message: string = toError(caught).message;
+
+  return message.length > 0 ? message : fallback;
+};

@@ -17,6 +17,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
 import { User as UserApi } from '../../api/User';
 import { Authorization } from '../Auth';
+import { SingleFlight } from '../../utils/SingleFlight';
 import { IMfaConfigSecurity } from '../User';
 import { KEY_SECURITY_DIRTY, Prefs, PrefsInstance } from '../../utils/Prefs';
 import { AppLock } from './AppLock';
@@ -31,8 +32,10 @@ const authorization =
 const hasAccessToken = (): boolean => 'undefined' !== typeof authorization().accessToken;
 
 export class SecuritySync {
-  // 单飞：连续切换开关或多入口触发时，避免并发上行（后到的请求覆盖顺序不确定）
-  private static _inFlight: boolean = false;
+  // 单飞：连续切换开关或多入口触发时，避免并发上行（后到的请求覆盖顺序不确定）。
+  // 用 `SingleFlight.enqueue` 而不是布尔位：原先「补发」要先把 `_inFlight` 复位再重入 flush，
+  // reset 与重入之间的微任务缝隙里，第三处触发会另起一次并发上行。
+  private static _flush: SingleFlight<void> = new SingleFlight<void>();
 
   // 登录后调和（只调一次，不要在每次页面显示时调用）
   static reconcile(context: Context, server: IMfaConfigSecurity | null | undefined): void {
@@ -60,7 +63,7 @@ export class SecuritySync {
 
   // 把本地生效值推到服务端；非 dirty / 未登录 / 已有请求在飞时直接返回
   static flush(context: Context): void {
-    if (SecuritySync._inFlight || !SecuritySync.isDirty(context) || !hasAccessToken()) {
+    if (SecuritySync._flush.busy || !SecuritySync.isDirty(context) || !hasAccessToken()) {
       return;
     }
 
@@ -70,35 +73,47 @@ export class SecuritySync {
       return;
     }
 
-    const privacyWindow: boolean = PrivacyWindow.instance().enabled;
-    const appLock: boolean = AppLock.instance().enabled;
-    const security: IMfaConfigSecurity = { privacy_window: privacyWindow, app_lock: appLock };
+    SecuritySync.schedule(prefs).catch((e: Error): void => {
+      // 本地设置已生效：失败只保留脏标记，下次登录 / 回前台重试，不打扰用户
+      hilog.warn(LogDomain.MODELS, TAG, 'sync_failed: %{public}s', JSON.stringify(e));
+    });
+  }
 
-    SecuritySync._inFlight = true;
+  // 排一次上行：取值在入队前完成（补发时必须拿**当前**值），并同步占位，不留并发缝隙
+  private static schedule(prefs: PrefsInstance): Promise<void> {
+    const security: IMfaConfigSecurity = SecuritySync.current();
 
-    UserApi.editConfigMfa(security)
-      .then((): void => {
-        // 先复位单飞标记：下面的补发依赖它
-        SecuritySync._inFlight = false;
+    return SecuritySync._flush.enqueue((): Promise<void> => SecuritySync.push(prefs, security));
+  }
 
-        // 上行期间用户又改过开关：已上行的不是当前值，保留 dirty 并立即补发（dirty 未清，flush 会重新发）
-        if (PrivacyWindow.instance().enabled !== privacyWindow || AppLock.instance().enabled !== appLock) {
-          hilog.info(LogDomain.MODELS, TAG, 'sync_stale: 上行期间本地变更，保留脏标记后补发');
+  private static async push(prefs: PrefsInstance, security: IMfaConfigSecurity): Promise<void> {
+    await UserApi.editConfigMfa(security);
 
-          SecuritySync.flush(context);
+    // 上行期间用户又改过开关：已上行的不是当前值，保留 dirty 并立即补发（dirty 未清，下次 flush 也会重发）
+    if (!SecuritySync.matches(security)) {
+      hilog.info(LogDomain.MODELS, TAG, 'sync_stale: 上行期间本地变更，保留脏标记后补发');
 
-          return;
-        }
-
-        Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, false);
-        hilog.info(LogDomain.MODELS, TAG, 'sync_done: privacyWindow=%{public}s, appLock=%{public}s',
-          privacyWindow.toString(), appLock.toString());
-      })
-      .catch((e: Error): void => {
-        // 本地设置已生效：失败只保留脏标记，下次登录 / 回前台重试，不打扰用户
-        SecuritySync._inFlight = false;
-        hilog.warn(LogDomain.MODELS, TAG, 'sync_failed: %{public}s', JSON.stringify(e));
+      SecuritySync.schedule(prefs).catch((e: Error): void => {
+        hilog.warn(LogDomain.MODELS, TAG, 'sync_retry_failed: %{public}s', JSON.stringify(e));
       });
+
+      return;
+    }
+
+    Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, false);
+    // 此时已校验过「上行值 == 当前值」，直接用当前生效值打日志（`IMfaConfigSecurity` 的字段是可选的）
+    hilog.info(LogDomain.MODELS, TAG, 'sync_done: privacyWindow=%{public}s, appLock=%{public}s',
+      PrivacyWindow.instance().enabled.toString(), AppLock.instance().enabled.toString());
+  }
+
+  private static current(): IMfaConfigSecurity {
+    return { privacy_window: PrivacyWindow.instance().enabled, app_lock: AppLock.instance().enabled };
+  }
+
+  // 已上行的值是否仍等于当前生效值
+  private static matches(uplinked: IMfaConfigSecurity): boolean {
+    return uplinked.privacy_window === PrivacyWindow.instance().enabled &&
+      uplinked.app_lock === AppLock.instance().enabled;
   }
 
   // 注销账号：清掉「待上行」语义，避免下一个登录的账号被上一个账号的本地值覆盖。

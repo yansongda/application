@@ -2,8 +2,7 @@
   "modelVersion": "5.1.0",
   "description": "多因子认证（MFA）服务，目前支持 TOTP 算法。为您提供便捷、简单、纯粹的认证服务",
   "dependencies": {
-    "@ohos/axios": "^2.2.6",
-    "@developers/dateformat": "^1.0.2"
+    "@ohos/axios": "^2.2.6"
   },
   "devDependencies": {
     "@ohos/hypium": "1.0.21",

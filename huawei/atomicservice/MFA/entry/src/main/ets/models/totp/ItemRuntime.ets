@@ -1,8 +1,8 @@
 import { IItem, IItemConfig } from '../../types/Item';
-import { AppStorageV2 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { AppPagesName, LogDomain } from '../../App';
+import { LogDomain } from '../../App';
 import { Toast } from '../../utils/PromptAction';
+import { loginInStack } from '../../utils/NavState';
 import { Totp } from '../../api/Totp';
 import { OtpAlgorithm, TOTP } from '@yansongda/otp';
 
@@ -155,9 +155,8 @@ export class ItemRuntime {
   start() {
     this.stop();
 
-    const allPathName: string[] = AppStorageV2.connect(NavPathStack)!.getAllPathName();
-
-    if (allPathName.includes(AppPagesName.LOGIN.toString())) {
+    // 登录页在栈中说明正在重新认证：不要自动算码 / 起定时器，免得在登录页背后空转请求
+    if (loginInStack()) {
       return;
     }
 
@@ -174,9 +173,7 @@ export class ItemRuntime {
       return;
     }
 
-    const allPathName: string[] = AppStorageV2.connect(NavPathStack)!.getAllPathName();
-
-    if (allPathName.includes(AppPagesName.LOGIN.toString())) {
+    if (loginInStack()) {
       return;
     }
 
