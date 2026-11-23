@@ -1,8 +1,8 @@
 import { User as UserApi } from '../../api/User';
 import { Config, User } from '../../models/User';
 import { Authorization } from '../../models/Auth';
-import { AppPagesName } from '../../App';
 import { Toast } from '../../utils/PromptAction';
+import { SessionGuard } from '../../utils/SessionGuard';
 import { AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
 import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
 import { SecuritySync } from '../../models/security/Sync';
@@ -76,8 +76,11 @@ struct Delete {
                 SecuritySync.clearDirty(context);
               }
 
+              // 清空栈后交给统一入口跳登录页。
+              // throttle: false —— 这是**显式**跳转（用户刚注销），不能被「自动跳转节流」挡掉；
+              // 跳转前置的 `Dialog.closeAllAsync()` 也由 SessionGuard 统一处理，页面不要再自己 push。
               this.pages.clear();
-              this.pages.pushPathByName(AppPagesName.LOGIN, null);
+              SessionGuard.redirect(undefined, { throttle: false });
             })
 
           Row() {

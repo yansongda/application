@@ -14,6 +14,13 @@ import { Dialog } from './PromptAction';
 import { loginInStack, navPages } from './NavState';
 import { SessionThrottle } from './SessionThrottle';
 
+export interface RedirectOptions {
+  // 是否走「自动跳转」节流（1s 去抖 + 60s/3 次上限）。默认 true。
+  // 显式跳转（例如注销账号后回登录页）必须传 false：节流是用来防「同一个异常信号引起的重复跳转」，
+  // 不该拦用户的主动操作——否则在刚发生过自动跳转的 1s 内点注销，会停在已清空的栈上没有任何反应。
+  throttle?: boolean;
+}
+
 const throttle: SessionThrottle = new SessionThrottle();
 
 export class SessionGuard {
@@ -22,13 +29,15 @@ export class SessionGuard {
     SessionGuard.redirect(state);
   }
 
-  // 手动 / 自动跳转登录页的统一入口
-  static redirect(state?: State): void {
+  // 手动 / 自动跳转登录页的唯一入口（页面不要再自己 clear + push）
+  static redirect(state?: State, options?: RedirectOptions): void {
     if (loginInStack()) {
       return;
     }
 
-    if (!throttle.allow(Date.now())) {
+    const throttled: boolean = 'undefined' === typeof options || options.throttle !== false;
+
+    if (throttled && !throttle.allow(Date.now())) {
       // 不提示、不再弹框：这类信号通常来自同一轮抖动的多个请求，提示只会叠在页面上
       hilog.warn(LogDomain.UTILS, 'utils/session_guard',
         '忽略本次自动跳转登录页（原因: %{public}s），60s 内已自动跳转: %{public}d 次',

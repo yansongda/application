@@ -30,6 +30,7 @@ import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
 import { OTPAuthURI } from '@yansongda/otp';
 import { ItemFilterKind } from '../../utils/ItemFilter';
 import { AuthExpiredError, errorMessage } from '../../utils/Errors';
+import { SingleFlight } from '../../utils/SingleFlight';
 import { SessionGuard } from '../../utils/SessionGuard';
 
 @Builder
@@ -48,9 +49,10 @@ export struct Index {
   private listState: ListViewState = new ListViewState();
   private pinningId: string | undefined = undefined;
   private snapshotIds: string[] = [];
-  // 请求去重：保留在飞的 Promise（不是布尔锁），让 onActive 静默刷新与下拉刷新共享同一次请求；
-  // inflightSilent 记录本次在飞的是否静默，供后来者判断要不要补一次带 loading 的刷新
-  private inflightRefresh: Promise<void> | undefined = undefined;
+  // 请求单飞：onActive 静默刷新与下拉刷新共享同一次请求（保留在飞 Promise，不是布尔锁，
+  // 后来者会真正等待本次刷新结束）；inflightSilent 记录本次在飞的是否静默，
+  // 供后来者判断要不要补一次带 loading 的刷新
+  private refreshFlight: SingleFlight<void> = new SingleFlight<void>();
   private inflightSilent: boolean = false;
   // 静默续期单飞：onActive 可能被连续触发（切前后台 / 弹窗收起），重复续期会连打两次 refresh
   private renewing: boolean = false;
@@ -496,48 +498,26 @@ export struct Index {
   // silent：自动刷新（onActive 返回首页等）时已有数据就不弹 loading；
   // 首屏（本地无条目）与下拉刷新仍走 loading，避免空态/失败时没有任何反馈。
   private refresh(silent: boolean = false): Promise<void> {
-    const inflight: Promise<void> | undefined = this.inflightRefresh;
+    const pending: Promise<void> | undefined = this.refreshFlight.pending;
 
     // 单飞：在飞时返回同一个 Promise，调用方会真正等待本次刷新结束。
     // 要不要弹 loading 由**首个**调用者决定（静默刷新失败是无声的）。
-    if ('undefined' !== typeof inflight) {
-      if (silent || !this.inflightSilent) {
-        return inflight;
-      }
+    if ('undefined' === typeof pending) {
+      this.inflightSilent = silent;
 
-      // 非静默调用方（下拉刷新 / 重试按钮）撞上在飞的静默刷新：等它结束后再补一次带 loading 的刷新，
-      // 否则用户点了「重试」却看不到任何反馈（静默分支失败不弹框）。
-      // 链子必须**立即占位**：过去写成 `.then(() => this.refresh())`，在 clear() 清空 inflightRefresh
-      // 与 again() 注册新任务之间存在一个微任务缝隙，卡在里面的第三个调用方会另起一次并发刷新。
-      const again = (): Promise<void> => this.runRefresh(false);
-      const chained: Promise<void> = inflight.then(again, again);
-
-      this.inflightRefresh = chained;
-      this.inflightSilent = false;
-
-      return chained;
+      return this.refreshFlight.run(() => this.doRefresh(silent));
     }
 
-    return this.runRefresh(silent);
-  }
+    if (silent || !this.inflightSilent) {
+      return pending;
+    }
 
-  // 真正发起一次刷新并登记为「在飞」；inflightRefresh / inflightSilent 的占用与释放都收在这里
-  private runRefresh(silent: boolean): Promise<void> {
-    const task: Promise<void> = this.doRefresh(silent);
+    // 非静默调用方（下拉刷新 / 重试按钮）撞上在飞的静默刷新：等它结束后再补一次带 loading 的刷新，
+    // 否则用户点了「重试」却看不到任何反馈（静默分支失败不弹框）。
+    // `enqueue` 会同步占位，不会留下「旧任务结束到新任务登记」之间的并发缝隙。
+    this.inflightSilent = false;
 
-    this.inflightRefresh = task;
-    this.inflightSilent = silent;
-
-    const clear = (): void => {
-      if (this.inflightRefresh === task) {
-        this.inflightRefresh = undefined;
-        this.inflightSilent = false;
-      }
-    };
-
-    task.then(clear, clear);
-
-    return task;
+    return this.refreshFlight.enqueue(() => this.doRefresh(false));
   }
 
   private async doRefresh(silent: boolean): Promise<void> {

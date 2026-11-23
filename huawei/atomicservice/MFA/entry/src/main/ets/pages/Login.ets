@@ -12,6 +12,7 @@ import { AuthExpiredError } from '../utils/Errors';
 import { LoginPageParams } from '../types/Login';
 import { State } from '../types/Session';
 import { SessionGuard } from '../utils/SessionGuard';
+import { SingleFlight } from '../utils/SingleFlight';
 import { topPageName } from '../utils/NavState';
 
 @Builder
@@ -31,8 +32,8 @@ struct Login {
   // 失败重试时使用的目标状态（刷新失败→登录、完整登录等由 Authorization.ensure 内部决定）
   @Local
   private lastState: State = State.EMPTY_AUTHORIZATION;
-  // 认证重入锁：onReady 与重试按钮可能并发触发，多个流程会各自抢 loading 窗口
-  private isAuthenticating: boolean = false;
+  // 认证单飞：onReady 与重试按钮可能并发触发，多个流程会各自抢 loading 窗口
+  private authFlight: SingleFlight<void> = new SingleFlight<void>();
 
   build() {
     NavDestination() {
@@ -87,12 +88,17 @@ struct Login {
     })
   }
 
-  private async auth(state: State): Promise<void> {
-    if (this.isAuthenticating) {
-      return;
+  // 认证入口：同一时刻只允许一条认证流程在飞（重复触发直接丢弃，避免两个 loading 抢窗口）。
+  // 单飞状态交给 `SingleFlight`：布尔锁要靠 finally 兜底复位，漏一处登录页就变成点不动的死页。
+  private auth(state: State): Promise<void> {
+    if (this.authFlight.busy) {
+      return Promise.resolve();
     }
 
-    this.isAuthenticating = true;
+    return this.authFlight.run(() => this.doAuth(state));
+  }
+
+  private async doAuth(state: State): Promise<void> {
     this.lastState = state;
     this.failed = false;
 
@@ -107,7 +113,7 @@ struct Login {
 
       // 整个认证流程只开一个 loading：refresh 失败时的 login 降级由 Authorization.ensure 在同一窗口内完成，
       // 不再「关闭 → 重开 → 递归 auth」，否则接口在超时边界抖动时会在两个 loading 之间来回闪。
-      // 必须放在 try 内：这里一旦抛错，finally 也要能把 isAuthenticating 复位，否则登录页变成点不动的死页
+      // 放在 try 内：这里一旦抛错，下面的 catch 也要负责把状态收敛到「可重试」
       await Dialog.openLoading(() => this.loadingDialog());
 
       // 目标状态 → 具体动作（空操作 / refresh / refresh 失败降级 login / 完整登录）全部收敛在模型里
@@ -142,8 +148,6 @@ struct Login {
       hilog.warn(LogDomain.PAGES, AppPagesName.LOGIN, '登录失败: %{public}s', JSON.stringify(e));
 
       this.failed = true;
-    } finally {
-      this.isAuthenticating = false;
     }
   }
 
