@@ -58,7 +58,7 @@ export class Authorization {
       hilog.error(LogDomain.MODELS, 'models/auth', '华为账号授权失败(authenticateWithHuaweiID): %{public}s',
         JSON.stringify(error))
 
-      return Promise.reject();
+      return Promise.reject(new HttpError('华为账号授权失败，请重试'));
     }
 
     if (authenticateWithHuaweiIDResponse.state && request.state !== authenticateWithHuaweiIDResponse.state) {
@@ -66,7 +66,7 @@ export class Authorization {
         '华为账号授权失败(authenticateWithHuaweiID)，state 不同: %{public}s != %{public}s',
         authenticateWithHuaweiIDResponse.state, request.state);
 
-      return Promise.reject();
+      return Promise.reject(new HttpError('华为账号授权失败，请重试'));
     }
 
     return authenticateWithHuaweiIDResponse.data!;
@@ -88,7 +88,7 @@ export class Authorization {
       hilog.error(LogDomain.MODELS, 'models/auth', '华为账号登录失败(loginWithHuaweiID): %{public}s',
         JSON.stringify(error))
 
-      return Promise.reject();
+      return Promise.reject(new HttpError('华为账号登录失败，请重试'));
     }
 
     if (loginWithHuaweiIDResponse.state && request.state !== loginWithHuaweiIDResponse.state) {
@@ -96,7 +96,7 @@ export class Authorization {
         '华为账号登录失败(loginWithHuaweiID)，state 不同: %{public}s != %{public}s',
         loginWithHuaweiIDResponse.state, request.state);
 
-      return Promise.reject();
+      return Promise.reject(new HttpError('华为账号登录失败，请重试'));
     }
 
     return loginWithHuaweiIDResponse.data!;

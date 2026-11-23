@@ -320,7 +320,11 @@ export struct Index {
             this.itemsRuntime.delete(id);
             this.syncCards();
           } catch (e) {
-            await Dialog.openAlert(() => this.deleteFailedDialog(e.message));
+            // 认证失效已由 SessionGuard 跳转登录页：再弹失败框只会压在登录页上方
+            // （Dialog.execute 内部只跳过 retryBuilder，页面自己的 catch 必须再判一次）
+            if (!(e instanceof AuthExpiredError)) {
+              await Dialog.openAlert(() => this.deleteFailedDialog(e instanceof Error ? e.message : '请求失败'));
+            }
           }
         }
       }),
@@ -398,7 +402,10 @@ export struct Index {
       this.itemsRuntime.add(data);
       this.syncCards();
     } catch (e) {
-      await Dialog.openAlert(() => this.addFailedDialog(e.message));
+      // 认证失效已由 SessionGuard 跳转登录页：再弹失败框只会压在登录页上方
+      if (!(e instanceof AuthExpiredError)) {
+        await Dialog.openAlert(() => this.addFailedDialog(e instanceof Error ? e.message : '请求失败'));
+      }
     }
   }
 

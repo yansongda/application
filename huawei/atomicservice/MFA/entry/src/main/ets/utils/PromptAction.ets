@@ -481,7 +481,8 @@ export class Toast extends PromptAction {
       // 认证失效已由登录页接管：不要再弹失败 toast
       if (!(e instanceof AuthExpiredError)) {
         Toast.show({
-          message: failedMessage ?? e.message,
+          // 回调可能 reject 非 Error（旧代码里有空 reject 的历史债务）：兜底文案，避免在 catch 里再抛 TypeError
+          message: failedMessage ?? (e instanceof Error ? e.message : '请求失败'),
           duration: 3000,
         });
       }
