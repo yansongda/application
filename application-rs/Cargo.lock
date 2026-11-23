@@ -119,7 +119,7 @@ dependencies = [
 
 [[package]]
 name = "application-api"
-version = "1.26.0"
+version = "1.26.1"
 dependencies = [
  "aes-gcm 0.11.1",
  "application-database",
@@ -148,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "application-database"
-version = "1.26.0"
+version = "1.26.1"
 dependencies = [
  "application-kernel",
  "chrono",
@@ -162,7 +162,7 @@ dependencies = [
 
 [[package]]
 name = "application-http"
-version = "1.26.0"
+version = "1.26.1"
 dependencies = [
  "application-kernel",
  "reqwest",
@@ -173,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "application-kernel"
-version = "1.26.0"
+version = "1.26.1"
 dependencies = [
  "chrono",
  "config",
