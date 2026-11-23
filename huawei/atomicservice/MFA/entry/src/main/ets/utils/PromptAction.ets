@@ -218,12 +218,26 @@ export class Busy {
   static async open(builder: CustomBuilder): Promise<number | undefined> {
     Busy._refs++;
 
-    if ('undefined' !== typeof Busy._id) {
-      return Busy._id;
+    // 串行化：上一个 open 还在飞（包括被 reset() 取消、正在自行关窗的那个）就先等它落地再判断。
+    // 不能像以前那样「有 _opening 就直接返回它」：被取消的 open 会解析成 undefined，
+    // 调用方以为自己拿到了窗口，屏幕上实际什么都没有。
+    while ('undefined' !== typeof Busy._opening) {
+      const previous: Promise<number | undefined> = Busy._opening;
+
+      try {
+        await previous;
+      } catch (e) {
+        // 打开失败：继续走下面的新建逻辑
+      }
+
+      // 防御：万一 opening 的 finally 没清干净，别在本循环里死等
+      if (Busy._opening === previous) {
+        Busy._opening = undefined;
+      }
     }
 
-    if ('undefined' !== typeof Busy._opening) {
-      return Busy._opening;
+    if ('undefined' !== typeof Busy._id) {
+      return Busy._id;
     }
 
     const gen: number = Busy._gen;
@@ -309,7 +323,8 @@ export class Busy {
 
     Busy._id = undefined;
     Busy._refs = 0;
-    Busy._opening = undefined;
+    // **不要**清 `_opening`：在飞的 open 会被代号取消并自行关窗，清掉它会让下一次 open
+    // 不再等待 → 两个 loading 窗口可能同屏。与 `Alert.reset()` 保持同一语义。
     Busy.clearWatchdog();
 
     return id;

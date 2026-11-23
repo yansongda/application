@@ -52,6 +52,8 @@ export struct Index {
   // inflightSilent 记录本次在飞的是否静默，供后来者判断要不要补一次带 loading 的刷新
   private inflightRefresh: Promise<void> | undefined = undefined;
   private inflightSilent: boolean = false;
+  // 静默续期单飞：onActive 可能被连续触发（切前后台 / 弹窗收起），重复续期会连打两次 refresh
+  private renewing: boolean = false;
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
   @Local
@@ -194,7 +196,16 @@ export struct Index {
         return;
       }
 
-      if (State.NORMAL !== this.authorization.state()) {
+      const state: State = this.authorization.state();
+
+      if (State.NORMAL !== state) {
+        // NEED_REFRESH（access_token 只剩 5 分钟内有效期）且本地还有 refresh_token：静默续期后再刷新，
+        // 避开「回到首页既不刷新也不续期」→ 要等第一个请求拿到 1000 才闪一下登录页。
+        // 必须先判 refresh_token：没有它时 ensure() 会走**完整登录**，等于从首页拉起华为账号授权。
+        if (State.NEED_REFRESH === state && 'undefined' !== typeof this.authorization.refreshToken) {
+          this.renewThenRefresh();
+        }
+
         return;
       }
 
@@ -495,12 +506,23 @@ export struct Index {
       }
 
       // 非静默调用方（下拉刷新 / 重试按钮）撞上在飞的静默刷新：等它结束后再补一次带 loading 的刷新，
-      // 否则用户点了「重试」却看不到任何反馈（静默分支失败不弹框）
-      const again = (): Promise<void> => this.refresh();
+      // 否则用户点了「重试」却看不到任何反馈（静默分支失败不弹框）。
+      // 链子必须**立即占位**：过去写成 `.then(() => this.refresh())`，在 clear() 清空 inflightRefresh
+      // 与 again() 注册新任务之间存在一个微任务缝隙，卡在里面的第三个调用方会另起一次并发刷新。
+      const again = (): Promise<void> => this.runRefresh(false);
+      const chained: Promise<void> = inflight.then(again, again);
 
-      return inflight.then(again, again);
+      this.inflightRefresh = chained;
+      this.inflightSilent = false;
+
+      return chained;
     }
 
+    return this.runRefresh(silent);
+  }
+
+  // 真正发起一次刷新并登记为「在飞」；inflightRefresh / inflightSilent 的占用与释放都收在这里
+  private runRefresh(silent: boolean): Promise<void> {
     const task: Promise<void> = this.doRefresh(silent);
 
     this.inflightRefresh = task;
@@ -565,6 +587,30 @@ export struct Index {
         });
       }));
     }
+  }
+
+  // 静默续期（NEED_REFRESH）：只刷 token，不走完整登录；成功后补一次静默刷新。
+  // 失败分两类：AuthExpiredError（refresh_token 也失效，SessionGuard 已跳登录页，这里只记日志，
+  // **不得**再弹任何框）、其它（网络 / 服务端）保持现状等下一次操作自然重试。
+  private renewThenRefresh(): void {
+    if (this.renewing) {
+      return;
+    }
+
+    this.renewing = true;
+
+    this.authorization.ensure(State.NEED_REFRESH)
+      .then((): void => {
+        this.refresh(true).catch(() => {
+          // 失败已在 refresh 内部处理，仅避免 unhandled rejection
+        });
+      })
+      .catch((e: Error): void => {
+        hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '静默续期失败: %{public}s', JSON.stringify(e));
+      })
+      .finally((): void => {
+        this.renewing = false;
+      });
   }
 
   // 卡片快照同步（单入口）：账号列表变化后写 preferences 并主动推送最新数据到已添加的卡片

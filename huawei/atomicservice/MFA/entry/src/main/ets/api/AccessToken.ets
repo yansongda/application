@@ -35,11 +35,8 @@ export class AccessToken {
           code: authorizationCode,
         });
 
-    // `code === 0` 不代表 data 里有 token：缺字段时直接失败，否则会把空 token 写进 Authorization，
-    // 使 `state()` 退化成 EMPTY_AUTHORIZATION，表现为「登录成功却反复回到登录页」
-    if ('undefined' === typeof response.access_token || 0 === response.access_token.length) {
-      throw new HttpError('登录响应异常，请重试');
-    }
+    // 必填字段校验收在 assertUsable 里
+    AccessToken.assertUsable(response.access_token, response.refresh_token, response.expired_in);
 
     return response;
   }
@@ -54,13 +51,23 @@ export class AccessToken {
           refresh_token: refreshToken,
         });
 
-    // refresh 响应里的 refresh_token 也必填：缺失时要在这里就失败，
-    // 否则本地 refresh_token 被写成 undefined，下次 `state()` 退化成 EMPTY/NEED_REFRESH
-    if ('undefined' === typeof response.access_token || 0 === response.access_token.length ||
-      'undefined' === typeof response.refresh_token || 0 === response.refresh_token.length) {
-      throw new HttpError('登录响应异常，请重试');
-    }
+    // 必填字段校验收在 assertUsable 里
+    AccessToken.assertUsable(response.access_token, response.refresh_token, response.expired_in);
 
     return response;
+  }
+
+  // `code === 0` 不代表 data 可用：任一必填字段缺失都会让本地认证状态退化——
+  // - access_token 空 → `state()` 变 EMPTY_AUTHORIZATION，表现为「登录成功却反复回登录页」；
+  // - refresh_token 空 → 下次无法续期，同样退化成 EMPTY；
+  // - expired_in 非数字 / 非正数 → `_expiredAt` 变 Invalid Date，5 分钟续期判定永远为 false。
+  // 所以三个字段都在这里兜住。
+  private static assertUsable(accessToken: string | undefined, refreshToken: string | undefined,
+    expiredIn: number | undefined): void {
+    if ('undefined' === typeof accessToken || 0 === accessToken.length ||
+      'undefined' === typeof refreshToken || 0 === refreshToken.length ||
+      'undefined' === typeof expiredIn || !Number.isFinite(expiredIn) || expiredIn <= 0) {
+      throw new HttpError('登录响应异常，请重试');
+    }
   }
 }
