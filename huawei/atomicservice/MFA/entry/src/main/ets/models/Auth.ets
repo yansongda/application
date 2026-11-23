@@ -2,21 +2,18 @@ import { authentication } from '@kit.AccountKit';
 import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { App, LogDomain } from '../App';
-import { dateformat } from '@developers/dateformat';
 import { AccessToken } from '../api/AccessToken';
 import { Context } from '@kit.AbilityKit';
-import { AuthExpiredError, HttpError } from '../utils/Errors';
+import { AuthExpiredError } from '../utils/Errors';
+import { AuthSnapshot, computeAuthState } from '../utils/AuthStatePolicy';
 import { State } from '../types/Session';
 
+// 登录态（持久化 + 网络动作）。
+//
+// 注意 `@ObservedV2` / `@Trace`：这是 **PersistenceV2 的持久化要求**（类要 @ObservedV2、持久化字段要 @Trace），
+// 不是给 UI 订阅用的——当前没有任何 `build()` 读这里的数据。删掉它们会让 token 不再落盘（每次冷启动都要重新登录）。
 @ObservedV2
 export class Authorization {
-  @Trace
-  private _authorizedAt: Date | undefined;
-
-  public get authorizedAt(): Date | undefined {
-    return this._authorizedAt;
-  }
-
   @Trace
   private _accessToken: string | undefined;
 
@@ -33,10 +30,6 @@ export class Authorization {
 
   @Trace
   private _expiredAt: Date | undefined;
-
-  public get expiredAt(): Date | undefined {
-    return this._expiredAt;
-  }
 
   static async authenticateWithHuaweiID(scopes?: string[],
     context?: Context): Promise<authentication.AuthorizationWithHuaweiIDCredential> {
@@ -56,9 +49,9 @@ export class Authorization {
     } catch (error) {
       // 元服务虽要求已登录，但仍可能因 App 指纹校验失败、网络异常、用户取消等原因抛错
       hilog.error(LogDomain.MODELS, 'models/auth', '华为账号授权失败(authenticateWithHuaweiID): %{public}s',
-        JSON.stringify(error))
+        JSON.stringify(error));
 
-      return Promise.reject(new HttpError('华为账号授权失败，请重试'));
+      return Promise.reject(new Error('华为账号授权失败，请重试'));
     }
 
     if (authenticateWithHuaweiIDResponse.state && request.state !== authenticateWithHuaweiIDResponse.state) {
@@ -66,7 +59,7 @@ export class Authorization {
         '华为账号授权失败(authenticateWithHuaweiID)，state 不同: %{public}s != %{public}s',
         authenticateWithHuaweiIDResponse.state, request.state);
 
-      return Promise.reject(new HttpError('华为账号授权失败，请重试'));
+      return Promise.reject(new Error('华为账号授权失败，请重试'));
     }
 
     return authenticateWithHuaweiIDResponse.data!;
@@ -86,9 +79,9 @@ export class Authorization {
     } catch (error) {
       // 元服务虽要求已登录，但仍可能因 App 指纹校验失败、网络异常、用户取消等原因抛错
       hilog.error(LogDomain.MODELS, 'models/auth', '华为账号登录失败(loginWithHuaweiID): %{public}s',
-        JSON.stringify(error))
+        JSON.stringify(error));
 
-      return Promise.reject(new HttpError('华为账号登录失败，请重试'));
+      return Promise.reject(new Error('华为账号登录失败，请重试'));
     }
 
     if (loginWithHuaweiIDResponse.state && request.state !== loginWithHuaweiIDResponse.state) {
@@ -96,28 +89,14 @@ export class Authorization {
         '华为账号登录失败(loginWithHuaweiID)，state 不同: %{public}s != %{public}s',
         loginWithHuaweiIDResponse.state, request.state);
 
-      return Promise.reject(new HttpError('华为账号登录失败，请重试'));
+      return Promise.reject(new Error('华为账号登录失败，请重试'));
     }
 
     return loginWithHuaweiIDResponse.data!;
   }
 
   state(): State {
-    if (!this._accessToken || !this._refreshToken || !this._expiredAt) {
-      return State.EMPTY_AUTHORIZATION;
-    }
-
-    // 提前 5 分钟刷新 token
-    if (dateformat.create(this._expiredAt).isBefore(dateformat.now().add(5, 'minute'))) {
-      return State.NEED_REFRESH;
-    }
-
-    // refresh_token 有效期 30 天，提前 1 天刷新
-    if (this._authorizedAt && dateformat.create(this._authorizedAt).add(29, 'day').isBefore(dateformat.now())) {
-      return State.REFRESH_TOKEN_EXPIRED;
-    }
-
-    return State.NORMAL;
+    return computeAuthState(this.snapshot(), Date.now());
   }
 
   // 统一认证入口：调用方只声明「目标状态」，不再自己写 refresh → login 的降级分支。
@@ -127,6 +106,11 @@ export class Authorization {
   // - 其余（EMPTY_AUTHORIZATION / REFRESH_TOKEN_EXPIRED / NEED_REFRESH 但本地无 refresh_token）：完整登录
   //   最后一个分支不能漏：强制 NEED_REFRESH（拦截器按响应码给的）遇到本地刚 clear 过 token 时，
   //   refresh 必然失败，若还 rethrow 给页面，用户点重试会永远停在登录页、走不到 login()。
+  //   `REFRESH_TOKEN_EXPIRED` 只由拦截器（1005/1006）给出，即 refresh_token 已确定失效，直接完整登录，
+  //   不再拿它去试 refresh（那一轮请求注定失败）。
+  //
+  // **只应由登录页调用**：这个方法会走 `login()`，也就是会拉起华为账号授权。
+  // 非登录页（首页静默续期等）请用 `refreshOnly()`，否则「token 失效」会在两个页面各触发一次完整登录。
   async ensure(target?: State): Promise<void> {
     const state: State = 'undefined' === typeof target ? this.state() : target;
 
@@ -153,6 +137,13 @@ export class Authorization {
     await this.login();
   }
 
+  // 只续期，不做交互式登录：供**非登录页**使用（首页 `onActive` 静默续期）。
+  // - refresh_token 缺失 / 失效：抛 AuthExpiredError，由 SessionGuard 负责跳登录页；
+  // - 网络 / 服务端错误：原样抛给调用方，由调用方决定是否重试（绝不在这里拉起华为账号授权）。
+  async refreshOnly(): Promise<void> {
+    await this.refresh(this.refreshToken);
+  }
+
   async login(): Promise<Authorization> {
     const credential = await Authorization.loginWithHuaweiID();
 
@@ -162,15 +153,12 @@ export class Authorization {
     if ('undefined' === typeof credential) {
       hilog.error(LogDomain.MODELS, 'models/auth', '获取到的认证信息为空');
 
-      return Promise.reject(new HttpError('华为账号授权失败，请重试'));
+      return Promise.reject(new Error('华为账号授权失败，请重试'));
     }
 
     const response = await AccessToken.login(App.clientId, credential?.authorizationCode!);
 
-    this._authorizedAt = new Date();
-    this._accessToken = response.access_token;
-    this._refreshToken = response.refresh_token;
-    this._expiredAt = dateformat.now().add(response.expired_in, 'second').toDate() as Date;
+    this.apply(response.access_token, response.refresh_token, response.expired_in);
 
     return this;
   }
@@ -186,18 +174,30 @@ export class Authorization {
 
     const response = await AccessToken.loginRefresh(App.clientId, refreshToken!);
 
-    this._authorizedAt = new Date();
-    this._accessToken = response.access_token;
-    this._refreshToken = response.refresh_token;
-    this._expiredAt = dateformat.now().add(response.expired_in, 'second').toDate() as Date;
+    this.apply(response.access_token, response.refresh_token, response.expired_in);
 
     return this;
   }
 
   clear(): void {
-    this._authorizedAt = undefined;
     this._accessToken = undefined;
     this._refreshToken = undefined;
     this._expiredAt = undefined;
+  }
+
+  // 判定用的快照：只读，纯数据，供 `AuthStatePolicy` 使用
+  private snapshot(): AuthSnapshot {
+    const expiredAtMs: number | undefined =
+      'undefined' === typeof this._expiredAt ? undefined : this._expiredAt.getTime();
+
+    return { accessToken: this._accessToken, refreshToken: this._refreshToken, expiredAtMs: expiredAtMs };
+  }
+
+  // 落库的唯一入口：login / refresh 两条路径必须写同一组字段，
+  // 否则会出现「有 access_token 没有 expiredAt」这种让 `state()` 退化成 EMPTY 的半登录态
+  private apply(accessToken: string, refreshToken: string, expiredIn: number): void {
+    this._accessToken = accessToken;
+    this._refreshToken = refreshToken;
+    this._expiredAt = new Date(Date.now() + expiredIn * 1000);
   }
 }

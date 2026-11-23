@@ -8,7 +8,7 @@ import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from '@o
 import { App, AppEnv, HttpDomain, LogDomain } from '../App';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { application } from '@kit.AbilityKit';
-import { AuthExpiredError, ErrorKind, HttpError } from './Errors';
+import { AuthExpiredError, HttpError } from './Errors';
 import { State } from '../types/Session';
 
 export interface HttpAuthHooks {
@@ -99,8 +99,7 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     hilog.warn(LogDomain.UTILS, 'utils/http', '获取请求失败提示文案失败: %{public}s', JSON.stringify(error));
   }
 
-  return Promise.reject(new HttpError(message, undefined,
-    isTimeout(e) ? ErrorKind.TIMEOUT : ErrorKind.NETWORK));
+  return Promise.reject(new HttpError(message));
 });
 
 http.interceptors.response.use((response: AxiosResponse) => {
@@ -142,8 +141,7 @@ http.interceptors.response.use((response: AxiosResponse) => {
     hilog.warn(LogDomain.UTILS, 'utils/http', '获取响应失败提示文案失败: %{public}s', JSON.stringify(error));
   }
 
-  return Promise.reject(new HttpError(message, undefined,
-    isTimeout(e) ? ErrorKind.TIMEOUT : ErrorKind.SERVER));
+  return Promise.reject(new HttpError(message));
 });
 
 export interface Response<T> {

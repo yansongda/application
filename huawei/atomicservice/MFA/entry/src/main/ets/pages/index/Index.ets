@@ -29,7 +29,7 @@ import { ListViewState } from '../../models/totp/ListViewState';
 import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
 import { OTPAuthURI } from '@yansongda/otp';
 import { ItemFilterKind } from '../../utils/ItemFilter';
-import { AuthExpiredError } from '../../utils/Errors';
+import { AuthExpiredError, errorMessage } from '../../utils/Errors';
 import { SessionGuard } from '../../utils/SessionGuard';
 
 @Builder
@@ -334,7 +334,7 @@ export struct Index {
             // 认证失效已由 SessionGuard 跳转登录页：再弹失败框只会压在登录页上方
             // （Dialog.execute 内部只跳过 retryBuilder，页面自己的 catch 必须再判一次）
             if (!(e instanceof AuthExpiredError)) {
-              await Dialog.openAlert(() => this.deleteFailedDialog(e instanceof Error ? e.message : '请求失败'));
+              await Dialog.openAlert(() => this.deleteFailedDialog(errorMessage(e)));
             }
           }
         }
@@ -415,7 +415,7 @@ export struct Index {
     } catch (e) {
       // 认证失效已由 SessionGuard 跳转登录页：再弹失败框只会压在登录页上方
       if (!(e instanceof AuthExpiredError)) {
-        await Dialog.openAlert(() => this.addFailedDialog(e instanceof Error ? e.message : '请求失败'));
+        await Dialog.openAlert(() => this.addFailedDialog(errorMessage(e)));
       }
     }
   }
@@ -541,10 +541,13 @@ export struct Index {
   }
 
   private async doRefresh(silent: boolean): Promise<void> {
-    const withDialog: boolean = !silent || this.itemsRuntime.ids.length <= 0;
+    // interactive：要不要给用户反馈（loading + 失败提示）。
+    // 不能只用 silent 一个布尔表达两件事：静默刷新在「本地没有条目」时也必须弹 loading，
+    // 此时若失败仍静默返回，用户看到的是「空列表 + 一次 loading + 什么都没有」。
+    const interactive: boolean = !silent || this.itemsRuntime.ids.length <= 0;
 
     try {
-      if (withDialog) {
+      if (interactive) {
         await Dialog.openLoading(() => this.loadingDialog($r('app.string.loading')));
       }
 
@@ -562,7 +565,7 @@ export struct Index {
         this.syncCards();
       } finally {
         // 必须等 loading 退场后再走失败分支：否则重试框会与 loading 同屏
-        if (withDialog) {
+        if (interactive) {
           await Dialog.closeLoading();
         }
       }
@@ -574,7 +577,7 @@ export struct Index {
         return;
       }
 
-      if (silent) {
+      if (!interactive) {
         hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '静默刷新失败: %{public}s', JSON.stringify(e));
 
         return;
@@ -589,9 +592,13 @@ export struct Index {
     }
   }
 
-  // 静默续期（NEED_REFRESH）：只刷 token，不走完整登录；成功后补一次静默刷新。
+  // 静默续期（NEED_REFRESH）：只刷 token，**不走完整登录**；成功后补一次静默刷新。
+  // 必须用 `refreshOnly()` 而不是 `ensure(State.NEED_REFRESH)`：后者在 refresh_token 失效时会降级
+  // `login()`，等于**从首页拉起华为账号授权**，而卡与此同时 SessionGuard 也正把用户送去登录页，
+  // 会形成「首页登录 + 登录页登录」两条并发链路（两次 loginWithHuaweiID / 两次 access-token/login，
+  // 服务端 upsert 互相覆盖 → 本地与服务端 token 可能不一致 → 再触发一次失效跳转）。
   // 失败分两类：AuthExpiredError（refresh_token 也失效，SessionGuard 已跳登录页，这里只记日志，
-  // **不得**再弹任何框）、其它（网络 / 服务端）保持现状等下一次操作自然重试。
+  // **不得**再弹任何框）、其它（网络 / 服务端）保持现状等下一次 onActive 自然重试。
   private renewThenRefresh(): void {
     if (this.renewing) {
       return;
@@ -599,7 +606,7 @@ export struct Index {
 
     this.renewing = true;
 
-    this.authorization.ensure(State.NEED_REFRESH)
+    this.authorization.refreshOnly()
       .then((): void => {
         this.refresh(true).catch(() => {
           // 失败已在 refresh 内部处理，仅避免 unhandled rejection
