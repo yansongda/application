@@ -31,6 +31,7 @@ import { OTPAuthURI } from '@yansongda/otp';
 import { ItemFilterKind } from '../../utils/ItemFilter';
 import { AuthExpiredError, errorMessage } from '../../utils/Errors';
 import { SingleFlight } from '../../utils/SingleFlight';
+import { LoadingLease } from '../../utils/dialog/WindowCoordinator';
 import { SessionGuard } from '../../utils/SessionGuard';
 
 @Builder
@@ -526,9 +527,11 @@ export struct Index {
     // 此时若失败仍静默返回，用户看到的是「空列表 + 一次 loading + 什么都没有」。
     const interactive: boolean = !silent || this.itemsRuntime.ids.length <= 0;
 
+    let lease: LoadingLease | undefined = undefined;
+
     try {
       if (interactive) {
-        await Dialog.openLoading(() => this.loadingDialog($r('app.string.loading')));
+        lease = await Dialog.openLoading(() => this.loadingDialog($r('app.string.loading')));
       }
 
       try {
@@ -545,8 +548,8 @@ export struct Index {
         this.syncCards();
       } finally {
         // 必须等 loading 退场后再走失败分支：否则重试框会与 loading 同屏
-        if (interactive) {
-          await Dialog.closeLoading();
+        if ('undefined' !== typeof lease) {
+          await lease.release();
         }
       }
     } catch (e) {

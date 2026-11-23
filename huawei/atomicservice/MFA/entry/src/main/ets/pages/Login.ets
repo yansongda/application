@@ -13,6 +13,7 @@ import { LoginPageParams } from '../types/Login';
 import { State } from '../types/Session';
 import { SessionGuard } from '../utils/SessionGuard';
 import { SingleFlight } from '../utils/SingleFlight';
+import { LoadingLease } from '../utils/dialog/WindowCoordinator';
 import { topPageName } from '../utils/NavState';
 
 @Builder
@@ -113,14 +114,16 @@ struct Login {
 
       // 整个认证流程只开一个 loading：refresh 失败时的 login 降级由 Authorization.ensure 在同一窗口内完成，
       // 不再「关闭 → 重开 → 递归 auth」，否则接口在超时边界抖动时会在两个 loading 之间来回闪。
-      // 放在 try 内：这里一旦抛错，下面的 catch 也要负责把状态收敛到「可重试」
-      await Dialog.openLoading(() => this.loadingDialog());
+      // 租约由 finally 释放：这里一旦抛错也要能把窗口关掉，否则 autoCancel:false 的遮罩会留住用户
+      const lease: LoadingLease = await Dialog.openLoading(() => this.loadingDialog());
 
-      // 目标状态 → 具体动作（空操作 / refresh / refresh 失败降级 login / 完整登录）全部收敛在模型里
-      await this.authorization.ensure(state);
-
-      // 先让认证 loading 完全退场，再回首页：否则首页 onActive 的刷新 loading 会与它同屏
-      await Dialog.closeLoading();
+      try {
+        // 目标状态 → 具体动作（空操作 / refresh / refresh 失败降级 login / 完整登录）全部收敛在模型里
+        await this.authorization.ensure(state);
+      } finally {
+        // 先让认证 loading 完全退场，再回首页：否则首页 onActive 的刷新 loading 会与它同屏
+        await lease.release();
+      }
 
       SessionGuard.resetAfterLogin();
 
@@ -132,8 +135,6 @@ struct Login {
         // fetchUser 内部已吞掉异常，这里仅避免 unhandled rejection
       });
     } catch (e) {
-      await Dialog.closeLoading();
-
       // 认证失效已由 SessionGuard 跳转登录页，这里再弹重试框只会叠在登录页上方；保留页面内重试按钮
       if (!(e instanceof AuthExpiredError)) {
         await Dialog.openAlert(() => this.loginConfirmDialog(() => {

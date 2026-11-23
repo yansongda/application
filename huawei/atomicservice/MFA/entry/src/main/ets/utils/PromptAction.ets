@@ -1,446 +1,142 @@
-// 弹窗窗口层：只负责「开 / 关 / 等退场」，不掺业务语义。
+// 弹窗门面：`Dialog` / `Toast` 是对页面的唯一入口。
 //
-// 三个子职责：
-// - `Dialog`：窗口原语 + awaitable close（`onDidDisappear` 回调 + 兜底超时）
-// - `Busy`：全局单飞 loading（引用计数 + 打开代号 + 看门狗）
-// - `Alert`：单槽位重试 / 失败框（串行化 + 打开代号）
+// 分层：
+// - 并发决策（单飞 / 引用计数 / 代号 / 等真实退场 / 打开超时 / 看门狗）全在
+//   `utils/dialog/WindowCoordinator.ets`——纯逻辑，可在 `entry/src/test` 单测；
+// - 本文件只做两件事：把 ArkUI 的 openCustomDialog / closeCustomDialog 与 setTimeout 注入进去，
+//   以及给页面提供稳定门面。
 //
-// 页面统一使用 `Dialog.openLoading / closeLoading / openAlert / execute`；
-// 不要再直接 `Dialog.open` 承载 loading（会新开窗口，两个 loading 同屏）。
+// 页面使用约定：
+// - loading 一律 `Dialog.openLoading(...)` 拿到租约并在 finally 里 `lease.release()`
+//   （`Dialog.execute` / `Toast.execute` 内部已配对，手写流程才需要自己 release）；
+// - 重试 / 失败框一律 `Dialog.openAlert(...)`；
+// - 认证失效（AuthExpiredError）的跳转由 `SessionGuard` 负责，门面只会跳过重试框与失败 toast。
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../App';
 import { AppStorageV2, UIContext } from '@kit.ArkUI';
 import { PromptAction as OhosPromptAction } from '@ohos.arkui.UIContext';
 import promptAction from '@ohos.promptAction';
-import { AuthExpiredError } from './Errors';
+import { AuthExpiredError, errorMessage, toError } from './Errors';
 import { loginInStack } from './NavState';
+import {
+  Clock,
+  LoadingLease,
+  WindowCoordinator,
+  WindowLogger,
+  WindowOpener,
+  WindowTimings
+} from './dialog/WindowCoordinator';
 
-// 关闭兜底：正常情况下 `onDidDisappear` 会立即回调；系统异常 / 回调缺失时最多等这么久
+// 关窗兜底：正常情况下 `onDidDisappear` 会立即回调；系统异常 / 回调缺失时最多等这么久。
+// （SDK 明确写了「退场动画被打断，例如同时触发弹窗关闭和页面切换」时该回调不触发，
+//   `SessionGuard` 的「关框后立即 push」正好落在这个场景，属已知代价：不阻塞、不卡死。）
 const CLOSE_FALLBACK_MS: number = 500;
+// 打开兜底：`openCustomDialog` 一旦不 settle，窗口层的全局锁会永久卡住，之后整个 App 开不出弹窗
+const OPEN_TIMEOUT_MS: number = 3000;
 // loading 看门狗：任何异常分支漏关时兜底，避免 autoCancel:false 的遮罩永久挡住页面。
 // 必须大于最长请求超时（备份接口 15s），否则会误杀进行中的请求。
 const LOADING_WATCHDOG_MS: number = 45000;
 
-interface ClosedToken {
-  id: number | undefined;
-  closed: boolean;
-  waiters: Array<() => void>;
-}
+const TIMINGS: WindowTimings = {
+  closeFallbackMs: CLOSE_FALLBACK_MS,
+  openTimeoutMs: OPEN_TIMEOUT_MS,
+  loadingWatchdogMs: LOADING_WATCHDOG_MS,
+};
 
 class PromptAction {
   private static _action: OhosPromptAction | undefined;
 
-  protected static get action(): OhosPromptAction {
+  static get action(): OhosPromptAction {
     if ('undefined' === typeof PromptAction._action) {
-      PromptAction._action = AppStorageV2.connect(UIContext)!.getPromptAction();
+      const context: UIContext | undefined = AppStorageV2.connect(UIContext);
+
+      PromptAction._action = context!.getPromptAction();
     }
 
     return PromptAction._action;
   }
 }
 
-export class Dialog extends PromptAction {
-  // 每个窗口的「已退场」令牌：`closeCustomDialog(id)` 是同步 void，无法 await，
-  // 改用打开时注册的 `onDidDisappear` 回调 + 兜底超时，替代固定 200ms 猜测。
-  private static _tokens: Map<number, ClosedToken> = new Map();
-
-  static async open(builder: CustomBuilder): Promise<number | undefined> {
-    const token: ClosedToken = { id: undefined, closed: false, waiters: [] };
-    const onDidDisappear = (): void => {
-      token.closed = true;
-
-      // 令牌**不在**这里删：`AlertDialogV2` 点按钮后框架会自动关框，此时槽位（`Busy._id` / `Alert._id`）
-      // 仍指向该 id。保留 closed 标记，下一次 `closeAndWait` / `waitClosed` 才能立刻判定「已退场」；
-      // 若在这里删掉，它会退化成 500ms 兜底 + 对一个已不存在的 id 再调一次 `closeCustomDialog`（多一条错误日志）。
-      // 条目数上界就是「当前 loading + 当前 alert + 上一个自关闭的 alert」，不会无限增长。
-      const waiters: Array<() => void> = token.waiters;
-
-      token.waiters = [];
-      waiters.forEach((waiter: () => void): void => waiter());
-    };
-
-    try {
-      const id: number | undefined = await PromptAction.action.openCustomDialog({
-        builder,
-        autoCancel: false,
-        onDidDisappear: onDidDisappear,
-      });
-
-      if ('undefined' !== typeof id) {
-        token.id = id;
-        Dialog._tokens.set(id, token);
-      }
-
-      return id;
-    } catch (e) {
-      hilog.error(LogDomain.UTILS, 'utils/dialog', '调用 `openCustomDialog` 失败，调用链路: %{public}s',
-        JSON.stringify(e));
-    }
-
-    return undefined;
+class ArkClock implements Clock {
+  after(delayMs: number, action: () => void): number {
+    return setTimeout(action, delayMs);
   }
 
-  static close(dialogId: number | undefined): void {
-    if ('undefined' === typeof dialogId) {
-      return;
-    }
+  cancel(handle: number): void {
+    clearTimeout(handle);
+  }
+}
 
-    try {
-      PromptAction.action.closeCustomDialog(dialogId);
-    } catch (e) {
-      hilog.error(LogDomain.UTILS, 'utils/dialog', '调用 `closeCustomDialog` 失败，调用链路: %{public}s',
-        JSON.stringify(e));
-    }
+class ArkWindowLogger implements WindowLogger {
+  warn(tag: string, message: string): void {
+    hilog.warn(LogDomain.UTILS, tag, '%{public}s', message);
   }
 
-  // 关窗并等待真实退场（onDidDisappear）；拿不到令牌时按兜底超时返回
-  static async closeAndWait(dialogId: number | undefined): Promise<void> {
-    if ('undefined' === typeof dialogId) {
-      return;
-    }
-
-    const token: ClosedToken | undefined = Dialog._tokens.get(dialogId);
-
-    // 窗口已自行退场（用户点了 alert 按钮 / 被系统取消）：不用再关，也不用等兜底
-    if ('undefined' !== typeof token && token.closed) {
-      Dialog._tokens.delete(dialogId);
-
-      return;
-    }
-
-    Dialog.close(dialogId);
-
-    await Dialog.waitClosed(dialogId);
+  error(tag: string, message: string): void {
+    hilog.error(LogDomain.UTILS, tag, '%{public}s', message);
   }
+}
 
-  // 等指定窗口退场（不主动关闭）；拿不到令牌（窗口已清理或从未登记）时按兜底超时返回
-  static async waitClosed(dialogId: number | undefined): Promise<void> {
-    if ('undefined' === typeof dialogId) {
-      return;
-    }
-
-    const token: ClosedToken | undefined = Dialog._tokens.get(dialogId);
-
-    if ('undefined' === typeof token) {
-      // 令牌缺失：窗口可能在登记前就被清场。作为「令牌表清理逻辑漏了」的探针，日志里留一条 warn。
-      hilog.warn(LogDomain.UTILS, 'utils/dialog', '等待窗口退场时找不到令牌，按兜底超时返回: id=%{public}d', dialogId);
-
-      await Dialog.fallback();
-      return;
-    }
-
-    if (token.closed) {
-      Dialog._tokens.delete(dialogId);
-      return;
-    }
-
-    await new Promise<void>((resolve: () => void): void => {
-      const timer: number = setTimeout(() => {
-        resolve();
-      }, CLOSE_FALLBACK_MS);
-
-      token.waiters.push(() => {
-        clearTimeout(timer);
-        resolve();
-      });
+class ArkWindowOpener implements WindowOpener<CustomBuilder> {
+  // `autoCancel: false`：loading / 重试框都不允许点遮罩关闭，否则会出现「窗口关了但流程还在跑」
+  open(builder: CustomBuilder, onClosed: () => void): Promise<number | undefined> {
+    return PromptAction.action.openCustomDialog({
+      builder: builder,
+      autoCancel: false,
+      onDidDisappear: onClosed,
     });
-
-    Dialog._tokens.delete(dialogId);
   }
 
-  // --- 对页面的稳定门面（与 Busy/Alert 组合） ---
+  close(windowId: number): void {
+    PromptAction.action.closeCustomDialog(windowId);
+  }
+}
 
-  static async openLoading(builder: CustomBuilder): Promise<number | undefined> {
-    return Busy.open(builder);
+const windows: WindowCoordinator<CustomBuilder> =
+  new WindowCoordinator<CustomBuilder>(new ArkWindowOpener(), new ArkClock(), new ArkWindowLogger(), TIMINGS);
+
+export class Dialog {
+  // 打开（或复用）全局单飞 loading。
+  // 返回的租约必须 `release()`：这决定了窗口什么时候真正关闭（引用归零），
+  // 也决定了迟到的 release 不会误关下一轮窗口（租约带打开代号）。
+  static openLoading(builder: CustomBuilder): Promise<LoadingLease> {
+    return windows.openLoading(builder);
   }
 
-  static async closeLoading(): Promise<void> {
-    await Busy.close();
+  // 打开单槽位重试 / 失败框（并发调用会排队，先关旧框再开新框）
+  static openAlert(builder: CustomBuilder): Promise<number | undefined> {
+    return windows.openAlert(builder);
   }
 
-  static async openAlert(builder: CustomBuilder): Promise<number | undefined> {
-    return Alert.open(builder);
+  // 强制清场并等待全部退场（跳登录页前使用）
+  static closeAllAsync(): Promise<void> {
+    return windows.closeAll();
   }
 
-  // 强制清场并等待全部退场（跳登录页 / 打开重试框前使用）
-  static async closeAllAsync(): Promise<void> {
-    const loadingId: number | undefined = Busy.reset();
-    const alertId: number | undefined = Alert.reset();
-
-    await Dialog.closeAndWait(loadingId);
-    await Dialog.closeAndWait(alertId);
-  }
-
+  // 开 loading → 执行 → 关 loading（失败时按需弹重试框）
   static async execute<T>(openBuilder: CustomBuilder, callback: () => Promise<T>,
     retryBuilder?: CustomBuilder): Promise<T> {
-    await Busy.open(openBuilder);
-
-    let error: undefined | Error = undefined;
+    const lease: LoadingLease = await windows.openLoading(openBuilder);
 
     try {
-      const result = await callback();
+      const result: T = await callback();
 
-      await Busy.close();
+      await lease.release();
 
       return result;
     } catch (e) {
-      error = e;
+      // 先关 loading 并等它真正退场，再弹重试框：顺序反了两个窗口会同屏
+      await lease.release();
+
+      const error: Error = toError(e);
+
+      // 认证失效已由 SessionGuard 跳转登录页：再弹重试框只会叠在登录页上方
+      if ('undefined' !== typeof retryBuilder && !(error instanceof AuthExpiredError)) {
+        await windows.openAlert(retryBuilder);
+      }
+
+      throw error;
     }
-
-    await Busy.close();
-
-    // 认证失效已由 SessionGuard 跳转登录页：再弹重试框只会叠在登录页上方
-    if ('undefined' !== typeof retryBuilder && !(error instanceof AuthExpiredError)) {
-      await Alert.open(retryBuilder);
-    }
-
-    return Promise.reject(error);
-  }
-
-  private static async fallback(): Promise<void> {
-    await new Promise<void>((resolve: () => void): void => {
-      setTimeout(() => {
-        resolve();
-      }, CLOSE_FALLBACK_MS);
-    });
-  }
-}
-
-// 全局单飞 loading：同一时刻最多一个窗口，引用计数归零才真正关闭。
-export class Busy {
-  private static _id: number | undefined = undefined;
-  private static _refs: number = 0;
-  private static _opening: Promise<number | undefined> | undefined = undefined;
-  private static _timer: number | undefined = undefined;
-  // 打开代号：`reset()` 自增。打开中的窗口如果跨越了清场，会因代号不匹配而自关，避免孤儿窗口
-  private static _gen: number = 0;
-
-  static async open(builder: CustomBuilder): Promise<number | undefined> {
-    Busy._refs++;
-
-    // 串行化：上一个 open 还在飞（包括被 reset() 取消、正在自行关窗的那个）就先等它落地再判断。
-    // 不能像以前那样「有 _opening 就直接返回它」：被取消的 open 会解析成 undefined，
-    // 调用方以为自己拿到了窗口，屏幕上实际什么都没有。
-    while ('undefined' !== typeof Busy._opening) {
-      const previous: Promise<number | undefined> = Busy._opening;
-
-      try {
-        await previous;
-      } catch (e) {
-        // 打开失败：继续走下面的新建逻辑
-      }
-
-      // 防御：万一 opening 的 finally 没清干净，别在本循环里死等
-      if (Busy._opening === previous) {
-        Busy._opening = undefined;
-      }
-    }
-
-    if ('undefined' !== typeof Busy._id) {
-      return Busy._id;
-    }
-
-    const gen: number = Busy._gen;
-    const opening: Promise<number | undefined> = (async (): Promise<number | undefined> => {
-      // 重试框按钮的同步 action 会立刻调用 open：先关掉上一个 alert 并等它真正退场，避免两个窗口同屏。
-      // 这一步取代了各页面各自 setTimeout(200) 的写法。
-      await Alert.dismissAndWait();
-
-      // 等待期间可能发生清场（跳登录页）或调用方已全部释放：此时不要再开窗，
-      // 否则窗口会先真的显示出来、再因代号不匹配被关掉，表现为「登录页上闪一下 loading」。
-      if (gen !== Busy._gen || Busy._refs <= 0) {
-        return undefined;
-      }
-
-      const id: number | undefined = await Dialog.open(builder);
-
-      if ('undefined' === typeof id) {
-        return undefined;
-      }
-
-      if (gen !== Busy._gen) {
-        await Dialog.closeAndWait(id);
-
-        return undefined;
-      }
-
-      // 打开期间调用方已经全部释放（请求秒回）：立即关掉，不要把窗口留到看门狗
-      if (Busy._refs <= 0) {
-        await Dialog.closeAndWait(id);
-
-        return undefined;
-      }
-
-      Busy._id = id;
-      Busy.watch(id);
-
-      return id;
-    })();
-
-    Busy._opening = opening;
-
-    try {
-      return await opening;
-    } finally {
-      if (Busy._opening === opening) {
-        Busy._opening = undefined;
-      }
-    }
-  }
-
-  static async close(): Promise<void> {
-    Busy._refs = Busy._refs > 0 ? Busy._refs - 1 : 0;
-
-    if (Busy._refs > 0) {
-      return;
-    }
-
-    if ('undefined' !== typeof Busy._opening) {
-      try {
-        await Busy._opening;
-      } catch (e) {
-        // 打开失败：没有窗口可关
-      }
-    }
-
-    const id: number | undefined = Busy._id;
-
-    Busy.clearWatchdog();
-    Busy._id = undefined;
-
-    if ('undefined' === typeof id) {
-      return;
-    }
-
-    await Dialog.closeAndWait(id);
-  }
-
-  // 强制清场：自增代号、清空计数与看门狗，返回待关闭的窗口 id
-  static reset(): number | undefined {
-    Busy._gen++;
-
-    const id: number | undefined = Busy._id;
-
-    Busy._id = undefined;
-    Busy._refs = 0;
-    // **不要**清 `_opening`：在飞的 open 会被代号取消并自行关窗，清掉它会让下一次 open
-    // 不再等待 → 两个 loading 窗口可能同屏。与 `Alert.reset()` 保持同一语义。
-    Busy.clearWatchdog();
-
-    return id;
-  }
-
-  private static watch(id: number): void {
-    Busy.clearWatchdog();
-
-    Busy._timer = setTimeout(() => {
-      Busy._timer = undefined;
-
-      if (Busy._id !== id) {
-        return;
-      }
-
-      hilog.error(LogDomain.UTILS, 'utils/dialog', 'loading 超时未关闭，强制关闭: id=%{public}d', id);
-
-      Busy._id = undefined;
-      Busy._refs = 0;
-      Dialog.close(id);
-    }, LOADING_WATCHDOG_MS);
-  }
-
-  private static clearWatchdog(): void {
-    if ('undefined' === typeof Busy._timer) {
-      return;
-    }
-
-    clearTimeout(Busy._timer);
-    Busy._timer = undefined;
-  }
-}
-
-// 重试 / 失败框：同一时刻最多一个，并发打开请求串行化
-export class Alert {
-  private static _id: number | undefined = undefined;
-  private static _opening: Promise<number | undefined> | undefined = undefined;
-  private static _gen: number = 0;
-
-  static async open(builder: CustomBuilder): Promise<number | undefined> {
-    if ('undefined' !== typeof Alert._opening) {
-      try {
-        await Alert._opening;
-      } catch (e) {
-        // 上一个 alert 打开失败：继续打开当前这个
-      }
-    }
-
-    const gen: number = Alert._gen;
-    const opening: Promise<number | undefined> = (async (): Promise<number | undefined> => {
-      const previous: number | undefined = Alert._id;
-
-      Alert._id = undefined;
-
-      if ('undefined' !== typeof previous) {
-        // 等旧框真正退场，避免新旧两个 alert 同屏
-        await Dialog.closeAndWait(previous);
-      }
-
-      // 等旧框期间可能发生了清场：不要再开新窗（同 Busy.open 的说明）
-      if (gen !== Alert._gen) {
-        return undefined;
-      }
-
-      const id: number | undefined = await Dialog.open(builder);
-
-      if ('undefined' === typeof id) {
-        return undefined;
-      }
-
-      if (gen !== Alert._gen) {
-        await Dialog.closeAndWait(id);
-
-        return undefined;
-      }
-
-      Alert._id = id;
-
-      return id;
-    })();
-
-    Alert._opening = opening;
-
-    try {
-      return await opening;
-    } finally {
-      if (Alert._opening === opening) {
-        Alert._opening = undefined;
-      }
-    }
-  }
-
-  static reset(): number | undefined {
-    Alert._gen++;
-
-    const id: number | undefined = Alert._id;
-
-    Alert._id = undefined;
-
-    return id;
-  }
-
-  // 打开 loading 前调用：关掉当前 alert 并等它真正退场，替代页面里的 setTimeout 延迟。
-  // 必须**主动关闭**而不是只等待：alert 可能仍在等用户操作（此时它并没有在退场），只等待会让槽位
-  // 提前清空、窗口却留在屏幕上，`closeAllAsync()` 之后也再关不掉它（孤儿窗口）。
-  // 用「读并清空槽位」而不是 `reset()`：`reset()` 会自增代号，把正在打开中的重试框一并取消掉。
-  static async dismissAndWait(): Promise<void> {
-    const id: number | undefined = Alert._id;
-
-    Alert._id = undefined;
-
-    if ('undefined' === typeof id) {
-      return;
-    }
-
-    await Dialog.closeAndWait(id);
   }
 }
 
@@ -465,19 +161,14 @@ export class Toast extends PromptAction {
     successMessage?: Resource | string | undefined,
     failedMessage?: Resource | string | undefined
   ): Promise<T> {
-    let withDialog: boolean = false;
-
-    if ('undefined' !== typeof openBuilder) {
-      withDialog = true;
-
-      await Busy.open(openBuilder);
-    }
+    const lease: LoadingLease | undefined =
+      'undefined' === typeof openBuilder ? undefined : await windows.openLoading(openBuilder);
 
     try {
-      const result = await callback();
+      const result: T = await callback();
 
-      if (withDialog) {
-        await Busy.close();
+      if ('undefined' !== typeof lease) {
+        await lease.release();
       }
 
       if (successMessage) {
@@ -489,20 +180,21 @@ export class Toast extends PromptAction {
 
       return result;
     } catch (e) {
-      if (withDialog) {
-        await Busy.close();
+      if ('undefined' !== typeof lease) {
+        await lease.release();
       }
 
+      const error: Error = toError(e);
+
       // 认证失效已由登录页接管：不要再弹失败 toast
-      if (!(e instanceof AuthExpiredError)) {
+      if (!(error instanceof AuthExpiredError)) {
         Toast.show({
-          // 回调可能 reject 非 Error（旧代码里有空 reject 的历史债务）：兜底文案，避免在 catch 里再抛 TypeError
-          message: failedMessage ?? (e instanceof Error ? e.message : '请求失败'),
+          message: failedMessage ?? errorMessage(error),
           duration: 3000,
         });
       }
 
-      return Promise.reject(e);
+      throw error;
     }
   }
 }
