@@ -577,7 +577,7 @@ export struct Index {
 
   // 静默续期（NEED_REFRESH）：只刷 token，**不走完整登录**；成功后补一次静默刷新。
   // 必须用 `refreshOnly()` 而不是 `ensure(State.NEED_REFRESH)`：后者在 refresh_token 失效时会降级
-  // `login()`，等于**从首页拉起华为账号授权**，而卡与此同时 SessionGuard 也正把用户送去登录页，
+  // `login()`，等于**从首页拉起华为账号授权**，而与此同时 SessionGuard 也正把用户送去登录页，
   // 会形成「首页登录 + 登录页登录」两条并发链路（两次 loginWithHuaweiID / 两次 access-token/login，
   // 服务端 upsert 互相覆盖 → 本地与服务端 token 可能不一致 → 再触发一次失效跳转）。
   // 失败分两类：AuthExpiredError（refresh_token 也失效，SessionGuard 已跳登录页，这里只记日志，

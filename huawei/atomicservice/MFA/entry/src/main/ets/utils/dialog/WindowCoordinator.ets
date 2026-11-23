@@ -91,8 +91,22 @@ export class WindowCoordinator<B> {
 
     this._leases++;
 
-    // 串行化：上一个 open 还在飞（含被清场取消、正在自行关窗的那次）就先等它落地再判断
-    await this.settleOpening();
+    // 串行化：上一个 open 还在飞（含被清场取消、正在自行关窗的那次）就先等它落地再判断。
+    // **这个 while 必须内联**：从函数进入到 `_opening = opening` 之间不能出现任何 await，
+    // 否则同一 tick 里的并发调用会各自越过门禁、同时开窗（把这段抽成 `await helper()` 就会踩到）。
+    while ('undefined' !== typeof this._opening) {
+      const previous: Promise<number | undefined> = this._opening;
+
+      try {
+        await previous;
+      } catch (e) {
+        // 打开失败：继续走下面的新建逻辑
+      }
+
+      if (this._opening === previous) {
+        this._opening = undefined;
+      }
+    }
 
     if ('undefined' !== typeof this._loadingId) {
       return this.lease(gen, this._loadingId);
@@ -141,7 +155,20 @@ export class WindowCoordinator<B> {
 
   // 打开重试 / 失败框（单槽位）：并发调用排队，先关旧框再开新框
   async openAlert(builder: B): Promise<number | undefined> {
-    await this.settleAlertOpening();
+    // 同 openLoading：串行化循环必须内联，`await` 之前不能给别的调用方留出越过门禁的机会
+    while ('undefined' !== typeof this._alertOpening) {
+      const previous: Promise<number | undefined> = this._alertOpening;
+
+      try {
+        await previous;
+      } catch (e) {
+        // 上一个 alert 打开失败：继续打开当前这个
+      }
+
+      if (this._alertOpening === previous) {
+        this._alertOpening = undefined;
+      }
+    }
 
     const gen: number = this._alertGen;
     const opening: Promise<number | undefined> = (async (): Promise<number | undefined> => {
@@ -300,7 +327,9 @@ export class WindowCoordinator<B> {
     return id;
   }
 
-  // 等 loading 槽位上在飞的 open 落地（防御性清 `_opening`，避免 finally 异常时死循环）
+  // 等 loading 槽位上在飞的 open 落地（**只给 release 路径用**：那里不需要同步占位，
+  // 等待结束后会用 `_leases > 0` 再确认一次，避免误关别人的窗口）。
+  // `openLoading` / `openAlert` 的串行化不能用它——见那两处关于「await 让出门禁」的注释。
   private async settleOpening(): Promise<void> {
     while ('undefined' !== typeof this._opening) {
       const previous: Promise<number | undefined> = this._opening;
@@ -313,23 +342,6 @@ export class WindowCoordinator<B> {
 
       if (this._opening === previous) {
         this._opening = undefined;
-      }
-    }
-  }
-
-  // 等 alert 槽位上在飞的 open 落地
-  private async settleAlertOpening(): Promise<void> {
-    while ('undefined' !== typeof this._alertOpening) {
-      const previous: Promise<number | undefined> = this._alertOpening;
-
-      try {
-        await previous;
-      } catch (e) {
-        // 上一个 alert 打开失败：继续打开当前这个
-      }
-
-      if (this._alertOpening === previous) {
-        this._alertOpening = undefined;
       }
     }
   }

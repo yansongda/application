@@ -187,8 +187,11 @@ export class Authorization {
 
   // 判定用的快照：只读，纯数据，供 `AuthStatePolicy` 使用
   private snapshot(): AuthSnapshot {
-    const expiredAtMs: number | undefined =
-      'undefined' === typeof this._expiredAt ? undefined : this._expiredAt.getTime();
+    // PersistenceV2 的持久化是 JSON 往返：`Date` 字段冷启动后可能已经是字符串，
+    // 直接调 `getTime()` 会在冷启动时抛异常（登录态判定整体挂掉）。统一走字符串 → Date 归一。
+    const expiredAtMs: number | undefined = 'undefined' === typeof this._expiredAt
+      ? undefined
+      : new Date(this._expiredAt.toString()).getTime();
 
     return { accessToken: this._accessToken, refreshToken: this._refreshToken, expiredAtMs: expiredAtMs };
   }
