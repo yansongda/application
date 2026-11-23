@@ -1,3 +1,24 @@
+## [1.26.1] - 2026-11-23
+
+### Changed
+
+- chore(deploy): `docker-compose.yml` 每环境数据目录改为独立子目录，宿主机挂载由 `./prod`、`./test` 调整为 `./prod/data`、`./test/data`（容器内 `/www/data` 不变），使库文件与 `config.toml` 分离；`database/sqlite/README.md` 部署布局与「静默坑」检查命令同步更新，并补充 `mkdir -p prod/data test/data` 前置步骤。**存量部署升级前需迁移库文件**：`mkdir -p prod/data test/data && mv prod/*.db* prod/data/ && mv test/*.db* test/data/`（`create_if_missing=false`，库文件不在位时容器启动失败，不会静默建空库）(#217) ([7f35447](https://github.com/yansongda/application/commit/7f35447))
+- build(application-rs): 依赖升级到最新 —— salvo 1.0.1→1.2.1、tokio 1.53.3→1.54.1、sqlx 0.9.0→0.9.1、aes-gcm 0.10.3→0.11.1（aead 0.6 / cipher 0.5）、sha2 0.10.9→0.11.1（digest 0.11）、pbkdf2 0.12.2→0.13.0、base64 0.22.1→0.23.1、getrandom 0.2.17→0.4.3、zeroize 1.9.1→1.9.2、bytes 1.12.1→1.12.2、url 2.5.8→2.5.9；workspace `rust-version` 提升至 1.95.0（salvo 1.2.1 的 MSRV）；代码适配 `getrandom::getrandom`→`getrandom::fill`、`Nonce::from_slice`→`Nonce::from`，备份信封格式与加解密输出不变 (#217) ([7f35447](https://github.com/yansongda/application/commit/7f35447))
+
+## [1.26.0] - 2026-11-23
+
+### Added
+
+- docs(database): 新增 `database/sqlite/README.md`：建库流程、部署布局、与 TiDB 的行为差异（主键编号、`updated_at` 应用层维护、文本比较改为大小写敏感、JSON 存 TEXT）及本次切换的迁移备查记录 (#214, #215) ([9472ba0](https://github.com/yansongda/application/commit/9472ba0))
+
+### Changed
+
+- refactor(database): 数据库由 TiDB（MySQL 协议）切换为单机 SQLite（`account.db` / `tool.db`），启用 WAL + `busy_timeout`、`create_if_missing=false`，连接池统一为 `SqlitePool`（`Pool::mysql` → `Pool::sqlite`）；`[databases.*].url` 需以 `sqlite:` 开头，MySQL/TiDB 连接串不再被识别 (#214) ([471aa3d](https://github.com/yansongda/application/commit/471aa3d))
+- refactor(database): 主键/外键由 `u64` 统一改为 `i64`（SQLite `INTEGER` 为有符号 64 位，与 `last_insert_rowid()` 一致）；HTTP 路径与请求/响应字段不变 (#214) ([471aa3d](https://github.com/yansongda/application/commit/471aa3d))
+- refactor(database): 时间列 `created_at` / `updated_at` 改由应用层显式写入（SQLite 无 `ON UPDATE CURRENT_TIMESTAMP`），对外行为不变 (#214) ([471aa3d](https://github.com/yansongda/application/commit/471aa3d))
+- refactor(kernel): 配置默认值与示例改为 `sqlite:///www/data/{account,tool}.db`，`max-connections` 建议 4 / `min-connections` 1 / `acquire-timeout` 5（兼作 SQLite busy_timeout）(#214) ([471aa3d](https://github.com/yansongda/application/commit/471aa3d))
+- chore(deploy): `docker-compose.yml` 镜像改为华为 SWR `swr.cn-south-1.myhuaweicloud.com/yansongda-app/application:application-api-v1.26.0`，按环境挂载 `./prod`、`./test` → `/www/data`（读写）与 `./{prod,test}/config.toml` → `/www/config.toml:ro`；`.gitignore` 忽略 `*.db` / `*.db-wal` / `*.db-shm` 与 `/data/`、`/prod/`、`/test/` (#214) ([471aa3d](https://github.com/yansongda/application/commit/471aa3d))
+
 ## [1.25.0] - 2026-11-10
 
 ### Added

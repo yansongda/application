@@ -13,8 +13,8 @@ pub struct ThirdUserConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ThirdUser {
-    pub id: u64,
-    pub user_id: u64,
+    pub id: i64,
+    pub user_id: i64,
     pub platform: Platform,
     pub third_id: String,
     pub config: Option<Json<ThirdUserConfig>>,
@@ -26,8 +26,8 @@ pub async fn fetch(
     platform: &Platform,
     third_id: &str,
 ) -> application_kernel::result::Result<ThirdUser> {
-    let sql = "select * from account.third_user where platform = ? and third_id = ? limit 1";
-    let pool_ref = Pool::mysql("account")?;
+    let sql = "select * from third_user where platform = ? and third_id = ? limit 1";
+    let pool_ref = Pool::sqlite("account")?;
 
     let result: Option<ThirdUser> = query_optional!(pool_ref, sql, platform, third_id);
 
@@ -41,14 +41,23 @@ pub async fn fetch(
 pub async fn insert(
     platform: &Platform,
     third_id: &str,
-    user_id: u64,
+    user_id: i64,
     config: Option<&ThirdUserConfig>,
-) -> application_kernel::result::Result<u64> {
-    let sql =
-        "insert into account.third_user (platform, third_id, user_id, config) values (?, ?, ?, ?)";
-    let pool_ref = Pool::mysql("account")?;
+) -> application_kernel::result::Result<i64> {
+    let sql = "insert into third_user (platform, third_id, user_id, config, created_at, updated_at) values (?, ?, ?, ?, ?, ?)";
+    let now = Local::now();
+    let pool_ref = Pool::sqlite("account")?;
 
-    let result = insert!(pool_ref, sql, platform, third_id, user_id, config.map(Json));
+    let result = insert!(
+        pool_ref,
+        sql,
+        platform,
+        third_id,
+        user_id,
+        config.map(Json),
+        now,
+        now
+    );
 
-    Ok(result.last_insert_id())
+    Ok(result.last_insert_rowid())
 }

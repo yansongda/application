@@ -6,10 +6,10 @@ use sqlx::FromRow;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ShortUrl {
-    pub id: u64,
+    pub id: i64,
     pub short: String,
     pub url: String,
-    pub visit: u64,
+    pub visit: i64,
     pub created_at: DateTime<Local>,
     pub updated_at: DateTime<Local>,
 }
@@ -21,8 +21,8 @@ pub struct CreateShortUrl {
 }
 
 pub async fn fetch(short: &str) -> application_kernel::result::Result<ShortUrl> {
-    let sql = "select * from tool.short_url where short = ? limit 1";
-    let pool_ref = Pool::mysql("tool")?;
+    let sql = "select * from short_url where short = ? limit 1";
+    let pool_ref = Pool::sqlite("tool")?;
 
     let result: Option<ShortUrl> = query_optional!(pool_ref, sql, short);
 
@@ -34,26 +34,27 @@ pub async fn fetch(short: &str) -> application_kernel::result::Result<ShortUrl> 
 }
 
 pub async fn insert(url: CreateShortUrl) -> application_kernel::result::Result<ShortUrl> {
-    let sql = "insert into tool.short_url (short, url) values (?, ?)";
-    let pool_ref = Pool::mysql("tool")?;
+    let sql = "insert into short_url (short, url, created_at, updated_at) values (?, ?, ?, ?)";
+    let now = Local::now();
+    let pool_ref = Pool::sqlite("tool")?;
 
-    let result = insert!(pool_ref, sql, &url.short, &url.url);
+    let result = insert!(pool_ref, sql, &url.short, &url.url, now, now);
 
     Ok(ShortUrl {
-        id: result.last_insert_id(),
+        id: result.last_insert_rowid(),
         short: url.short,
         url: url.url,
         visit: 0,
-        created_at: Local::now(),
-        updated_at: Local::now(),
+        created_at: now,
+        updated_at: now,
     })
 }
 
-pub async fn update_count(id: u64) -> application_kernel::result::Result<()> {
-    let sql = "update tool.short_url set visit = visit + 1 where id = ?";
-    let pool_ref = Pool::mysql("tool")?;
+pub async fn update_count(id: i64) -> application_kernel::result::Result<()> {
+    let sql = "update short_url set visit = visit + 1, updated_at = ? where id = ?";
+    let pool_ref = Pool::sqlite("tool")?;
 
-    let _ = update!(pool_ref, sql, id);
+    let _ = update!(pool_ref, sql, Local::now(), id);
 
     Ok(())
 }

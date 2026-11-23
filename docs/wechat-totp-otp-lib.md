@@ -6,7 +6,8 @@
 > **参考实现**：`~/000-Coding/ohos-otp`（华为元服务在用的 `@yansongda/otp`）
 >
 > **现状更新（2026-11-12）**：OTP 实现已在 `github.com/yansongda/otp` monorepo 提取为独立 npm 包
-> `@yansongda/miniprogram-otp@^1.0.1`（源码 `packages/core` 与本仓库原 `src/otp/` 同源，242 项算法测试由上游承接）。
+> `@yansongda/miniprogram-otp@^2.0.0`（源码 `packages/core` 与本仓库原 `src/otp/` 同源，242 项算法测试由上游承接）。
+> 2.0.0 为 fail-closed 破坏性版本：`otpauth://` 的 `account` 必填且不得含冒号，时间参数统一要求安全整数，错误码 18 → 22 个。
 > 本仓库已删除 `src/otp/` 与 `tests/otp/`，业务改从包入口导入；下文「为什么落在本仓库而非独立发版仓库」的结论
 > 已被该包取代（包声明 `miniprogram: dist`，微信「构建 npm」可直接消费）。
 

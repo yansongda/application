@@ -1,6 +1,5 @@
 use crate::account::Platform;
 use crate::{Pool, query_optional};
-
 use application_kernel::result::ErrorCode;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
@@ -9,7 +8,7 @@ use sqlx::types::Json;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ThirdConfig {
-    pub id: u64,
+    pub id: i64,
     pub platform: Platform,
     pub third_id: String,
     pub config: Option<Json<Config>>,
@@ -39,8 +38,8 @@ pub async fn fetch(
     platform: &Platform,
     third_id: &str,
 ) -> application_kernel::result::Result<ThirdConfig> {
-    let sql = "select * from account.third_config where platform = ? and third_id = ? limit 1";
-    let pool_ref = Pool::mysql("account")?;
+    let sql = "select * from third_config where platform = ? and third_id = ? limit 1";
+    let pool_ref = Pool::sqlite("account")?;
 
     let result: Option<ThirdConfig> = query_optional!(pool_ref, sql, platform, third_id);
 

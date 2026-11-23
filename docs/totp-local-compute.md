@@ -8,7 +8,7 @@
 >
 > **现状更新（2026-11-07）**：`src/vendor/otpauth` 已移除，端内算码改由自研零依赖库 `src/otp/` 承担（与华为 `@yansongda/otp` 同构）；与 otpauth 9.5.2 的 3240 组参数差分零差异。设计与验证证据见 `docs/wechat-totp-otp-lib.md`。
 >
-> **现状更新（2026-11-12）**：`src/otp/` 已迁移为独立 npm 包 `@yansongda/miniprogram-otp@^1.0.1`，本仓库不再保留 OTP 源码与算法测试；端内算码改从包入口导入（`utils/totp.ts` / `utils/totp-uri.ts`）。
+> **现状更新（2026-11-12）**：`src/otp/` 已迁移为独立 npm 包 `@yansongda/miniprogram-otp`（当前 `^2.0.0`），本仓库不再保留 OTP 源码与算法测试；端内算码改从包入口导入（`utils/totp.ts` / `utils/totp-uri.ts`）。
 
 ## 1. 背景与问题
 
@@ -36,7 +36,7 @@
 
 ```
 【改造前：TOTP 小程序】
-扫码 URI ──POST /totp/create──▶ MySQL(tool.totp: secret+period)
+扫码 URI ──POST /totp/create──▶ SQLite(tool.totp: secret+period)
 每周期末 ──POST /totp/detail──▶ 后端 totp-rs 算 code ──▶ 倒计时展示
 
 【改造后：TOTP 小程序】

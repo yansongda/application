@@ -3,3 +3,12 @@
 config.toml
 /.idea
 .sisyphus
+
+# SQLite 运行数据与迁移中间产物：一律不入库
+*.db
+*.db-wal
+*.db-shm
+/data/
+/prod/
+/test/
+/database/sqlite/migrate/dump/

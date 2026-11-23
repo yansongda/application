@@ -229,9 +229,9 @@ fn decrypt_payload<P: Item>(password: &str, envelope: &Envelope) -> Result<Vec<P
     let aad = envelope.aad();
     let cipher =
         Aes256Gcm::new_from_slice(&key[..]).map_err(|_| ErrorCode::InternalCryptoFailed)?;
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
     let result = cipher.decrypt(
-        nonce,
+        &nonce,
         Payload {
             msg: &ciphertext,
             aad: aad.as_bytes(),
@@ -271,12 +271,12 @@ fn create_with<P: Item>(
     let mut salt = [0u8; SALT_LEN];
     let mut nonce_bytes = [0u8; NONCE_LEN];
 
-    getrandom::getrandom(&mut salt).map_err(|e| {
+    getrandom::fill(&mut salt).map_err(|e| {
         error!("生成备份 salt 失败: {:?}", e);
 
         ErrorCode::InternalCryptoFailed
     })?;
-    getrandom::getrandom(&mut nonce_bytes).map_err(|e| {
+    getrandom::fill(&mut nonce_bytes).map_err(|e| {
         error!("生成备份 nonce 失败: {:?}", e);
 
         ErrorCode::InternalCryptoFailed
@@ -306,10 +306,10 @@ fn create_with<P: Item>(
     let key = Zeroizing::new(derive_key(password, &salt, iterations));
     let cipher =
         Aes256Gcm::new_from_slice(&key[..]).map_err(|_| ErrorCode::InternalCryptoFailed)?;
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
     let ciphertext = cipher
         .encrypt(
-            nonce,
+            &nonce,
             Payload {
                 msg: plaintext,
                 aad: aad.as_bytes(),
