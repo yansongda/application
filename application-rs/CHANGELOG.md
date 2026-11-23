@@ -1,9 +1,9 @@
-## [Unreleased]
+## [1.26.1] - 2026-11-23
 
 ### Changed
 
-- chore(deploy): `docker-compose.yml` 每环境数据目录改为独立子目录，宿主机挂载由 `./prod`、`./test` 调整为 `./prod/data`、`./test/data`（容器内 `/www/data` 不变），使库文件与 `config.toml` 分离；`database/sqlite/README.md` 部署布局与「静默坑」检查命令同步更新，并补充 `mkdir -p prod/data test/data` 前置步骤
-- build(application-rs): 依赖升级到最新 —— salvo 1.0.1→1.2.1、tokio 1.53.3→1.54.1、sqlx 0.9.0→0.9.1、aes-gcm 0.10.3→0.11.1（aead 0.6 / cipher 0.5）、sha2 0.10.9→0.11.1（digest 0.11）、pbkdf2 0.12.2→0.13.0、base64 0.22.1→0.23.1、getrandom 0.2.17→0.4.3、zeroize 1.9.1→1.9.2、bytes 1.12.1→1.12.2、url 2.5.8→2.5.9；workspace `rust-version` 提升至 1.95.0（salvo 1.2.1 的 MSRV）；代码适配 `getrandom::getrandom`→`getrandom::fill`、`Nonce::from_slice`→`Nonce::from`，备份信封格式与加解密输出不变
+- chore(deploy): `docker-compose.yml` 每环境数据目录改为独立子目录，宿主机挂载由 `./prod`、`./test` 调整为 `./prod/data`、`./test/data`（容器内 `/www/data` 不变），使库文件与 `config.toml` 分离；`database/sqlite/README.md` 部署布局与「静默坑」检查命令同步更新，并补充 `mkdir -p prod/data test/data` 前置步骤。**存量部署升级前需迁移库文件**：`mkdir -p prod/data test/data && mv prod/*.db* prod/data/ && mv test/*.db* test/data/`（`create_if_missing=false`，库文件不在位时容器启动失败，不会静默建空库）(#217) ([7f35447](https://github.com/yansongda/application/commit/7f35447))
+- build(application-rs): 依赖升级到最新 —— salvo 1.0.1→1.2.1、tokio 1.53.3→1.54.1、sqlx 0.9.0→0.9.1、aes-gcm 0.10.3→0.11.1（aead 0.6 / cipher 0.5）、sha2 0.10.9→0.11.1（digest 0.11）、pbkdf2 0.12.2→0.13.0、base64 0.22.1→0.23.1、getrandom 0.2.17→0.4.3、zeroize 1.9.1→1.9.2、bytes 1.12.1→1.12.2、url 2.5.8→2.5.9；workspace `rust-version` 提升至 1.95.0（salvo 1.2.1 的 MSRV）；代码适配 `getrandom::getrandom`→`getrandom::fill`、`Nonce::from_slice`→`Nonce::from`，备份信封格式与加解密输出不变 (#217) ([7f35447](https://github.com/yansongda/application/commit/7f35447))
 
 ## [1.26.0] - 2026-11-23
 
