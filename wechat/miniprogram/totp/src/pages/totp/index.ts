@@ -1,23 +1,13 @@
 import api from "@api/totp";
 import { ensureAuthenticated, isAccessTokenFresh } from "@utils/app";
 import error from "@utils/error";
-import {
-  collectTagStats,
-  countPinned,
-  filterItems,
-  groupItems,
-  ItemFilterKind,
-  ItemGroupKind,
-  type ItemView,
-  sortPinnedFirst,
-  type TagStat,
-} from "@utils/item-filter";
+import { sortPinnedFirst } from "@utils/item-filter";
 import { withLoading } from "@utils/loading";
 import logger from "@utils/logger";
 import { notify, toast } from "@utils/notify";
 import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { hasSettings } from "@utils/security";
-import { substr } from "@utils/string";
+import { dropIndex, moveItem } from "@utils/sort-order";
 import { syncTabBarSelected, TAB_BAR_INDEX } from "@utils/tab-bar";
 import {
   applySort,
@@ -33,6 +23,13 @@ import {
   parseTotpUri,
   rebuildTotpUri,
 } from "@utils/totp-uri";
+import {
+  buildListView,
+  type ListGroupView,
+  type ListItemView,
+  type ListMenuStats,
+  toListItem,
+} from "@utils/totp-view";
 import { refreshUser } from "@utils/user-sync";
 import {
   applyFilter,
@@ -41,7 +38,6 @@ import {
   DEFAULT_VIEW_STATE,
   readViewState,
   saveViewState,
-  syncView,
   type ViewFilterKind,
 } from "@utils/view-state";
 import type {
@@ -53,21 +49,9 @@ import type {
 } from "types/totp";
 import type { Tap } from "types/wechat";
 
-// 渲染用分组：在 item-filter 的 ItemGroupView 基础上补充标题与组内条目
-interface RenderGroup {
-  kind: ItemGroupKind;
-  tag: string;
-  title: string;
-  ids: string[];
-  items: RenderItem[];
-}
-
-// 列表渲染条目：ItemView 基础上携带算码所需字段（卡片组件直接消费）
-interface RenderItem extends ItemView {
-  secret: string;
-  period: number;
-  digits?: number;
-  algorithm?: string;
+// 排序模式下的行：卡片条目 + 拖动位移（行高与落位计算见 utils/sort-order.ts）
+interface DragRow extends ListItemView {
+  translateY: number;
 }
 
 interface ItemPinEvent {
@@ -86,15 +70,15 @@ interface GroupedDataset {
   grouped: boolean;
 }
 
-// 视图状态与筛选/分组互斥语义（全部 + 平铺）对齐华为 ListViewState
-const ROW_HEIGHT = 100;
+// 长按进入拖动（毫秒）与「滚动而非拖动」的位移阈值（px）
+const LONG_PRESS_MS = 350;
+const MOVE_CANCEL_PX = 10;
 
 Page({
   data: {
     locked: false,
-    items: [] as CacheItem[],
-    groups: [] as RenderGroup[],
-    visibleItems: [] as RenderItem[],
+    groups: [] as ListGroupView[],
+    visibleItems: [] as ListItemView[],
     query: "",
     filterKind: "all" as ViewFilterKind,
     filterTag: "",
@@ -105,7 +89,7 @@ Page({
     menuStats: {
       total: 0,
       pinned: 0,
-      tags: [] as TagStat[],
+      tags: [] as ListMenuStats["tags"],
     },
     totalCount: 0,
     pinnedCount: 0,
@@ -114,7 +98,7 @@ Page({
     dialogVisible: false,
     currentItemId: "0",
     isSortMode: false,
-    dragItems: [] as (CacheItem & { y: number; translateY: number })[],
+    dragItems: [] as DragRow[],
     draggingIndex: -1,
     isDragging: false,
     touchStartY: 0,
@@ -122,7 +106,8 @@ Page({
   },
   // 视图状态（筛选/分组）：页面级属性，不参与 setData
   viewState: { ...DEFAULT_VIEW_STATE },
-  snapshotIds: [] as string[],
+  // 长按拖动计时器：松手 / 取消 / 卸载都要清，否则会在已结束的手势上置 isDragging
+  pressTimer: null as number | null,
   // 写接口防重入：loading 期间忽略重复点击
   pinning: false,
   deleting: false,
@@ -190,7 +175,7 @@ Page({
 
     // 优先用本地缓存渲染，避免等待网络时验证码区域空白。
     if (cache !== null) {
-      this.renderItems(cache.items);
+      this.recompute(cache.items);
     }
 
     const sync = (): ReturnType<typeof syncFromRemote> => syncFromRemote();
@@ -198,8 +183,7 @@ Page({
 
     return request
       .then((fresh) => {
-        this.renderItems(fresh.items);
-        this.recompute();
+        this.recompute(fresh.items);
       })
       .catch((e: unknown) => {
         if (cache === null) {
@@ -215,109 +199,25 @@ Page({
         this.recompute();
       });
   },
-  renderItems(items: CacheItem[]) {
-    this.setData({
-      items: items.map((item) => ({
-        ...item,
-        issuer: substr(item.issuer, 7),
-        username: substr(item.username, 50),
-      })),
-      totalCount: items.length,
+  // 列表唯一渲染入口：派生逻辑全在 utils/totp-view.ts（纯函数、可单测），
+  // 这里只负责「取哪个数据源 + 回写失效的视图状态 + setData」。
+  // items 入参用于复用调用方刚拿到的缓存，省掉一次 storage 反序列化。
+  recompute(items?: CacheItem[]) {
+    const rawItems = items ?? readCache()?.items ?? [];
+    const built = buildListView({
+      items: rawItems,
+      viewState: this.viewState,
+      query: this.data.query,
+      isSortMode: this.data.isSortMode,
     });
-  },
-  // 列表唯一渲染入口：缓存 → ItemView → 过滤 → 置顶优先 → 分组；
-  // 同时清理失效的视图状态（标签被删/置顶清零时回退「全部」）
-  recompute() {
-    const cache = readCache();
-    const rawItems = cache?.items ?? [];
 
-    const views: RenderItem[] = rawItems.map((item) => ({
-      id: item.id,
-      issuer: substr(item.issuer, 7),
-      username: substr(item.username, 50),
-      tags: item.tags ?? [],
-      pinned: item.pinned === true,
-      secret: item.secret,
-      period: item.period,
-      digits: item.digits,
-      algorithm: item.algorithm,
-    }));
+    this.viewState = built.viewState;
 
-    const synced = syncView(this.viewState, views);
-
-    if (synced.changed) {
-      this.viewState = synced.state;
+    if (built.viewStateChanged) {
       saveViewState(this.viewState);
     }
 
-    const kind: ItemFilterKind =
-      this.viewState.kind === "pinned"
-        ? ItemFilterKind.PINNED
-        : this.viewState.kind === "tag"
-          ? ItemFilterKind.TAG
-          : ItemFilterKind.ALL;
-    const filtered = filterItems(
-      views,
-      kind,
-      this.viewState.tag,
-      this.data.query,
-    );
-    const ordered = this.data.isSortMode ? filtered : sortPinnedFirst(filtered);
-    const grouped = this.viewState.grouped && !this.data.isSortMode;
-    const byId = new Map<string, RenderItem>(
-      ordered.map((view) => [view.id, view as RenderItem]),
-    );
-    const groups: RenderGroup[] = grouped
-      ? groupItems(ordered).map((group) => ({
-          kind: group.kind,
-          tag: group.tag,
-          title:
-            group.kind === ItemGroupKind.PINNED
-              ? "置顶"
-              : group.kind === ItemGroupKind.UNASSIGNED
-                ? "未分类"
-                : group.tag,
-          ids: group.ids,
-          items: group.ids.flatMap((id) => {
-            const view = byId.get(id);
-
-            return typeof view === "undefined" ? [] : [view];
-          }),
-        }))
-      : [];
-    const visibleItems: RenderItem[] = grouped ? [] : (ordered as RenderItem[]);
-    const pinnedCount = countPinned(views);
-    let filterLabel = "筛选";
-
-    if (this.viewState.grouped) {
-      filterLabel = "分组";
-    } else if (this.viewState.kind === "pinned") {
-      filterLabel = "置顶";
-    } else if (this.viewState.kind === "tag" && this.viewState.tag.length > 0) {
-      filterLabel = `#${this.viewState.tag}`;
-    }
-
-    this.setData({
-      items: rawItems.map((item) => ({
-        ...item,
-        issuer: substr(item.issuer, 7),
-        username: substr(item.username, 50),
-      })),
-      totalCount: rawItems.length,
-      pinnedCount,
-      menuStats: {
-        total: views.length,
-        pinned: pinnedCount,
-        tags: collectTagStats(views),
-      },
-      groups,
-      visibleItems,
-      filterKind: this.viewState.kind,
-      filterTag: this.viewState.tag,
-      grouped,
-      filterLabel,
-      viewActive: this.viewState.grouped || this.viewState.kind !== "all",
-    });
+    this.setData(built.model);
   },
   onQueryInput(e: WechatMiniprogram.Input) {
     this.setData({ query: e.detail.value });
@@ -500,12 +400,16 @@ Page({
 
     this.setData({ dialogVisible: false, currentItemId: "0" });
   },
-  // ---- 拖拽排序（沿用现有实现：100px 行高、350ms 长按、y/translateY 拖拽）----
+  // ---- 拖拽排序（100px 行高、350ms 长按；位移只走 setData 路径，避免每次 touchmove 全量序列化）----
   enterSortMode() {
     // 排序作用于完整列表：清空搜索/筛选/分组，落盘「全部 + 平铺」
     this.viewState = applyFilter("all", "");
     saveViewState(this.viewState);
-    this.snapshotIds = this.data.items.map((item) => item.id);
+
+    // 起始顺序沿用当前展示序（置顶优先），避免进入排序模式的瞬间列表跳变
+    const rows: DragRow[] = sortPinnedFirst(
+      (readCache()?.items ?? []).map(toListItem),
+    ).map((row) => ({ ...row, translateY: 0 }));
 
     this.setData({
       isSortMode: true,
@@ -513,91 +417,101 @@ Page({
       filterKind: "all",
       filterTag: "",
       grouped: false,
-      dragItems: this.data.items.map((item, index) => ({
-        ...item,
-        y: index * ROW_HEIGHT,
-        translateY: 0,
-      })),
+      dragItems: rows,
     });
 
     this.recompute();
   },
   onTouchStart(e: WechatMiniprogram.TouchEvent) {
     const index = Number(e.currentTarget.dataset.index);
-    const touch = e.touches[0];
 
-    this.setData({
-      draggingIndex: index,
-      touchStartY: touch.clientY,
-    });
+    this.clearPressTimer();
+    this.setData({ draggingIndex: index, touchStartY: e.touches[0].clientY });
 
-    setTimeout(() => {
+    this.pressTimer = setTimeout(() => {
       if (this.data.draggingIndex === index) {
         this.setData({ isDragging: true });
       }
-    }, 350);
+    }, LONG_PRESS_MS);
   },
   onTouchMove(e: WechatMiniprogram.TouchEvent) {
-    const touch = e.touches[0];
-    const deltaY = touch.clientY - this.data.touchStartY;
+    const deltaY = e.touches[0].clientY - this.data.touchStartY;
 
     if (!this.data.isDragging) {
-      if (Math.abs(deltaY) > 10) {
+      // 长按生效前的明显位移视为滚动：取消待触发的拖动高亮
+      if (Math.abs(deltaY) > MOVE_CANCEL_PX) {
         this.setData({ draggingIndex: -1 });
       }
-      return;
-    }
 
-    const newDragItems = [...this.data.dragItems];
-    newDragItems[this.data.draggingIndex].translateY = deltaY;
-    this.setData({ dragItems: newDragItems });
-  },
-  onTouchEnd(_e: WechatMiniprogram.TouchEvent) {
-    if (!this.data.isDragging) {
-      this.setData({ draggingIndex: -1 });
       return;
     }
 
     const index = this.data.draggingIndex;
-    const item = this.data.dragItems[index];
-    const finalY = item.y + item.translateY;
-    let newIndex = Math.round(finalY / ROW_HEIGHT);
-    newIndex = Math.max(0, Math.min(this.data.dragItems.length - 1, newIndex));
 
-    if (newIndex !== index) {
-      const newDragItems = [...this.data.dragItems];
-      const [movedItem] = newDragItems.splice(index, 1);
-      newDragItems.splice(newIndex, 0, movedItem);
-
-      newDragItems.forEach((item, i) => {
-        item.y = i * ROW_HEIGHT;
-        item.translateY = 0;
-      });
-
-      this.setData({ dragItems: newDragItems });
-    } else {
-      const newDragItems = [...this.data.dragItems];
-      newDragItems[index].translateY = 0;
-      this.setData({ dragItems: newDragItems });
+    if (index < 0) {
+      return;
     }
 
-    this.setData({ draggingIndex: -1, isDragging: false });
+    // 只写被拖动行：整份 dragItems（含全部密钥字段）不再随每个 touchmove 序列化到视图层
+    this.setData({ [`dragItems[${index}].translateY`]: deltaY });
+  },
+  onTouchEnd() {
+    this.clearPressTimer();
+
+    const index = this.data.draggingIndex;
+
+    if (index < 0 || !this.data.isDragging) {
+      this.setData({ draggingIndex: -1, isDragging: false });
+
+      return;
+    }
+
+    const rows = this.data.dragItems;
+    const to = dropIndex(index, rows[index].translateY, rows.length);
+
+    if (to === index) {
+      this.setData({
+        [`dragItems[${index}].translateY`]: 0,
+        draggingIndex: -1,
+        isDragging: false,
+      });
+
+      return;
+    }
+
+    this.setData({
+      dragItems: moveItem(rows, index, to).map((row) => ({
+        ...row,
+        translateY: 0,
+      })),
+      draggingIndex: -1,
+      isDragging: false,
+    });
+  },
+  // 来电 / 系统弹窗会打断 touch 序列：与松手同口径收尾，避免 isDragging 卡住后再也拖不动
+  onTouchCancel() {
+    this.onTouchEnd();
+  },
+  clearPressTimer() {
+    if (this.pressTimer !== null) {
+      clearTimeout(this.pressTimer);
+      this.pressTimer = null;
+    }
+  },
+  onUnload() {
+    this.clearPressTimer();
   },
   async saveSort() {
-    const reorderedItems = this.data.dragItems.map((di) => {
-      const { y: _y, translateY: _t, ...rest } = di;
-      return rest as CacheItem;
-    });
-    const sortItems = reorderedItems.map((item, index) => ({
+    const ordered = this.data.dragItems;
+    const sortItems = ordered.map((item, index) => ({
       id: item.id,
-      sort: reorderedItems.length - 1 - index,
+      sort: ordered.length - 1 - index,
     }));
 
     try {
       await withLoading("保存中...", () => api.sort(sortItems));
       // 服务端成功后才覆盖缓存顺序
-      applySort(reorderedItems.map((item) => item.id));
-      this.snapshotIds = [];
+      applySort(ordered.map((item) => item.id));
 
       this.setData({
         isSortMode: false,
@@ -608,26 +522,13 @@ Page({
 
       this.recompute();
     } catch (e: unknown) {
-      // 服务端未变更：按进入排序时的 id 快照恢复缓存顺序渲染
-      const cache = readCache();
-      const byId = new Map((cache?.items ?? []).map((item) => [item.id, item]));
-      const restored: CacheItem[] = this.snapshotIds.flatMap((id) => {
-        const item = byId.get(id);
-
-        return typeof item === "undefined" ? [] : [item];
-      });
-      this.snapshotIds = [];
-
+      // 服务端未变更：缓存顺序就是进入排序时的顺序，重新派生视图即可恢复
       this.setData({
         isSortMode: false,
         dragItems: [],
         draggingIndex: -1,
         isDragging: false,
       });
-
-      if (restored.length > 0) {
-        this.renderItems(restored);
-      }
 
       this.recompute();
 

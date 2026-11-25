@@ -1,10 +1,11 @@
 import api from "@api/totp";
 import error from "@utils/error";
-import { collectTags, type ItemView } from "@utils/item-filter";
+import { collectTags } from "@utils/item-filter";
 import { withLoading } from "@utils/loading";
 import { notify, toast } from "@utils/notify";
 import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { readCache, updateItemFields } from "@utils/totp-cache";
+import { toItemView } from "@utils/totp-view";
 import type { EditTagsRequest } from "types/totp";
 
 interface Query {
@@ -48,19 +49,7 @@ Page({
   onLoad(query: Query) {
     const tag = query.tag ? decodeURIComponent(query.tag) : "";
     const cacheItems = readCache()?.items ?? [];
-    const suggestions = collectTags(
-      cacheItems.map((item) => {
-        const view: ItemView = {
-          id: item.id,
-          issuer: item.issuer,
-          username: item.username,
-          tags: item.tags ?? [],
-          pinned: item.pinned === true,
-        };
-
-        return view;
-      }),
-    );
+    const suggestions = collectTags(cacheItems.map(toItemView));
     // 建议标签：已存在于预设或当前已选中（输入框中）的不再重复展示
     const chips = [
       ...PRESET_TAGS,

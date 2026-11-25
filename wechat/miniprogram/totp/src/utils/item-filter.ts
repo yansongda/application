@@ -80,14 +80,14 @@ const matchesQuery = (item: ItemView, tokens: string[]): boolean => {
   return true;
 };
 
-const filterItems = (
-  items: ItemView[],
+const filterItems = <T extends ItemView>(
+  items: T[],
   kind: ItemFilterKind,
   tag: string,
   query: string,
-): ItemView[] => {
+): T[] => {
   const tokens = queryTokens(query);
-  const result: ItemView[] = [];
+  const result: T[] = [];
 
   for (const item of items) {
     if (kind === ItemFilterKind.PINNED && !item.pinned) {
@@ -107,9 +107,9 @@ const filterItems = (
 };
 
 // 稳定分区：置顶项保持原有相对顺序，非置顶项保持原有相对顺序
-const sortPinnedFirst = (items: ItemView[]): ItemView[] => {
-  const pinned: ItemView[] = [];
-  const rest: ItemView[] = [];
+const sortPinnedFirst = <T extends ItemView>(items: T[]): T[] => {
+  const pinned: T[] = [];
+  const rest: T[] = [];
 
   for (const item of items) {
     if (item.pinned) {
