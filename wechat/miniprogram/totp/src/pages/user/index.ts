@@ -16,6 +16,7 @@ import {
 } from "@utils/privacy";
 import { readSettings } from "@utils/security";
 import { flush as flushSecuritySync } from "@utils/security-sync";
+import { syncTabBarSelected, TAB_BAR_INDEX } from "@utils/tab-bar";
 import { readCache } from "@utils/totp-cache";
 import { readUserCache, updateUserCache } from "@utils/user-cache";
 import { refreshUser } from "@utils/user-sync";
@@ -93,6 +94,9 @@ Page({
   },
   uploadingAvatar: false,
   async onShow() {
+    // 自定义 tabBar 不会自动高亮：切回本页时把选中态指回「我的」
+    syncTabBarSelected(this, TAB_BAR_INDEX.user);
+
     // 应用锁守卫：锁定时不发请求，直接渲染遮罩
     const locked = appLockSyncOnPageShow();
 

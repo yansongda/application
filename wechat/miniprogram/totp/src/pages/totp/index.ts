@@ -17,6 +17,7 @@ import { withLoading } from "@utils/loading";
 import logger from "@utils/logger";
 import { hasSettings } from "@utils/security";
 import { substr } from "@utils/string";
+import { syncTabBarSelected, TAB_BAR_INDEX } from "@utils/tab-bar";
 import {
   applySort,
   readCache,
@@ -30,7 +31,6 @@ import {
   parseTotpUri,
   rebuildTotpUri,
 } from "@utils/totp-uri";
-import { readUserCache } from "@utils/user-cache";
 import { refreshUser } from "@utils/user-sync";
 import {
   applyFilter,
@@ -109,10 +109,6 @@ Page({
     },
     totalCount: 0,
     pinnedCount: 0,
-    user: {
-      avatar: "",
-      nickname: "",
-    },
     isError: false,
     isCreating: false,
     dialogVisible: false,
@@ -130,7 +126,12 @@ Page({
   // 写接口防重入：loading 期间忽略重复点击
   pinning: false,
   deleting: false,
+  // 首屏标记：首次 onShow 显示 loading，之后（切 tab / 从子页返回）静默同步
+  firstLoad: true,
   async onShow() {
+    // 自定义 tabBar 不会自动高亮：切回本页时把选中态指回 TOTP
+    syncTabBarSelected(this, TAB_BAR_INDEX.totp);
+
     // 应用锁守卫：锁定时不发请求、不启动计时，直接渲染遮罩
     const locked = appLockSyncOnPageShow();
 
@@ -169,11 +170,8 @@ Page({
 
     // 新装/重装：本地安全设置已被清空，须先从服务端恢复应用锁再拉取验证码，
     // 否则首屏漏锁、直到下一个页面才要求验证（完全删除后重新扫码可复现）
-    let securityRestored = false;
-
     if (!hasSettings()) {
       await refreshUser();
-      securityRestored = true;
 
       if (appLockSyncOnPageShow()) {
         this.setData({ locked: true });
@@ -182,37 +180,9 @@ Page({
       }
     }
 
-    // 头像/昵称：优先本地缓存，远端刷新成功后覆盖
-    const cachedUser = readUserCache();
-
-    if (cachedUser !== null) {
-      this.setData({
-        user: {
-          avatar: cachedUser.config.avatar ?? "",
-          nickname: cachedUser.config.nickname ?? "",
-        },
-      });
-    }
-
-    await this.loadItems();
-
-    // 用户资料刷新不阻塞列表渲染；失败静默（refreshUser 内部已捕获）
-    if (!securityRestored) {
-      refreshUser()
-        .then((user) => {
-          if (user !== null) {
-            this.setData({
-              user: {
-                avatar: user.config?.avatar ?? "",
-                nickname: user.config?.nickname ?? "",
-              },
-            });
-          }
-        })
-        .catch(() => {
-          // 静默：个人中心资料刷新失败不影响列表
-        });
-    }
+    // 首屏出 loading，切 tab / 从子页返回时静默同步（避免每次 onShow 都闪一下 loading）
+    await this.loadItems({ silent: !this.firstLoad });
+    this.firstLoad = false;
 
     // 冷启动恢复筛选/分组视图，并在数据刷新后清理失效状态
     this.viewState = readViewState();
@@ -224,9 +194,11 @@ Page({
     this.onShow();
   },
   retry() {
+    // 重试需要 loading 反馈，重置首屏标记后重跑 onShow
+    this.firstLoad = true;
     this.onShow();
   },
-  loadItems(): Promise<void> {
+  loadItems(options: { silent?: boolean } = {}): Promise<void> {
     const cache = readCache();
 
     // 优先用本地缓存渲染，避免等待网络时验证码区域空白。
@@ -234,7 +206,10 @@ Page({
       this.renderItems(cache.items);
     }
 
-    return withLoading("加载中...", () => syncFromRemote())
+    const sync = (): ReturnType<typeof syncFromRemote> => syncFromRemote();
+    const request = options.silent ? sync() : withLoading("加载中...", sync);
+
+    return request
       .then((fresh) => {
         this.renderItems(fresh.items);
         this.recompute();
@@ -407,9 +382,6 @@ Page({
     this.viewState = clearFilter(this.viewState);
     saveViewState(this.viewState);
     this.recompute();
-  },
-  goProfile() {
-    wx.navigateTo({ url: "/pages/user/index" });
   },
   goCreate() {
     wx.navigateTo({ url: "/pages/totp/create/index" });

@@ -25,6 +25,7 @@ wechat/miniprogram/totp/
 
 - `src/pages/`：页面
 - `src/components/`：组件
+- `src/custom-tab-bar/`：自定义 tabBar 组件（`app.json` `tabBar.custom = true`）
 - `src/utils/`：工具函数
 - `src/miniprogram_npm/`：微信开发者工具构建的 npm 产物（不提交）
 
@@ -102,6 +103,7 @@ bun run check:otp-dependency    # OTP 依赖守卫（版本基线 / dist 指纹 
 
 ## NOTES
 
+- 底部导航为**自定义 tabBar**（`app.json` `tabBar.custom = true`，组件必须在 `src/custom-tab-bar/index.*`，用 `t-icon` 渲染，因此不需要 `iconPath` 图片）：选中态**不会**随 `switchTab` 自动切换，每个 tab 页的 `onShow` 首行必须调用 `utils/tab-bar.ts#syncTabBarSelected(this, TAB_BAR_INDEX.x)`，否则高亮停在切换前的 tab。tabBar 高度固定 `54px + env(safe-area-inset-bottom)` 且不压缩页面视口，tab 页需自行预留底部空间（`pages/totp/index.scss` 的 `.items` / `.page-sort`、`pages/user/index.scss` 的 `.page`），`t-fab` 也需按该常量上抬。新增或调整 tab 时同步三处顺序：`app.json` `tabBar.list`、`custom-tab-bar/index.ts` 的 `LIST`、`utils/tab-bar.ts` 的 `TAB_BAR_INDEX`。
 - 与 `yansongda` 主小程序共享 `utils/error.ts`、`utils/logger.ts`、`utils/string.ts`、`models/error.ts`、`types/http.d.ts` 等代码，但当前无正式共享包，分别独立维护。
 - 当前 CI 已接入 `bun run biome:check`、`bun run typecheck`、`bun run test`（`tests/`）与 `bun run check:otp-dependency`（OTP 依赖守卫：caret 版本基线、dist 指纹、RFC 向量与错误码冒烟）。
 - OTP 算法实现来自 npm 包 `@yansongda/miniprogram-otp`（源码在上游 otp monorepo 的 `packages/core`，与鸿蒙 `@yansongda/otp` 同源）；**本仓库不再保留 OTP 源码与算法测试**，`utils/totp.ts` 是唯一算码调用点，`utils/totp-uri.ts` 是唯一 URI / 错误文案编排点。

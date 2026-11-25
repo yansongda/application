@@ -18,17 +18,6 @@
   </view>
 
   <block wx:else>
-    <view class="header" bind:tap="goProfile">
-      <view class="header-left">
-        <image wx:if="{{user.avatar}}" class="header-avatar" src="{{user.avatar}}" mode="aspectFill" />
-        <view wx:else class="header-avatar header-avatar-default">
-          <t-icon name="user" size="36rpx" color="#ffffff" />
-        </view>
-        <text class="header-title">MFA</text>
-      </view>
-      <view class="header-sub">已保护 {{items.length}} 个账号</view>
-    </view>
-
     <block wx:if="{{items.length > 0}}">
       <view class="toolbar">
         <block wx:if="{{isSortMode}}">
@@ -146,7 +135,13 @@
       <view class="empty-help" bind:tap="onImport">从其它应用导入</view>
     </view>
 
-    <t-fab wx:if="{{!isSortMode && items.length > 0}}" icon="add" bind:click="onFabClick" aria-label="添加账号"></t-fab>
+    <t-fab
+      wx:if="{{!isSortMode && items.length > 0}}"
+      icon="add"
+      style="right: 16px; bottom: calc(86px + env(safe-area-inset-bottom));"
+      bind:click="onFabClick"
+      aria-label="添加账号"
+    ></t-fab>
   </block>
 </view>
 
