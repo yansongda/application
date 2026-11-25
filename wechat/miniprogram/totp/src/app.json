@@ -13,6 +13,23 @@
     "pages/help/index",
     "pages/backup/index"
   ],
+  "tabBar": {
+    "custom": true,
+    "color": "#8c8c8c",
+    "selectedColor": "#5bb43b",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/totp/index",
+        "text": "TOTP"
+      },
+      {
+        "pagePath": "pages/user/index",
+        "text": "我的"
+      }
+    ]
+  },
   "window": {
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#f3f3f3",

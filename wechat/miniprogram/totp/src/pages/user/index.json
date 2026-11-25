@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "个人中心",
+  "navigationBarTitleText": "我的",
   "usingComponents": {
     "app-lock-screen": "/components/lock-screen/index",
     "t-cell": "tdesign-miniprogram/cell/cell",

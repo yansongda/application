@@ -1,0 +1,14 @@
+<view class="tab-bar">
+  <view
+    wx:for="{{ list }}"
+    wx:key="pagePath"
+    class="tab-bar-item {{ selected === item.index ? 'tab-bar-item-active' : '' }}"
+    data-index="{{ item.index }}"
+    bind:tap="onTabTap"
+    aria-role="tab"
+    aria-label="{{ item.text }}"
+  >
+    <t-icon name="{{ item.icon }}" size="46rpx" />
+    <text class="tab-bar-text">{{ item.text }}</text>
+  </view>
+</view>
