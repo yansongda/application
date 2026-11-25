@@ -1,12 +1,12 @@
 import userApi from "@api/user";
 import { clearTokenBundle } from "@utils/app";
-import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
+import { notify } from "@utils/notify";
+import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { clearDirty } from "@utils/security-sync";
 import { clearCache } from "@utils/totp-cache";
 import { clearUserCache } from "@utils/user-cache";
 import { clearViewState } from "@utils/view-state";
-import Message from "tdesign-miniprogram/message/index";
 import Toast, { hideToast } from "tdesign-miniprogram/toast/index";
 
 interface CheckboxChangeEvent {
@@ -22,19 +22,11 @@ Page({
   },
   onShow() {
     // 应用锁守卫：锁定时不发请求，直接渲染遮罩
-    const locked = appLockSyncOnPageShow();
-
-    if (locked !== this.data.locked) {
-      this.setData({ locked });
-    }
-
-    if (locked) {
-      return;
-    }
+    guardOnShow(this);
   },
   // 解锁成功：页面无取数/计时，仅解除锁定
   onUnlocked() {
-    this.setData({ locked: false });
+    guardOnUnlocked(this);
   },
   onCheckChange(e: CheckboxChangeEvent) {
     this.setData({ checked: e.detail.checked === true });
@@ -65,12 +57,7 @@ Page({
     } catch (e) {
       this.setData({ submitting: false });
       hideToast();
-      Message.error({
-        content: `注销失败：${error.getErrorMessage(e)}`,
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, `注销失败：${error.getErrorMessage(e)}`);
 
       return;
     }

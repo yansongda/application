@@ -1,13 +1,12 @@
 import api from "@api/totp";
-import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import { copyText } from "@utils/clipboard";
 import error from "@utils/error";
 import { withLoading } from "@utils/loading";
+import { notify, toast } from "@utils/notify";
+import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { substr } from "@utils/string";
 import { computeSnapshot } from "@utils/totp";
 import { readCache, syncFromRemote, updateItemFields } from "@utils/totp-cache";
-import Message from "tdesign-miniprogram/message/index";
-import Toast from "tdesign-miniprogram/toast/index";
 import type { CacheItem, EditPinnedRequest } from "types/totp";
 import type { Tap } from "types/wechat";
 
@@ -50,13 +49,7 @@ Page({
   },
   onShow() {
     // 应用锁守卫：锁定时不发请求、不启动计时，直接渲染遮罩
-    const locked = appLockSyncOnPageShow();
-
-    if (locked !== this.data.locked) {
-      this.setData({ locked });
-    }
-
-    if (locked) {
+    if (guardOnShow(this)) {
       return;
     }
 
@@ -76,7 +69,7 @@ Page({
   },
   // 解锁成功：重新执行 onShow（重读缓存并重启计时）
   onUnlocked() {
-    this.setData({ locked: false });
+    guardOnUnlocked(this);
     this.onShow();
   },
   // 页面隐藏/卸载时停表；onShow 会重新启动（从缓存重读）。
@@ -204,12 +197,7 @@ Page({
     const ok = await copyText(this.data.code);
 
     if (!ok) {
-      Toast({
-        message: "复制失败",
-        theme: "error",
-        duration: 1500,
-        direction: "column",
-      });
+      toast.error("复制失败", 1500);
     }
   },
   async gotoTag() {
@@ -241,19 +229,7 @@ Page({
       this.item = { ...item, pinned: next };
       this.setData({ pinnedDisplay: next ? "已置顶" : "未置顶" });
     } catch (e: unknown) {
-      Toast({
-        message: "操作失败",
-        theme: "error",
-        duration: 100,
-        direction: "column",
-      });
-
-      Message.error({
-        content: `置顶失败：${error.getErrorMessage(e)}`,
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, `置顶失败：${error.getErrorMessage(e)}`);
     } finally {
       this.pinning = false;
     }
@@ -280,12 +256,7 @@ Page({
     }
   },
   showLoadError() {
-    Toast({
-      message: "加载失败",
-      theme: "error",
-      duration: 100,
-      direction: "column",
-    });
+    toast.error("加载失败", 100);
 
     this.setData({ dialogVisible: true });
   },

@@ -2,7 +2,6 @@ import userApi from "@api/user";
 import { HttpError } from "@models/error";
 import { ensureAuthenticated } from "@utils/app";
 import {
-  syncOnPageShow as appLockSyncOnPageShow,
   setEnabled as setAppLockEnabled,
   VerifyOutcome,
   verify as verifyAppLock,
@@ -10,6 +9,8 @@ import {
 import error from "@utils/error";
 import { withLoading } from "@utils/loading";
 import logger from "@utils/logger";
+import { notify, toast } from "@utils/notify";
+import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import {
   isSupported as isPrivacySupported,
   setEnabled as setPrivacyEnabled,
@@ -20,8 +21,6 @@ import { syncTabBarSelected, TAB_BAR_INDEX } from "@utils/tab-bar";
 import { readCache } from "@utils/totp-cache";
 import { readUserCache, updateUserCache } from "@utils/user-cache";
 import { refreshUser } from "@utils/user-sync";
-import Message from "tdesign-miniprogram/message/index";
-import Toast from "tdesign-miniprogram/toast/index";
 
 interface SwitchChangeEvent {
   detail: { value: boolean };
@@ -98,13 +97,7 @@ Page({
     syncTabBarSelected(this, TAB_BAR_INDEX.user);
 
     // 应用锁守卫：锁定时不发请求，直接渲染遮罩
-    const locked = appLockSyncOnPageShow();
-
-    if (locked !== this.data.locked) {
-      this.setData({ locked });
-    }
-
-    if (locked) {
+    if (guardOnShow(this)) {
       return;
     }
 
@@ -115,13 +108,7 @@ Page({
 
     // 新装/重装：refreshUser 内的端云调和可能刚把 appLock 恢复为 true，
     // 必须在渲染前复核并上锁（否则要等下一个页面才验证）
-    const restoredLocked = appLockSyncOnPageShow();
-
-    if (restoredLocked !== this.data.locked) {
-      this.setData({ locked: restoredLocked });
-    }
-
-    if (restoredLocked) {
+    if (guardOnShow(this)) {
       return;
     }
 
@@ -141,7 +128,7 @@ Page({
   },
   // 解锁成功：解除锁定并重新执行 onShow（重新拉取资料与安全设置）
   onUnlocked() {
-    this.setData({ locked: false });
+    guardOnUnlocked(this);
     this.onShow();
   },
   async gotoNickname() {
@@ -192,20 +179,10 @@ Page({
 
       if (err instanceof HttpError) {
         // 失败保持原头像
-        Message.error({
-          content: `头像更新失败：${error.getErrorMessage(err)}`,
-          duration: 5000,
-          offset: [20, 32],
-          context: this,
-        });
+        notify.error(this, `头像更新失败：${error.getErrorMessage(err)}`);
       } else {
         logger.warning("头像读取失败", err);
-        Message.error({
-          content: "头像读取失败，请重试",
-          duration: 5000,
-          offset: [20, 32],
-          context: this,
-        });
+        notify.error(this, "头像读取失败，请重试");
       }
 
       return;
@@ -215,12 +192,7 @@ Page({
     updateUserCache({ config: { avatar: dataUri } });
     this.setData({ avatar: dataUri });
 
-    Toast({
-      message: "头像已更新",
-      theme: "success",
-      duration: 1500,
-      direction: "column",
-    });
+    toast.success("头像已更新", 1500);
   },
   async avatarToJpegDataUri(tempPath: string): Promise<string> {
     const ext = tempPath.split(".").pop()?.toLowerCase() ?? "";
@@ -278,19 +250,9 @@ Page({
     const next = e.detail.value === true;
 
     if (next && !isPrivacySupported()) {
-      Message.error({
-        content: "当前设备或基础库不支持防截屏",
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, "当前设备或基础库不支持防截屏");
     } else if (!setPrivacyEnabled(next)) {
-      Message.error({
-        content: "防截屏设置保存失败",
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, "防截屏设置保存失败");
     } else {
       flushSecuritySync();
       this.setData({ privacyWindow: next });
@@ -312,12 +274,7 @@ Page({
         return;
       }
 
-      Message.error({
-        content: "应用锁关闭失败，请重试",
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, "应用锁关闭失败，请重试");
       this.setData({ securityRevision: this.data.securityRevision + 1 });
 
       return;
@@ -333,19 +290,9 @@ Page({
         return;
       }
 
-      Message.error({
-        content: "应用锁开启失败，请重试",
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, "应用锁开启失败，请重试");
     } else {
-      Message.error({
-        content: appLockOutcomeMessage(outcome),
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, appLockOutcomeMessage(outcome));
     }
 
     this.setData({ securityRevision: this.data.securityRevision + 1 });

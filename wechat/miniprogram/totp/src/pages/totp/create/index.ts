@@ -1,10 +1,9 @@
 import api from "@api/totp";
-import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import { withLoading } from "@utils/loading";
+import { notify, toast } from "@utils/notify";
+import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { upsertItem } from "@utils/totp-cache";
 import { buildTotpUri, describeOtpError } from "@utils/totp-uri";
-import Message from "tdesign-miniprogram/message/index";
-import Toast from "tdesign-miniprogram/toast/index";
 import type { TotpAlgorithm } from "types/totp";
 import type { FormSubmit } from "types/wechat";
 
@@ -54,19 +53,11 @@ Page({
   submitting: false,
   onShow() {
     // 应用锁守卫：锁定时不发请求，直接渲染遮罩
-    const locked = appLockSyncOnPageShow();
-
-    if (locked !== this.data.locked) {
-      this.setData({ locked });
-    }
-
-    if (locked) {
-      return;
-    }
+    guardOnShow(this);
   },
   // 解锁成功：页面无取数/计时，仅解除锁定
   onUnlocked() {
-    this.setData({ locked: false });
+    guardOnUnlocked(this);
   },
   onIssuerChange(e: ChangeEvent) {
     this.setData({ issuer: e.detail.value });
@@ -120,56 +111,31 @@ Page({
     // @yansongda/miniprogram-otp v2 起 otpauth label 必须有「非空且不含冒号」的 account：
     // 空值 / 含冒号会抛 INVALID_OTPAUTH_URI（该文案面向扫码场景，手动创建时误导），故前置拦截。
     if (account.length === 0) {
-      Toast({
-        message: "请填写用户名",
-        theme: "error",
-        duration: 1500,
-        direction: "column",
-      });
+      toast.error("请填写用户名", 1500);
 
       return;
     }
 
     if (account.includes(":")) {
-      Toast({
-        message: "用户名不能包含冒号",
-        theme: "error",
-        duration: 1500,
-        direction: "column",
-      });
+      toast.error("用户名不能包含冒号", 1500);
 
       return;
     }
 
     if (secret.length === 0) {
-      Toast({
-        message: "请填写密钥",
-        theme: "error",
-        duration: 1500,
-        direction: "column",
-      });
+      toast.error("请填写密钥", 1500);
 
       return;
     }
 
     if (!Number.isInteger(period) || period <= 0) {
-      Toast({
-        message: "周期需为正整数",
-        theme: "error",
-        duration: 1500,
-        direction: "column",
-      });
+      toast.error("周期需为正整数", 1500);
 
       return;
     }
 
     if (digits < 6 || digits > 8) {
-      Toast({
-        message: "位数需在 6 至 8 之间",
-        theme: "error",
-        duration: 1500,
-        direction: "column",
-      });
+      toast.error("位数需在 6 至 8 之间", 1500);
 
       return;
     }
@@ -202,32 +168,14 @@ Page({
         pinned: item.pinned === true,
       });
 
-      Toast({
-        message: "创建成功",
-        theme: "success",
-        duration: 1500,
-        direction: "column",
-        preventScrollThrough: true,
-      });
+      toast.success("创建成功", 1500);
 
       setTimeout(() => wx.navigateBack(), 1500);
     } catch (err: unknown) {
       this.submitting = false;
 
-      Toast({
-        message: "创建失败",
-        theme: "error",
-        duration: 100,
-        direction: "column",
-      });
-
       // buildTotpUri 抛 OtpError；api.create 抛 HttpError —— 文案统一由 describeOtpError 处理
-      Message.error({
-        content: `创建失败：${describeOtpError(err)}`,
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, `创建失败：${describeOtpError(err)}`);
     }
   },
   async cancel() {

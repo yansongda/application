@@ -13,11 +13,7 @@ import {
   parseEnvelope,
 } from "@models/backup";
 import { ensureAuthenticated } from "@utils/app";
-import {
-  syncOnPageShow as appLockSyncOnPageShow,
-  VerifyOutcome,
-  verify as verifyAppLock,
-} from "@utils/app-lock";
+import { VerifyOutcome, verify as verifyAppLock } from "@utils/app-lock";
 import {
   buildBackupFileName,
   readBackupFileFromChat,
@@ -28,9 +24,9 @@ import { copyText, readText } from "@utils/clipboard";
 import { formatLocalDateTime } from "@utils/datetime";
 import error from "@utils/error";
 import logger from "@utils/logger";
+import { notify, toast } from "@utils/notify";
+import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { readCache, syncFromRemote } from "@utils/totp-cache";
-import Message from "tdesign-miniprogram/message/index";
-import Toast from "tdesign-miniprogram/toast/index";
 import type { BackupEnvelope } from "types/backup";
 
 interface InputEvent {
@@ -101,11 +97,7 @@ Page({
   },
 
   async onShow() {
-    const locked = appLockSyncOnPageShow();
-
-    this.setData({ locked });
-
-    if (locked) {
+    if (guardOnShow(this)) {
       this.clearSecrets();
 
       return;
@@ -129,7 +121,7 @@ Page({
   },
 
   onUnlocked() {
-    this.setData({ locked: false });
+    guardOnUnlocked(this);
     this.onShow();
   },
 
@@ -166,24 +158,17 @@ Page({
     const cache = readCache();
 
     if (cache === null || cache.items.length === 0) {
-      Message.warning({
-        content: "没有可导出的账号",
-        duration: 3000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.warning(this, "没有可导出的账号");
 
       return;
     }
 
     // 服务端以数据库为准；本地缓存超限时提前拦截，给出一致文案
     if (cache.items.length > MAX_ITEMS) {
-      Message.warning({
-        content: `单次最多导出 ${MAX_ITEMS} 个账号，请先删除多余账号`,
-        duration: 3000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.warning(
+        this,
+        `单次最多导出 ${MAX_ITEMS} 个账号，请先删除多余账号`,
+      );
 
       return;
     }
@@ -209,12 +194,7 @@ Page({
       outcome !== VerifyOutcome.SUCCESS &&
       outcome !== VerifyOutcome.NO_CREDENTIAL
     ) {
-      Message.warning({
-        content: appLockMessage(outcome) || "身份验证失败，请重试",
-        duration: 3000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.warning(this, appLockMessage(outcome) || "身份验证失败，请重试");
 
       return;
     }
@@ -227,12 +207,7 @@ Page({
     );
 
     if (!strength.ok) {
-      Message.warning({
-        content: strength.reason,
-        duration: 3000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.warning(this, strength.reason);
 
       return;
     }
@@ -262,23 +237,13 @@ Page({
         elapsedMs: Date.now() - startedAt,
       });
 
-      Toast({
-        message: "加密备份已生成",
-        theme: "success",
-        duration: 1500,
-        direction: "column",
-      });
+      toast.success("加密备份已生成", 1500);
     } catch (e: unknown) {
       logger.error("backup_error", {
         stage: "export",
         name: (e as Error)?.name,
       });
-      Message.error({
-        content: error.getErrorMessage(e),
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, error.getErrorMessage(e));
     } finally {
       wx.hideLoading();
       this.busy = false;
@@ -297,12 +262,7 @@ Page({
       await shareBackupFile(file);
     } catch (_e: unknown) {
       logger.warning("backup_export", { channel: "file", result: "failed" });
-      Message.error({
-        content: "发送文件失败，可尝试复制到剪贴板",
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, "发送文件失败，可尝试复制到剪贴板");
     }
   },
 
@@ -318,12 +278,7 @@ Page({
         channel: "clipboard",
         count: this.data.itemsCount,
       });
-      Message.info({
-        content: "导入完成后请清理剪贴板",
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.info(this, "导入完成后请清理剪贴板");
     }
   },
 
@@ -342,12 +297,7 @@ Page({
         summary: "",
       });
     } catch (e: unknown) {
-      Message.error({
-        content: error.getErrorMessage(e),
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, error.getErrorMessage(e));
     }
   },
 
@@ -355,12 +305,7 @@ Page({
     const text = await readText();
 
     if (text === undefined || text.trim().length === 0) {
-      Message.warning({
-        content: "剪贴板没有内容",
-        duration: 3000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.warning(this, "剪贴板没有内容");
 
       return;
     }
@@ -379,12 +324,7 @@ Page({
       this.acceptImportText(file.text, "file");
     } catch (_e: unknown) {
       logger.warning("backup_parse", { channel: "file", result: "failed" });
-      Message.error({
-        content: "读取文件失败",
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, "读取文件失败");
     }
   },
 
@@ -399,12 +339,7 @@ Page({
     const strength = checkImportPassword(this.data.importPassword);
 
     if (!strength.ok) {
-      Message.warning({
-        content: strength.reason,
-        duration: 3000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.warning(this, strength.reason);
 
       return;
     }
@@ -441,23 +376,13 @@ Page({
       });
       this.importEnvelope = undefined;
 
-      Toast({
-        message: `成功导入 ${report} 条`,
-        theme: "success",
-        duration: 2500,
-        direction: "column",
-      });
+      toast.success(`成功导入 ${report} 条`, 2500);
     } catch (e: unknown) {
       logger.error("backup_error", {
         stage: "import",
         name: (e as Error)?.name,
       });
-      Message.error({
-        content: error.getErrorMessage(e),
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, error.getErrorMessage(e));
     } finally {
       wx.hideLoading();
       this.busy = false;
