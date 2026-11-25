@@ -2,12 +2,27 @@ import { TOTP } from "@yansongda/miniprogram-otp";
 import type { TotpAlgorithm } from "types/totp";
 
 const DEFAULT_DIGITS = 6;
+const DEFAULT_PERIOD = 30;
 const DEFAULT_ALGORITHM: TotpAlgorithm = "SHA1";
 
 // 与后端 Totp::digits() 一致：仅 6~8 合法，其余按默认值算码
 // 返回字面量联合，直接满足 @yansongda/miniprogram-otp 的 TotpOptions.digits 契约
 const normalizeDigits = (digits: number | undefined): 6 | 7 | 8 => {
   return digits === 7 || digits === 8 ? digits : DEFAULT_DIGITS;
+};
+
+// 与后端 Totp::period() 一致：仅正整数秒合法。库内部按 floor(ms/1000) % period 计算 step，
+// period 非正整数会直接抛 INVALID_PERIOD，因此脏缓存（0 / 小数 / 非数字）一律回落 30s。
+const normalizePeriod = (period: number | undefined): number => {
+  if (
+    typeof period === "number" &&
+    Number.isSafeInteger(period) &&
+    period > 0
+  ) {
+    return period;
+  }
+
+  return DEFAULT_PERIOD;
 };
 
 // 与后端 Totp::algorithm() 一致：仅 SHA1/SHA256/SHA512 合法，其余按默认值算码
@@ -39,19 +54,20 @@ const getTotpInstance = (
 ): TOTP => {
   const normalizedDigits = normalizeDigits(digits);
   const normalizedAlgorithm = normalizeAlgorithm(algorithm);
-  const key = `${normalizedAlgorithm}:${normalizedDigits}:${period}:${secret}`;
+  const normalizedPeriod = normalizePeriod(period);
+  const key = `${normalizedAlgorithm}:${normalizedDigits}:${normalizedPeriod}:${secret}`;
   const cached = totpInstanceCache.get(key);
 
   if (typeof cached !== "undefined") {
     return cached;
   }
 
-  // 按后端下发的净化值算码；旧缓存/旧后端缺字段时由 normalize* 回退 6 位 + SHA1。
+  // 按后端下发的净化值算码；旧缓存/旧后端缺字段时由 normalize* 回退 6 位 + SHA1 + 30s。
   const instance = new TOTP({
     secret,
     algorithm: normalizedAlgorithm,
     digits: normalizedDigits,
-    period,
+    period: normalizedPeriod,
   });
 
   totpInstanceCache.set(key, instance);
@@ -76,4 +92,4 @@ const computeSnapshot = (
   };
 };
 
-export { clearInstanceCache, computeSnapshot };
+export { clearInstanceCache, computeSnapshot, normalizePeriod };

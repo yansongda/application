@@ -1,5 +1,30 @@
 import { copyText } from "@utils/clipboard";
+import { onSecond } from "@utils/ticker";
 import { computeSnapshot } from "@utils/totp";
+
+// 每实例的 ticker 状态。组件 options 不接受自定义实例属性
+// （miniprogram-api-typings 的 Options 只涵盖 data/properties/methods/lifetimes/…），
+// 因此用 WeakMap 挂在实例上：随实例回收，不进 data（函数不能进 data）。
+interface TickState {
+  off: () => void;
+  failed: boolean;
+}
+
+const tickStates = new WeakMap<object, TickState>();
+
+const stateOf = (host: object): TickState => {
+  const existing = tickStates.get(host);
+
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const created: TickState = { off: () => undefined, failed: false };
+
+  tickStates.set(host, created);
+
+  return created;
+};
 
 Component({
   properties: {
@@ -34,37 +59,53 @@ Component({
   data: {
     code: "",
     remainSeconds: 0,
-    refreshCodeTimeoutIdentity: -1,
-    countdownIntervalIdentity: -1,
   },
 
   lifetimes: {
     attached() {
-      this.computeCode();
-      this.countdownRefresh();
+      this.start();
     },
     detached() {
-      this.clear();
+      this.stop();
+      tickStates.delete(this);
     },
   },
 
   pageLifetimes: {
     show() {
-      this.computeCode();
-      this.countdownRefresh();
+      this.start();
     },
     hide() {
-      this.clear();
+      this.stop();
     },
   },
 
   methods: {
-    computeCode() {
+    // 订阅全局整秒 ticker：N 张卡片共用一个定时器。
+    // 原实现每张卡片各自 setTimeout + setInterval，且倒计时靠本地递减，会随负载漂移。
+    start() {
+      this.stop();
+      this.tick();
+
+      const state = stateOf(this);
+
+      state.off = onSecond(() => this.tick());
+    },
+    stop() {
+      const state = tickStates.get(this);
+
+      if (state === undefined) {
+        return;
+      }
+
+      state.off();
+      state.off = () => undefined;
+    },
+    tick() {
       const secret = this.data.secret;
 
       if (!secret) {
-        this.setData({ code: "------" });
-        this.triggerEvent("message", "验证码计算失败");
+        this.fail();
 
         return;
       }
@@ -79,38 +120,27 @@ Component({
           Date.now(),
         );
 
+        stateOf(this).failed = false;
         this.setData({
           code: snapshot.code,
           remainSeconds: snapshot.remaining,
         });
       } catch (_e: unknown) {
-        this.setData({ code: "------" });
-        this.triggerEvent("message", "验证码计算失败");
+        this.fail();
       }
     },
-    countdownRefresh() {
-      this.clear();
+    // 算码失败只在首次提示：ticker 每秒回调，不去重会变成每秒弹一次
+    fail() {
+      const state = stateOf(this);
 
-      const period = this.data.period ?? 30;
-      // 以 epoch 秒取模对齐周期边界，保证「倒计时归零」与「验证码翻转」在同一
-      // 时刻发生；对任意时区与任意周期均成立。
-      const alignedSeconds = Math.floor(Date.now() / 1000);
-      const remainSeconds = period - (alignedSeconds % period);
+      if (this.data.code !== "------") {
+        this.setData({ code: "------" });
+      }
 
-      this.data.refreshCodeTimeoutIdentity = setTimeout(() => {
-        this.computeCode();
-        this.countdownRefresh();
-      }, remainSeconds * 1000);
-
-      let countdown = remainSeconds;
-      this.setData({ remainSeconds: countdown });
-      this.data.countdownIntervalIdentity = setInterval(() => {
-        countdown--;
-        if (countdown <= 0) {
-          clearInterval(this.data.countdownIntervalIdentity);
-        }
-        this.setData({ remainSeconds: countdown });
-      }, 1000);
+      if (!state.failed) {
+        state.failed = true;
+        this.triggerEvent("message", "验证码计算失败");
+      }
     },
     // 卡片主体点击 → 详情页（验证码区域 catchtap 复制，不会触发本事件）
     detail() {
@@ -141,13 +171,6 @@ Component({
       if (!ok) {
         wx.showToast({ title: "复制失败", icon: "none" });
       }
-    },
-    clear() {
-      clearTimeout(this.data.refreshCodeTimeoutIdentity);
-      this.data.refreshCodeTimeoutIdentity = -1;
-
-      clearInterval(this.data.countdownIntervalIdentity);
-      this.data.countdownIntervalIdentity = -1;
     },
   },
 });

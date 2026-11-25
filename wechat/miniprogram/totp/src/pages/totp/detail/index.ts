@@ -5,6 +5,7 @@ import { withLoading } from "@utils/loading";
 import { notify, toast } from "@utils/notify";
 import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { substr } from "@utils/string";
+import { onSecond } from "@utils/ticker";
 import { computeSnapshot } from "@utils/totp";
 import { readCache, syncFromRemote, updateItemFields } from "@utils/totp-cache";
 import type { CacheItem, EditPinnedRequest } from "types/totp";
@@ -43,7 +44,8 @@ Page({
   response: { issuer: "", username: "" },
   // 计时所需的密钥/周期等字段不参与渲染，挂在实例上避免 setData 无谓重渲染。
   item: null as CacheItem | null,
-  timer: null as number | null,
+  // 整秒 ticker 的退订函数：运行态，不进 data
+  unsubscribe: undefined as (() => void) | undefined,
   pinning: false,
   onLoad(query: Query) {
     this.itemId = query.id || "0";
@@ -73,12 +75,12 @@ Page({
     guardOnUnlocked(this);
     this.onShow();
   },
-  // 页面隐藏/卸载时停表；onShow 会重新启动（从缓存重读）。
+  // 页面隐藏/卸载时退订整秒 ticker；onShow 会重新启动（从缓存重读）。
   onHide() {
-    this.stopTimer();
+    this.stopTicker();
   },
   onUnload() {
-    this.stopTimer();
+    this.stopTicker();
   },
   // 仅在缓存未命中、确实要发请求时出 loading；命中缓存路径不会走到这里
   async loadFromRemote() {
@@ -101,7 +103,7 @@ Page({
     }
   },
   applyItem(item: CacheItem) {
-    this.stopTimer();
+    this.stopTicker();
     this.item = item;
     this.response = { issuer: item.issuer, username: item.username };
     const tags = item.tags ?? [];
@@ -121,9 +123,8 @@ Page({
       },
     });
 
-    // 先立即算一次再起表，避免首秒空白。
-    this.tick();
-    this.scheduleTick();
+    // 立即算一次再订阅整秒 ticker（与列表卡片共用同一个定时器），避免首秒空白。
+    this.startTicker();
   },
   // 一次算出验证码、剩余秒数与进度条百分比
   computeCurrentSnapshot(): Snapshot | null {
@@ -149,22 +150,15 @@ Page({
       progressPercent: (snapshot.remaining / item.period) * 100,
     };
   },
-  scheduleTick() {
-    this.stopTimer();
-
-    // 对齐整秒边界刷新（与列表卡片同策略），避免验证码在周期边界最多滞后 1 秒
-    const delay = 1000 - (Date.now() % 1000);
-
-    this.timer = setTimeout(() => {
-      this.tick();
-      this.scheduleTick();
-    }, delay);
+  // 对齐整秒边界刷新（与列表卡片同策略），避免验证码在周期边界最多滞后 1 秒
+  startTicker() {
+    this.stopTicker();
+    this.tick();
+    this.unsubscribe = onSecond(() => this.tick());
   },
-  stopTimer() {
-    if (this.timer !== null) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
+  stopTicker() {
+    this.unsubscribe?.();
+    this.unsubscribe = undefined;
   },
   tick() {
     const current = this.computeCurrentSnapshot();
