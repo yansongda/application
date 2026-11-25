@@ -6,6 +6,7 @@
  * 存储读写失败静默返回 false：视图状态丢失不影响使用。
  */
 import { STORAGE } from "../constant/app";
+import { collectTags, countPinned } from "./item-filter";
 
 export type ViewFilterKind = "all" | "pinned" | "tag";
 
@@ -64,12 +65,8 @@ const decodeViewState = (raw: unknown): ViewState => {
   return { kind, tag, grouped };
 };
 
-// 选择筛选即退出分组视图（state 参数仅为对齐调用方签名，返回值不依赖入参）
-const applyFilter = (
-  _state: ViewState,
-  kind: ViewFilterKind,
-  tag: string,
-): ViewState => {
+// 选择筛选即退出分组视图（筛选与分组互斥，故不依赖原 state）
+const applyFilter = (kind: ViewFilterKind, tag: string): ViewState => {
   return { kind, tag, grouped: false };
 };
 
@@ -85,33 +82,6 @@ const applyGrouped = (state: ViewState, grouped: boolean): ViewState => {
 // 清空筛选（搜索词不在本模块状态内；分组开关保持现状，与华为 ListViewState.clearFilter 一致）
 const clearFilter = (state: ViewState): ViewState => {
   return { kind: "all", tag: "", grouped: state.grouped };
-};
-
-// 从待渲染条目提取标签（按首次出现顺序去重，空标签忽略）
-const collectTagsFrom = (items: Array<{ tags: string[] }>): string[] => {
-  const tags: string[] = [];
-
-  for (const item of items) {
-    for (const tag of item.tags) {
-      if (tag.length > 0 && !tags.includes(tag)) {
-        tags.push(tag);
-      }
-    }
-  }
-
-  return tags;
-};
-
-const countPinnedFrom = (items: Array<{ pinned: boolean }>): number => {
-  let count = 0;
-
-  for (const item of items) {
-    if (item.pinned) {
-      count++;
-    }
-  }
-
-  return count;
 };
 
 // 刷新后清理已失效的视图状态：标签被删空、置顶项被取消时回到「全部」；
@@ -130,12 +100,12 @@ const syncView = (
   let kind = state.kind;
   let tag = state.tag;
 
-  if (kind === "tag" && !collectTagsFrom(items).includes(tag)) {
+  if (kind === "tag" && !collectTags(items).includes(tag)) {
     kind = "all";
     tag = "";
   }
 
-  if (kind === "pinned" && countPinnedFrom(items) === 0) {
+  if (kind === "pinned" && countPinned(items) === 0) {
     kind = "all";
     tag = "";
   }

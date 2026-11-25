@@ -107,9 +107,7 @@ describe("view-state", () => {
   });
 
   it("applyFilter_exitsGrouped", () => {
-    expect(
-      applyFilter({ kind: "all", tag: "", grouped: true }, "tag", "工作"),
-    ).toEqual({
+    expect(applyFilter("tag", "工作")).toEqual({
       kind: "tag",
       tag: "工作",
       grouped: false,

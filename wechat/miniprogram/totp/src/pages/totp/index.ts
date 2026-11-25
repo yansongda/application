@@ -341,11 +341,7 @@ Page({
       return;
     }
 
-    this.viewState = applyFilter(
-      this.viewState,
-      kind,
-      e.currentTarget.dataset.tag ?? "",
-    );
+    this.viewState = applyFilter(kind, e.currentTarget.dataset.tag ?? "");
     saveViewState(this.viewState);
     this.setData({ menuVisible: false });
     this.recompute();
@@ -514,7 +510,7 @@ Page({
   // ---- 拖拽排序（沿用现有实现：100px 行高、350ms 长按、y/translateY 拖拽）----
   enterSortMode() {
     // 排序作用于完整列表：清空搜索/筛选/分组，落盘「全部 + 平铺」
-    this.viewState = applyFilter(this.viewState, "all", "");
+    this.viewState = applyFilter("all", "");
     saveViewState(this.viewState);
     this.snapshotIds = this.data.items.map((item) => item.id);
 

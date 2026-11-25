@@ -2,12 +2,12 @@
  * 后端加密备份接口（契约见 application-rs/docs/backup-format.md）。
  * 口令只作为本次请求体发送，不进日志；错误码统一映射为可展示文案。
  */
+import { endpoint } from "@api/endpoint";
 import { KIND, PATH } from "@constant/backup";
 import { CODE } from "@constant/error";
 import { HttpError } from "@models/error";
 import error from "@utils/error";
 import http from "@utils/http";
-import logger from "@utils/logger";
 import type { BackupApi, BackupEnvelope, ImportResponse } from "types/backup";
 
 // 服务端 PBKDF2 600k 次迭代，微信默认 5s 超时偏紧
@@ -36,25 +36,22 @@ const describe = (e: unknown): string => {
   return error.getErrorMessage(e);
 };
 
-const exportBackup = async (password: string): Promise<BackupEnvelope> => {
-  try {
-    return await http.post<BackupEnvelope>(
+const exportBackup = endpoint(
+  "导出加密备份失败",
+  CODE.HTTP_API_BACKUP_EXPORT,
+  (password: string) =>
+    http.post<BackupEnvelope>(
       PATH.EXPORT,
       { kind: KIND, password },
       TIMEOUT_MS,
-    );
-  } catch (e: unknown) {
-    logger.error("导出加密备份失败", e);
+    ),
+  describe,
+);
 
-    throw new HttpError(CODE.HTTP_API_BACKUP_EXPORT, describe(e));
-  }
-};
-
-const importBackup = async (
-  backup: BackupEnvelope,
-  password: string,
-): Promise<number> => {
-  try {
+const importBackup = endpoint(
+  "导入加密备份失败",
+  CODE.HTTP_API_BACKUP_IMPORT,
+  async (backup: BackupEnvelope, password: string): Promise<number> => {
     const result = await http.post<ImportResponse>(
       PATH.IMPORT,
       { kind: KIND, password, backup },
@@ -62,12 +59,9 @@ const importBackup = async (
     );
 
     return result.imported;
-  } catch (e: unknown) {
-    logger.error("导入加密备份失败", e);
-
-    throw new HttpError(CODE.HTTP_API_BACKUP_IMPORT, describe(e));
-  }
-};
+  },
+  describe,
+);
 
 // 按契约标注：接口签名变化时本文件会编译失败，避免与编排层/页面漂移
 const backupApi: BackupApi = { exportBackup, importBackup };
