@@ -2,7 +2,7 @@ import api from "@api/totp";
 import { withLoading } from "@utils/loading";
 import { notify, toast } from "@utils/notify";
 import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
-import { upsertItem } from "@utils/totp-cache";
+import { toCacheItem, upsertItem } from "@utils/totp-cache";
 import { buildTotpUri, describeOtpError } from "@utils/totp-uri";
 import type { TotpAlgorithm } from "types/totp";
 import type { FormSubmit } from "types/wechat";
@@ -150,17 +150,7 @@ Page({
       const item = await withLoading("创建中...", () => api.create(uri));
 
       // 直接用 create 响应（服务端入库值）写缓存，避免前端二次解析 URI。
-      upsertItem({
-        id: item.id,
-        issuer: item.issuer,
-        username: item.username,
-        secret: item.config.secret,
-        period: item.config.period,
-        digits: item.config.digits,
-        algorithm: item.config.algorithm,
-        tags: item.tags ?? [],
-        pinned: item.pinned === true,
-      });
+      upsertItem(toCacheItem(item));
 
       toast.success("创建成功", 1500);
 

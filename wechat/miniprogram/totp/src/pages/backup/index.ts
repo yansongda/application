@@ -23,6 +23,7 @@ import {
 import { copyText, readText } from "@utils/clipboard";
 import { formatLocalDateTime } from "@utils/datetime";
 import error from "@utils/error";
+import { withLoading } from "@utils/loading";
 import logger from "@utils/logger";
 import { notify, toast } from "@utils/notify";
 import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
@@ -215,10 +216,10 @@ Page({
     this.busy = true;
     const startedAt = Date.now();
 
-    wx.showLoading({ title: "正在加密...", mask: true });
-
     try {
-      const result = await buildExport(backupApi, password);
+      const result = await withLoading("正在加密...", () =>
+        buildExport(backupApi, password),
+      );
 
       this.exportText = result.text;
       this.exportFileName = buildBackupFileName();
@@ -245,7 +246,6 @@ Page({
       });
       notify.error(this, error.getErrorMessage(e));
     } finally {
-      wx.hideLoading();
       this.busy = false;
     }
   },
@@ -347,12 +347,9 @@ Page({
     this.busy = true;
     const startedAt = Date.now();
 
-    wx.showLoading({ title: "正在导入...", mask: true });
-
     try {
-      const report = await backupApi.importBackup(
-        envelope,
-        this.data.importPassword,
+      const report = await withLoading("正在导入...", () =>
+        backupApi.importBackup(envelope, this.data.importPassword),
       );
 
       logger.info("backup_import", {
@@ -384,7 +381,6 @@ Page({
       });
       notify.error(this, error.getErrorMessage(e));
     } finally {
-      wx.hideLoading();
       this.busy = false;
     }
   },

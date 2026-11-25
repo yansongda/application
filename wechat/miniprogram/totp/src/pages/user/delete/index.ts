@@ -1,13 +1,14 @@
 import userApi from "@api/user";
 import { clearTokenBundle } from "@utils/app";
 import error from "@utils/error";
+import { withLoading } from "@utils/loading";
 import { notify } from "@utils/notify";
 import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { clearDirty } from "@utils/security-sync";
+import { clearInstanceCache } from "@utils/totp";
 import { clearCache } from "@utils/totp-cache";
 import { clearUserCache } from "@utils/user-cache";
 import { clearViewState } from "@utils/view-state";
-import Toast, { hideToast } from "tdesign-miniprogram/toast/index";
 
 interface CheckboxChangeEvent {
   detail: { checked: boolean };
@@ -44,27 +45,19 @@ Page({
   async onDialogConfirm() {
     this.setData({ dialogVisible: false, submitting: true });
 
-    Toast({
-      message: "注销中...",
-      theme: "loading",
-      duration: 10000,
-      direction: "column",
-      preventScrollThrough: true,
-    });
-
     try {
-      await userApi.deleteUser();
+      await withLoading("注销中...", () => userApi.deleteUser());
     } catch (e) {
       this.setData({ submitting: false });
-      hideToast();
       notify.error(this, `注销失败：${error.getErrorMessage(e)}`);
 
       return;
     }
 
-    // 按序清理本地登录态 / TOTP 缓存 / 用户缓存 / 视图状态 / 安全脏标记（设备级设置保留）
+    // 按序清理本地登录态 / TOTP 缓存与算码实例 / 用户缓存 / 视图状态 / 安全脏标记（设备级设置保留）
     clearTokenBundle();
     clearCache();
+    clearInstanceCache();
     clearUserCache();
     clearViewState();
     clearDirty();
