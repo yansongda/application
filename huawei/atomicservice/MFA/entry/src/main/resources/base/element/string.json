@@ -73,6 +73,10 @@
       "value": "用户名"
     },
     {
+      "name": "index_username_colon_error",
+      "value": "用户名不能包含冒号"
+    },
+    {
       "name": "index_page_config_information",
       "value": "配置信息"
     },

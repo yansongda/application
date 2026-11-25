@@ -157,6 +157,15 @@ struct EditText {
     // 输入为空时回退到默认文案，避免把空值提交给服务端
     const value = this.draft.length > 0 ? this.draft : this.fallbackValue();
 
+    // 用户名是 otpauth label 的 account 来源：含冒号会产出无法再导入的二维码
+    // （@yansongda/otp 2.0.0 把 label 里的 %3A 当作分隔符），与手动创建页保持同一约束；
+    // 发行方只进 query 参数，不受此限
+    if (!this.isIssuer && value.includes(':')) {
+      Toast.show({ message: $r('app.string.index_username_colon_error') });
+
+      return;
+    }
+
     hilog.info(LogDomain.PAGES, this.logPage(), '修改后的值: %{public}s', value);
 
     try {
