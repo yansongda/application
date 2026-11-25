@@ -24,6 +24,7 @@ import {
   readCache,
   removeItem,
   syncFromRemote,
+  toCacheItem,
   updateItemFields,
   upsertItem,
 } from "@utils/totp-cache";
@@ -414,15 +415,7 @@ Page({
 
       // 直接用 create 响应（即服务端入库值）乐观写入缓存，
       // 避免前端二次解析 URI 与后端 from_url_unchecked 的语义差异。
-      upsertItem({
-        id: item.id,
-        issuer: item.issuer,
-        username: item.username,
-        secret: item.config.secret,
-        period: item.config.period,
-        digits: item.config.digits,
-        algorithm: item.config.algorithm,
-      });
+      upsertItem(toCacheItem(item));
 
       toast.success("添加成功", 100);
 

@@ -1,7 +1,7 @@
 import api from "@api/totp";
 import { STORAGE } from "@constant/app";
 import logger from "@utils/logger";
-import type { CacheItem, TotpCache } from "types/totp";
+import type { CacheItem, Item, TotpCache } from "types/totp";
 
 // 读取时归一化：tags 过滤空串、缺省 []；pinned 缺省 false（旧版本缓存无这两个字段）
 const normalizeCacheItem = (item: CacheItem): CacheItem => {
@@ -123,11 +123,10 @@ const applySort = (orderedIds: string[]): void => {
   writeCache(cache);
 };
 
-const syncFromRemote = async (): Promise<TotpCache> => {
-  // /all 响应已携带 config.secret（PR #162 review 方案 A），单接口完成同步。
-  const items = await api.all();
-
-  const cacheItems: CacheItem[] = items.map((item) => ({
+// 后端条目 → 本地缓存条目：/all 同步、扫码创建、手动创建共用的唯一映射点，
+// 避免三处各自展开 config.secret / digits / algorithm 后出现字段漂移。
+const toCacheItem = (item: Item): CacheItem => {
+  return {
     id: item.id,
     issuer: item.issuer,
     username: item.username,
@@ -139,10 +138,15 @@ const syncFromRemote = async (): Promise<TotpCache> => {
     // tags/pinned 以服务端为准；旧后端缺省 [] / false
     tags: item.tags ?? [],
     pinned: item.pinned === true,
-  }));
+  };
+};
+
+const syncFromRemote = async (): Promise<TotpCache> => {
+  // /all 响应已携带 config.secret（PR #162 review 方案 A），单接口完成同步。
+  const items = await api.all();
 
   const cache: TotpCache = {
-    items: cacheItems,
+    items: items.map(toCacheItem),
   };
 
   writeCache(cache);
@@ -161,6 +165,7 @@ export {
   readCache,
   removeItem,
   syncFromRemote,
+  toCacheItem,
   updateItemFields,
   upsertItem,
   writeCache,

@@ -26,6 +26,11 @@ const normalizeAlgorithm = (algorithm: string | undefined): TotpAlgorithm => {
 // 键为 `${algorithm}:${digits}:${period}:${secret}`，条目数随用户密钥数增长，量级有限。
 const totpInstanceCache = new Map<string, TOTP>();
 
+// 注销账号 / 清空本地缓存时必须调用：实例持有明文 secret，缓存清空后内存里不应继续留存。
+const clearInstanceCache = (): void => {
+  totpInstanceCache.clear();
+};
+
 const getTotpInstance = (
   secret: string,
   period: number,
@@ -71,4 +76,4 @@ const computeSnapshot = (
   };
 };
 
-export { computeSnapshot };
+export { clearInstanceCache, computeSnapshot };
