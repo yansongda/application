@@ -28,7 +28,6 @@ Page({
   data: {
     locked: false,
     dialogVisible: false,
-    id: "0",
     code: "",
     remaining: 0,
     progressPercent: 0,
@@ -38,6 +37,8 @@ Page({
     pinnedDisplay: "未置顶",
     config: { period: 30, digits: 6, algorithm: "SHA1" },
   },
+  // 条目 id 不参与渲染：挂在实例属性上，避免无意义的 setData 与 data 直接改写
+  itemId: "0",
   // gotoEdit 仅依赖 issuer/username 传参，故 response 只需这两个字段。
   response: { issuer: "", username: "" },
   // 计时所需的密钥/周期等字段不参与渲染，挂在实例上避免 setData 无谓重渲染。
@@ -45,7 +46,7 @@ Page({
   timer: null as number | null,
   pinning: false,
   onLoad(query: Query) {
-    this.data.id = query.id || "0";
+    this.itemId = query.id || "0";
   },
   onShow() {
     // 应用锁守卫：锁定时不发请求、不启动计时，直接渲染遮罩
@@ -54,7 +55,7 @@ Page({
     }
 
     const item = readCache()?.items.find(
-      (cacheItem) => cacheItem.id === this.data.id,
+      (cacheItem) => cacheItem.id === this.itemId,
     );
 
     if (typeof item !== "undefined") {
@@ -85,7 +86,7 @@ Page({
       await withLoading("加载中...", () => syncFromRemote());
 
       const fresh = readCache()?.items.find(
-        (cacheItem) => cacheItem.id === this.data.id,
+        (cacheItem) => cacheItem.id === this.itemId,
       );
 
       if (typeof fresh === "undefined") {
@@ -106,7 +107,6 @@ Page({
     const tags = item.tags ?? [];
 
     this.setData({
-      id: item.id,
       code: "",
       remaining: 0,
       progressPercent: 0,
@@ -204,7 +204,7 @@ Page({
     const tags = this.item?.tags ?? [];
 
     await wx.navigateTo({
-      url: `/pages/totp/tag/index?id=${encodeURIComponent(this.data.id)}&tag=${encodeURIComponent(tags[0] ?? "")}`,
+      url: `/pages/totp/tag/index?id=${encodeURIComponent(this.itemId)}&tag=${encodeURIComponent(tags[0] ?? "")}`,
     });
   },
   async togglePinned() {
@@ -221,11 +221,11 @@ Page({
     try {
       await withLoading("处理中...", () =>
         api.editPinned({
-          id: this.data.id,
+          id: this.itemId,
           pinned: next,
         } as EditPinnedRequest),
       );
-      updateItemFields(this.data.id, { pinned: next });
+      updateItemFields(this.itemId, { pinned: next });
       this.item = { ...item, pinned: next };
       this.setData({ pinnedDisplay: next ? "已置顶" : "未置顶" });
     } catch (e: unknown) {
@@ -242,10 +242,10 @@ Page({
 
     switch (e.currentTarget.dataset.type) {
       case "issuer":
-        url = `/pages/totp/edit/issuer?id=${this.data.id}&issuer=${encodeURIComponent(this.response.issuer)}`;
+        url = `/pages/totp/edit/issuer?id=${this.itemId}&issuer=${encodeURIComponent(this.response.issuer)}`;
         break;
       case "username":
-        url = `/pages/totp/edit/username?id=${this.data.id}&username=${encodeURIComponent(this.response.username)}`;
+        url = `/pages/totp/edit/username?id=${this.itemId}&username=${encodeURIComponent(this.response.username)}`;
         break;
       default:
         break;

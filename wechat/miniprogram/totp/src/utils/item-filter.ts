@@ -173,7 +173,7 @@ const groupItems = (items: ItemView[]): ItemGroupView[] => {
 };
 
 // 标签列表：按首次出现顺序去重，空标签忽略
-const collectTags = (items: ItemView[]): string[] => {
+const collectTags = (items: Array<{ tags: string[] }>): string[] => {
   const tags: string[] = [];
 
   for (const item of items) {
@@ -189,7 +189,7 @@ const collectTags = (items: ItemView[]): string[] => {
 
 // 标签 → 条目数（首次出现顺序）：一次遍历算完，供菜单一次性渲染。
 // 同一 item 内的重复标签只计一次；只有一次数组遍历，标签多时不会 O(tag × item) 反复扫全量
-const collectTagStats = (items: ItemView[]): TagStat[] => {
+const collectTagStats = (items: Array<{ tags: string[] }>): TagStat[] => {
   const order: string[] = [];
   const counts = new Map<string, number>();
 
@@ -223,7 +223,7 @@ const collectTagStats = (items: ItemView[]): TagStat[] => {
   return stats;
 };
 
-const countPinned = (items: ItemView[]): number => {
+const countPinned = (items: Array<{ pinned: boolean }>): number => {
   let count = 0;
 
   for (const item of items) {

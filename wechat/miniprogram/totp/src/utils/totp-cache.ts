@@ -1,8 +1,7 @@
+import api from "@api/totp";
 import { STORAGE } from "@constant/app";
-import { PATH } from "@constant/totp";
-import http from "@utils/http";
 import logger from "@utils/logger";
-import type { CacheItem, Item, TotpCache } from "types/totp";
+import type { CacheItem, TotpCache } from "types/totp";
 
 // 读取时归一化：tags 过滤空串、缺省 []；pinned 缺省 false（旧版本缓存无这两个字段）
 const normalizeCacheItem = (item: CacheItem): CacheItem => {
@@ -126,7 +125,7 @@ const applySort = (orderedIds: string[]): void => {
 
 const syncFromRemote = async (): Promise<TotpCache> => {
   // /all 响应已携带 config.secret（PR #162 review 方案 A），单接口完成同步。
-  const items = await http.post<Item[]>(PATH.ALL, {});
+  const items = await api.all();
 
   const cacheItems: CacheItem[] = items.map((item) => ({
     id: item.id,

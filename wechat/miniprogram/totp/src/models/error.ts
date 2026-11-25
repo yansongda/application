@@ -1,5 +1,4 @@
 import { CODE, MESSAGE } from "@constant/error";
-import type { RequestData, RequestHeaders, RequestQuery } from "types/http";
 
 /**
  * 自建错误统一基类：保留 Error 语义（stack / name / instanceof），code 域由子类决定。
@@ -28,20 +27,7 @@ export class EE extends AppError<number> {
   }
 }
 
-export class WeixinError extends EE {
-  constructor(code?: number, message?: string) {
-    super(code || CODE.WEIXIN, message);
-    this.name = "WeixinError";
-  }
-}
-
 export class HttpError extends EE {
-  url?: string;
-  headers?: RequestHeaders;
-  query?: RequestQuery;
-  data?: RequestData;
-  timeout?: number;
-
   constructor(code?: number, message?: string) {
     super(code || CODE.HTTP, message);
     this.name = "HttpError";

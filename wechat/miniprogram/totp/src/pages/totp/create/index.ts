@@ -134,12 +134,6 @@ Page({
       return;
     }
 
-    if (digits < 6 || digits > 8) {
-      toast.error("位数需在 6 至 8 之间", 1500);
-
-      return;
-    }
-
     this.submitting = true;
 
     try {

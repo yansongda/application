@@ -8,7 +8,7 @@ import {
   BackupParseError,
   BackupParseErrorCode,
 } from "../../src/models/backup";
-import { AppError, EE, HttpError, WeixinError } from "../../src/models/error";
+import { AppError, EE, HttpError } from "../../src/models/error";
 import error from "../../src/utils/error";
 
 describe("error models", () => {
@@ -43,15 +43,6 @@ describe("error models", () => {
 
     expect(e.code).toBe(424242);
     expect(e.message).toBe(MESSAGE[CODE.UNKNOWN]);
-  });
-
-  it("keeps_weixin_error_default_code_and_name", () => {
-    const e = new WeixinError();
-
-    expect(e.code).toBe(CODE.WEIXIN);
-    expect(e.message).toBe(MESSAGE[CODE.WEIXIN]);
-    expect(e.name).toBe("WeixinError");
-    expect(e instanceof EE).toBe(true);
   });
 
   it("shares_the_base_class_across_code_domains", () => {

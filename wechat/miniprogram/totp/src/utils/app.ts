@@ -29,27 +29,8 @@ const wxLogin = (): Promise<string> => {
 };
 
 /**
- * Reads and parses the token bundle from storage.
- */
-const getTokenBundle = (): LoginResponse | null => {
-  const raw = wx.getStorageSync(STORAGE.TOKEN_BUNDLE) as
-    | StoredBundle
-    | undefined
-    | "";
-
-  if (!raw || typeof raw !== "object" || !raw.access_token) {
-    return null;
-  }
-
-  return {
-    access_token: raw.access_token,
-    refresh_token: raw.refresh_token,
-    expired_in: raw.expired_in,
-  };
-};
-
-/**
- * Returns the stored bundle with expired_at, or null.
+ * Returns the stored bundle (with expired_at), or null when absent / malformed.
+ * 唯一读盘入口：其余读取一律基于它推导，避免同一份校验逻辑写两遍。
  */
 const getStoredBundle = (): StoredBundle | null => {
   const raw = wx.getStorageSync(STORAGE.TOKEN_BUNDLE) as
@@ -62,6 +43,23 @@ const getStoredBundle = (): StoredBundle | null => {
   }
 
   return raw;
+};
+
+/**
+ * The token bundle as exposed to callers (without expired_at).
+ */
+const getTokenBundle = (): LoginResponse | null => {
+  const bundle = getStoredBundle();
+
+  if (bundle === null) {
+    return null;
+  }
+
+  return {
+    access_token: bundle.access_token,
+    refresh_token: bundle.refresh_token,
+    expired_in: bundle.expired_in,
+  };
 };
 
 /**
