@@ -1,11 +1,10 @@
 import api from "@api/totp";
-import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
 import { collectTags, type ItemView } from "@utils/item-filter";
 import { withLoading } from "@utils/loading";
+import { notify, toast } from "@utils/notify";
+import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { readCache, updateItemFields } from "@utils/totp-cache";
-import Message from "tdesign-miniprogram/message/index";
-import Toast from "tdesign-miniprogram/toast/index";
 import type { EditTagsRequest } from "types/totp";
 
 interface Query {
@@ -40,19 +39,11 @@ Page({
   saving: false,
   onShow() {
     // 应用锁守卫：锁定时不发请求，直接渲染遮罩
-    const locked = appLockSyncOnPageShow();
-
-    if (locked !== this.data.locked) {
-      this.setData({ locked });
-    }
-
-    if (locked) {
-      return;
-    }
+    guardOnShow(this);
   },
   // 解锁成功：页面无取数/计时，仅解除锁定
   onUnlocked() {
-    this.setData({ locked: false });
+    guardOnUnlocked(this);
   },
   onLoad(query: Query) {
     const tag = query.tag ? decodeURIComponent(query.tag) : "";
@@ -102,31 +93,13 @@ Page({
       );
       updateItemFields(this.data.id, { tags });
 
-      Toast({
-        message: "保存成功",
-        theme: "success",
-        duration: 1500,
-        direction: "column",
-        preventScrollThrough: true,
-      });
+      toast.success("保存成功", 1500);
 
       setTimeout(() => wx.navigateBack(), 1500);
     } catch (err: unknown) {
       this.saving = false;
 
-      Toast({
-        message: "保存失败",
-        theme: "error",
-        duration: 100,
-        direction: "column",
-      });
-
-      Message.error({
-        content: `保存失败：${error.getErrorMessage(err)}`,
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, `保存失败：${error.getErrorMessage(err)}`);
     }
   },
   async cancel() {

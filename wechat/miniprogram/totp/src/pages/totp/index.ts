@@ -1,6 +1,5 @@
 import api from "@api/totp";
 import { ensureAuthenticated, isAccessTokenFresh } from "@utils/app";
-import { syncOnPageShow as appLockSyncOnPageShow } from "@utils/app-lock";
 import error from "@utils/error";
 import {
   collectTagStats,
@@ -15,6 +14,8 @@ import {
 } from "@utils/item-filter";
 import { withLoading } from "@utils/loading";
 import logger from "@utils/logger";
+import { notify, toast } from "@utils/notify";
+import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { hasSettings } from "@utils/security";
 import { substr } from "@utils/string";
 import { syncTabBarSelected, TAB_BAR_INDEX } from "@utils/tab-bar";
@@ -42,8 +43,6 @@ import {
   syncView,
   type ViewFilterKind,
 } from "@utils/view-state";
-import Message from "tdesign-miniprogram/message/index";
-import Toast from "tdesign-miniprogram/toast/index";
 import type {
   CacheItem,
   EditPinnedRequest,
@@ -133,13 +132,7 @@ Page({
     syncTabBarSelected(this, TAB_BAR_INDEX.totp);
 
     // 应用锁守卫：锁定时不发请求、不启动计时，直接渲染遮罩
-    const locked = appLockSyncOnPageShow();
-
-    if (locked !== this.data.locked) {
-      this.setData({ locked });
-    }
-
-    if (locked) {
+    if (guardOnShow(this)) {
       return;
     }
 
@@ -156,12 +149,7 @@ Page({
         await withLoading("登录中...", () => ensureAuthenticated());
       }
     } catch {
-      Toast({
-        message: "登录失败",
-        theme: "error",
-        duration: 100,
-        direction: "column",
-      });
+      toast.error("登录失败", 100);
 
       this.setData({ isError: true });
 
@@ -173,9 +161,7 @@ Page({
     if (!hasSettings()) {
       await refreshUser();
 
-      if (appLockSyncOnPageShow()) {
-        this.setData({ locked: true });
-
+      if (guardOnShow(this)) {
         return;
       }
     }
@@ -190,7 +176,7 @@ Page({
   },
   // 解锁成功：解除锁定并重新执行 onShow（恢复取数与计时）
   onUnlocked() {
-    this.setData({ locked: false });
+    guardOnUnlocked(this);
     this.onShow();
   },
   retry() {
@@ -219,12 +205,7 @@ Page({
           // 无本地缓存兜底：显示错误态与重试按钮
           this.setData({ isError: true });
 
-          Message.error({
-            content: `加载失败：${error.getErrorMessage(e)}`,
-            duration: 5000,
-            offset: [20, 32],
-            context: this,
-          });
+          notify.error(this, `加载失败：${error.getErrorMessage(e)}`);
         } else {
           // 已有本地缓存兜底：保持缓存渲染，静默降级。
           logger.warning("同步 TOTP 列表失败，已使用本地缓存渲染", e);
@@ -427,12 +408,7 @@ Page({
     } catch (e: unknown) {
       this.setData({ isCreating: false });
 
-      Message.error({
-        content: describeOtpError(e),
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, describeOtpError(e));
 
       return;
     }
@@ -452,21 +428,11 @@ Page({
         algorithm: item.config.algorithm,
       });
 
-      Toast({
-        message: "添加成功",
-        theme: "success",
-        duration: 100,
-        direction: "column",
-      });
+      toast.success("添加成功", 100);
 
       this.loadItems();
     } catch (e: unknown) {
-      Message.error({
-        content: `添加失败：${error.getErrorMessage(e)}`,
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, `添加失败：${error.getErrorMessage(e)}`);
     } finally {
       this.setData({ isCreating: false });
     }
@@ -486,21 +452,11 @@ Page({
       );
       updateItemFields(id, { pinned });
 
-      Toast({
-        message: pinned ? "已置顶" : "已取消置顶",
-        theme: "success",
-        duration: 100,
-        direction: "column",
-      });
+      toast.success(pinned ? "已置顶" : "已取消置顶", 100);
 
       this.recompute();
     } catch (err: unknown) {
-      Message.error({
-        content: `置顶失败：${error.getErrorMessage(err)}`,
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, `置顶失败：${error.getErrorMessage(err)}`);
     } finally {
       this.pinning = false;
     }
@@ -523,12 +479,7 @@ Page({
     this.setData({ dialogVisible: true, currentItemId });
   },
   itemMessage(e: ItemMessageEvent) {
-    Message.error({
-      content: e.detail,
-      duration: 5000,
-      offset: [20, 32],
-      context: this,
-    });
+    notify.error(this, e.detail);
   },
   async dialogConfirm() {
     if (this.deleting) {
@@ -546,12 +497,7 @@ Page({
       removeItem(id);
       this.recompute();
     } catch (e: unknown) {
-      Message.error({
-        content: `删除失败：${error.getErrorMessage(e)}`,
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, `删除失败：${error.getErrorMessage(e)}`);
     } finally {
       this.deleting = false;
       this.setData({ currentItemId: "0" });
@@ -696,12 +642,7 @@ Page({
 
       this.recompute();
 
-      Message.error({
-        content: `排序失败：${error.getErrorMessage(e)}`,
-        duration: 5000,
-        offset: [20, 32],
-        context: this,
-      });
+      notify.error(this, `排序失败：${error.getErrorMessage(e)}`);
     }
   },
   onPullDownRefresh() {
