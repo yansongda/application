@@ -144,6 +144,15 @@ struct Index {
                 return;
               }
 
+              // @yansongda/otp 2.0.0 起 otpauth label 的 account 必须非空且不含冒号：
+              // 用户名含冒号会被 encodeURIComponent 编码成 %3A，而库把 label 里的 %3A 当作分隔符，
+              // 产出的二维码无法再被导入（与微信端同一约束），故提交前拦截
+              if (this.username.includes(':')) {
+                Toast.show({ message: $r('app.string.index_username_colon_error') });
+
+                return;
+              }
+
               const period = Number(this.period);
 
               if (!Number.isInteger(period) || period <= 0) {

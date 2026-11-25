@@ -6,6 +6,6 @@
   "author": "",
   "license": "",
   "dependencies": {
-    "@yansongda/otp": "^1.1.0"
+    "@yansongda/otp": "^2.0.0"
   }
 }
