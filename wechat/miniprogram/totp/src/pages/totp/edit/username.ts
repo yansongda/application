@@ -1,7 +1,5 @@
 import api from "@api/totp";
-import error from "@utils/error";
-import { withLoading } from "@utils/loading";
-import { notify, toast } from "@utils/notify";
+import { submitEditField } from "@utils/edit-field";
 import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { updateItemFields } from "@utils/totp-cache";
 import type { EditUsernameRequest } from "types/totp";
@@ -37,31 +35,15 @@ Page({
     });
   },
   async submit(e: FormSubmit<FormData>) {
-    const username = e.detail.value.username.trim();
-
-    // 空值不提交：提示后返回，不发请求。
-    if (username.length === 0) {
-      toast.error("账号名称不能为空", 1500);
-
-      return;
-    }
-
-    try {
-      await withLoading("更新中...", () =>
-        api.editUsername({
-          id: this.data.id,
-          username,
-        } as EditUsernameRequest),
-      );
-
-      updateItemFields(this.data.id, { username });
-
-      toast.success("修改成功", 1500);
-
-      setTimeout(() => wx.navigateBack(), 1500);
-    } catch (e: unknown) {
-      notify.error(this, `更新失败：${error.getErrorMessage(e)}`);
-    }
+    await submitEditField({
+      host: this,
+      id: this.data.id,
+      value: e.detail.value.username.trim(),
+      emptyMessage: "账号名称不能为空",
+      submit: (id, username) =>
+        api.editUsername({ id, username } as EditUsernameRequest),
+      onSaved: (username) => updateItemFields(this.data.id, { username }),
+    });
   },
   async cancel() {
     await wx.navigateBack();
