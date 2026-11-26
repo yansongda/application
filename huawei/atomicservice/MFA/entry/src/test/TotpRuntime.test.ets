@@ -8,9 +8,10 @@ import {
   normalizeAlgorithm,
   normalizeConfig,
   normalizeDigits,
-  normalizePeriod
-} from '../main/ets/utils/TotpParams';
-import { remainingOf, stepOf, TotpWindow, windowOf } from '../main/ets/utils/TotpProgress';
+  normalizePeriod,
+  remainingOf,
+  stepOf
+} from '../main/ets/utils/Totp';
 import { AlignedTicker, TimerSource } from '../main/ets/utils/Ticker';
 
 // 时钟基准（2023-11-15T06:13:20Z）：与真实时区无关，所有断言都是相对值
@@ -172,15 +173,6 @@ export default function totpRuntimeTest(): void {
       const offset: number = 19800000; // +05:30
 
       expect(remainingOf(NOW, period)).assertEqual(remainingOf(NOW + offset, period));
-    });
-
-    it('window_ratio_moves_forward', 0, () => {
-      const start: TotpWindow = windowOf(NOW, 30);
-      const middle: TotpWindow = windowOf(NOW + (start.remaining - 15) * 1000, 30);
-
-      expect(start.ratio).assertEqual(0);
-      expect(middle.ratio > 0).assertTrue();
-      expect(middle.ratio < 1).assertTrue();
     });
   });
 

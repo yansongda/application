@@ -24,7 +24,7 @@ export interface IItemConfig {
 }
 
 // 归一化后的条目配置：**每个字段都是确定值**（无 undefined / 无脏值）。
-// 归一化唯一入口是 `utils/TotpParams.ets#normalizeConfig`；模型内只存这个形态，
+// 归一化唯一入口是 `utils/Totp.ets#normalizeConfig`；模型内只存这个形态，
 // 因此 UI 与算码逻辑里**不得**再出现 `?? 30` / `?? 6` / `typeof === 'number'` 之类兜底。
 // secret 仍为可选：缺失表示「本端不可算码，须回退服务端」。
 export interface NormConfig {

@@ -3,7 +3,7 @@
 // 与历史实现的差别（PR 重构要点）：
 // - 不再有 `setInterval`/`setTimeout`/`start`/`stop`/`resume`：时间来自全局 `TotpClock`，
 //   倒计时（`remaining`）是 `nowMs` 的**纯派生值**，没有「每秒本地递减的计数」可漂移；
-// - 配置进模型时一次性归一化（`utils/TotpParams.ets#normalizeConfig`），下游不再兜底默认值；
+// - 配置进模型时一次性归一化（`utils/Totp.ets#normalizeConfig`），下游不再兜底默认值；
 // - 端内算码失败**不在这里提示、不在这里请求服务端**：返回 `RefreshOutcome.NEED_SERVER`，
 //   由 `ItemsRuntime` 汇总成一次批量回退（N 条失败 = 1 个请求、1 条提示），
 //   模型层因此不依赖 `Toast` / `api/*`，可以直接单测。
@@ -11,8 +11,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { TOTP } from '@yansongda/otp';
 import { LogDomain } from '../../App';
 import { IItem, IItemConfig, NormConfig } from '../../types/Item';
-import { DEFAULT_PERIOD, normalizeConfig } from '../../utils/TotpParams';
-import { remainingOf, stepOf } from '../../utils/TotpProgress';
+import { DEFAULT_PERIOD, normalizeConfig, remainingOf, stepOf } from '../../utils/Totp';
 import { TotpClock } from './TotpClock';
 
 const TAG: string = 'models/runtime';

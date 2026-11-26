@@ -1,7 +1,7 @@
 // 秒级统一 ticker 的**调度逻辑**（定时器注入，无 ArkUI 依赖，可在 `entry/src/test` 单测）。
 //
 // 不变量（改动前请确认）：
-// - **粒度 1s**：前提是所有 TOTP 周期都是正整数秒（见 `utils/TotpParams.ets#normalizePeriod`）。
+// - **粒度 1s**：前提是所有 TOTP 周期都是正整数秒（见 `utils/Totp.ets#normalizePeriod`）。
 // - 用递归 `schedule(delay)` **对齐整秒边界**（delay = periodMs - now % periodMs），
 //   不能用朴素 `setInterval(periodMs)`：定时器实际间隔只会 ≥ 请求值，朴素写法会累积漂移，
 //   表现为「倒计时归零」与「验证码翻转」逐渐错开。
