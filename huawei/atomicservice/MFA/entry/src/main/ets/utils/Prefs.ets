@@ -67,23 +67,6 @@ export class Prefs {
     return Prefs.rawOpen(context, type, true);
   }
 
-  static getString(p: PrefsInstance | undefined, key: string, defValue: string): string {
-    if ('undefined' === typeof p) {
-      return defValue;
-    }
-
-    try {
-      const value: preferences.ValueType = p.getSync(key, defValue);
-
-      return 'string' === typeof value ? value : defValue;
-    } catch (e) {
-      hilog.warn(LogDomain.UTILS, TAG, '读取失败，回落默认值: key=%{public}s, err=%{public}s', key,
-        JSON.stringify(e));
-
-      return defValue;
-    }
-  }
-
   static getBoolean(p: PrefsInstance | undefined, key: string, defValue: boolean): boolean {
     if ('undefined' === typeof p) {
       return defValue;
@@ -129,6 +112,25 @@ export class Prefs {
 
   static putObject(p: PrefsInstance | undefined, key: string, value: object): boolean {
     return Prefs.put(p, key, value);
+  }
+
+  // 安全设置（防截屏 / 应用锁）的唯一写入口：**写值 + 置脏标记**一步完成，返回是否写值成功。
+  // 脏标记语义见 models/security/Sync.ets（本地已变更、待上行服务端）。
+  // 收敛在这里的原因：约定是「新增设置项 = 登记 key + 各加一处读写」，如果脏标记由各模型自己写，
+  // 第三个设置项很容易漏掉（漏掉 = 下次登录 reconcile 时被服务端旧值覆盖）。
+  static putSecurityFlag(context: Context, key: string, on: boolean): boolean {
+    const prefs: PrefsInstance | undefined = Prefs.open(context);
+
+    if (!Prefs.putBoolean(prefs, key, on)) {
+      return false;
+    }
+
+    // 值已落盘：脏标记写失败不改变返回值（设置本身已生效），但必须留痕
+    if (!Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, true)) {
+      hilog.error(LogDomain.UTILS, TAG, '安全设置脏标记写入失败: key=%{public}s, store=%{public}s', key, Prefs.label());
+    }
+
+    return true;
   }
 
   static deleteKey(p: PrefsInstance | undefined, key: string): boolean {

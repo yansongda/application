@@ -48,15 +48,6 @@ export class AlignedTicker {
     this._periodMs = periodMs;
   }
 
-  // 是否有定时器在跑（0 或 1 个）
-  get ticking(): boolean {
-    return 'undefined' !== typeof this._handle;
-  }
-
-  get listenerCount(): number {
-    return this._listeners.length;
-  }
-
   subscribe(listener: (nowMs: number) => void): () => void {
     this._listeners.push(listener);
     // 运行期新增订阅者时补一个定时器（已有定时器时 schedule 会先取消，不会叠加）

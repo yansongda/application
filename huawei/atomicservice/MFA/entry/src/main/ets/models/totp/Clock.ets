@@ -50,10 +50,6 @@ export class Clock {
     this._ticker.stop();
   }
 
-  get ticking(): boolean {
-    return this._ticker.ticking;
-  }
-
   // 订阅每整秒回调；返回幂等退订函数
   subscribe(listener: (nowMs: number) => void): () => void {
     this._listeners.push(listener);
@@ -65,11 +61,6 @@ export class Clock {
         this._listeners.splice(index, 1);
       }
     };
-  }
-
-  // 手动推进一次（如新增条目后立刻算码；不需要等下一次 tick）
-  refreshNow(): void {
-    this.publish(Date.now());
   }
 
   private publish(nowMs: number): void {
