@@ -1,7 +1,5 @@
 import api from "@api/totp";
-import error from "@utils/error";
-import { withLoading } from "@utils/loading";
-import { notify, toast } from "@utils/notify";
+import { submitEditField } from "@utils/edit-field";
 import { guardOnShow, guardOnUnlocked } from "@utils/page-guard";
 import { updateItemFields } from "@utils/totp-cache";
 import type { EditIssuerRequest } from "types/totp";
@@ -37,31 +35,15 @@ Page({
     });
   },
   async submit(e: FormSubmit<FormData>) {
-    const issuer = e.detail.value.issuer.trim();
-
-    // 空值不提交：提示后返回，不发请求。
-    if (issuer.length === 0) {
-      toast.error("提供商名称不能为空", 1500);
-
-      return;
-    }
-
-    try {
-      await withLoading("更新中...", () =>
-        api.editIssuer({
-          id: this.data.id,
-          issuer,
-        } as EditIssuerRequest),
-      );
-
-      updateItemFields(this.data.id, { issuer });
-
-      toast.success("修改成功", 1500);
-
-      setTimeout(() => wx.navigateBack(), 1500);
-    } catch (e: unknown) {
-      notify.error(this, `更新失败：${error.getErrorMessage(e)}`);
-    }
+    await submitEditField({
+      host: this,
+      id: this.data.id,
+      value: e.detail.value.issuer.trim(),
+      emptyMessage: "提供商名称不能为空",
+      submit: (id, issuer) =>
+        api.editIssuer({ id, issuer } as EditIssuerRequest),
+      onSaved: (issuer) => updateItemFields(this.data.id, { issuer }),
+    });
   },
   async cancel() {
     await wx.navigateBack();
