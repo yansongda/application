@@ -7,8 +7,8 @@
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from '@ohos/axios';
 import { App, AppEnv, HttpDomain, LogDomain } from '../App';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { application } from '@kit.AbilityKit';
 import { AuthExpiredError, HttpError } from './Errors';
+import { stringOf } from './Resource';
 import { State } from '../types/Session';
 
 export interface HttpAuthHooks {
@@ -89,15 +89,9 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     e.message,
     e.config?.url, e.config?.method, JSON.stringify(e.config?.headers), JSON.stringify(e.config?.data));
 
-  let message = '网络错误，请检查网络状态';
-
-  try {
-    message =
-      application.getApplicationContext().resourceManager.getStringSync(
-        isTimeout(e) ? $r('app.string.error_http_timeout').id : $r('app.string.error_http_request_failed').id);
-  } catch (error) {
-    hilog.warn(LogDomain.UTILS, 'utils/http', '获取请求失败提示文案失败: %{public}s', JSON.stringify(error));
-  }
+  const message: string = stringOf(
+    isTimeout(e) ? $r('app.string.error_http_timeout') : $r('app.string.error_http_request_failed'),
+    '网络错误，请检查网络状态');
 
   return Promise.reject(new HttpError(message));
 });
@@ -131,15 +125,9 @@ http.interceptors.response.use((response: AxiosResponse) => {
     e.code, e.message, e.config?.url, e.config?.method, JSON.stringify(e.config?.data), JSON.stringify(e.response?.data)
   );
 
-  let message = '服务器响应错误，请重试或联系我们';
-
-  try {
-    message =
-      application.getApplicationContext().resourceManager.getStringSync(
-        isTimeout(e) ? $r('app.string.error_http_timeout').id : $r('app.string.error_http_response_failed').id)
-  } catch (error) {
-    hilog.warn(LogDomain.UTILS, 'utils/http', '获取响应失败提示文案失败: %{public}s', JSON.stringify(error));
-  }
+  const message: string = stringOf(
+    isTimeout(e) ? $r('app.string.error_http_timeout') : $r('app.string.error_http_response_failed'),
+    '服务器响应错误，请重试或联系我们');
 
   return Promise.reject(new HttpError(message));
 });

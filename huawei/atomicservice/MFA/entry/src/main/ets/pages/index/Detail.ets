@@ -1,4 +1,3 @@
-import { application } from '@kit.AbilityKit';
 import { AppStorageV2, LoadingDialogV2 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { ItemRuntime } from '../../models/totp/ItemRuntime';
@@ -11,6 +10,7 @@ import { IInfoCardJumpResult, InfoCard, InfoCardItem } from '../../components/In
 import { Clipboard } from '../../utils/Clipboard';
 import { collectTags } from '../../utils/ItemFilter';
 import { Toast } from '../../utils/PromptAction';
+import { stringOf } from '../../utils/Resource';
 
 @Builder
 export function builder() {
@@ -203,19 +203,11 @@ struct Detail {
   }
 
   private tagDisplay(tag: string): string {
-    return tag.length > 0 ? `#${tag}` : this.stringOf($r('app.string.index_page_tag_unset'));
+    return tag.length > 0 ? `#${tag}` : stringOf($r('app.string.index_page_tag_unset'));
   }
 
   private pinDisplay(on: boolean): string {
-    return this.stringOf(on ? $r('app.string.index_detail_page_pinned_on') :
+    return stringOf(on ? $r('app.string.index_detail_page_pinned_on') :
       $r('app.string.index_detail_page_pinned_off'));
-  }
-
-  private stringOf(resource: Resource): string {
-    try {
-      return application.getApplicationContext().resourceManager.getStringSync(resource.id);
-    } catch (e) {
-      return '';
-    }
   }
 }
