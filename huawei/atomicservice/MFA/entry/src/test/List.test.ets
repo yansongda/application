@@ -5,6 +5,7 @@ import backupTest from './Backup.test';
 import itemFilterTest from './ItemFilter.test';
 import listViewStateTest from './ListViewState.test';
 import otpSecretStrictTest from './OtpSecretStrict.test';
+import refreshPlannerTest from './RefreshPlanner.test';
 import sessionThrottleTest from './SessionThrottle.test';
 import singleFlightTest from './SingleFlight.test';
 import totpRuntimeTest from './TotpRuntime.test';
@@ -18,6 +19,7 @@ export default function testsuite() {
   itemFilterTest();
   listViewStateTest();
   otpSecretStrictTest();
+  refreshPlannerTest();
   sessionThrottleTest();
   singleFlightTest();
   totpRuntimeTest();
