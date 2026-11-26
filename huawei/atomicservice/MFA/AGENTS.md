@@ -27,10 +27,10 @@ MFA/
 - `pages/`：页面；`pages/form/` 为服务卡片页面（由 `resources/base/profile/form_config.json` 的 `src` 声明，**不注册**到 `routes.json`）
 - `components/`：公共组件；页面级组件按 feature 分子目录（如 `components/index/`）
 - `api/`：接口调用
-- `models/`：模型；按 feature 分子目录（`models/form/` 服务卡片相关、`models/totp/` TOTP 运行时、`models/security/` 安全设置与应用锁）
-- `utils/`：工具函数（`utils/Prefs.ets` 为 **preferences 唯一入口**，见「本地存储」节；`utils/dialog/` 为弹窗窗口协调器，纯逻辑 + 单测，见「弹窗与认证跳转」节；纯策略类工具 `AppLockPolicy` / `AuthStatePolicy` / `SessionThrottle` / `SingleFlight` / `ItemFilter` / `ListViewState` 一律无 ArkUI 依赖，可单测）
+- `models/`：模型；按 feature 分子目录（`models/form/` 服务卡片相关、`models/totp/` TOTP 运行时、`models/security/` 安全设置与应用锁、`models/index/` 首页编排的纯逻辑）
+- `utils/`：工具函数（`utils/Prefs.ets` 为 **preferences 唯一入口**，见「本地存储」节；`utils/Resource.ets` 为**资源→字符串唯一入口**（`getStringSync` 会抛，不要各处重复 try/catch）；`utils/dialog/` 为弹窗窗口协调器，纯逻辑 + 单测，见「弹窗与认证跳转」节；纯策略类工具 `AppLockPolicy` / `AuthStatePolicy` / `SessionThrottle` / `SingleFlight` / `ItemFilter` / `ListViewState` / `models/index/RefreshPlanner` 一律无 ArkUI 依赖，可单测）
 - `themes/`：主题定义
-- `types/`：类型定义
+- `types/`：后端契约与叶子类型（**不 import 业务模块**，用来打断 `api ↔ models` 的反向依赖，如 `types/User.ets` / `types/Session.ets` / `types/Login.ets`）
 
 ## 依赖与配置
 
@@ -106,7 +106,7 @@ MFA/
 - 未确认工程已有命令前，不凭空引入新的构建或测试流程，优先遵循工程内现有配置文件
 - ArkUI `ForEach` 的 keyGenerator **必须覆盖所有会影响该项渲染的数据**：key 不变时框架**不会**重新执行 itemGenerator，也不重建子项。分组/列表这类「同一 key 下成员会变」的场景必须把成员带进 key（如 `${kind}:${tag}:${ids.join(',')}`）；否则结构停留在旧值而内容已按 `@Trace` 刷新——典型表现：取消置顶后该项仍残留在「置顶」组、组头计数不更新。`components/SettingCard.ets` 的 `revision` 属于同类兜底手段。`Repeat` 不受此约束（按 key 精确 diff），新代码优先用 `Repeat`。
 - 窗口隐私模式（防截屏）**只允许**经 `utils/PrivacyWindow.ets` 的 `apply(on, cause)` 修改；功能层统一走 `models/security/PrivacyWindow.ets`（`apply()` / `occlude()`），**禁止**在页面/组件里直接调用 `window.setWindowPrivacyMode`（同一主窗口实例上混用全局与页面级开关会互相破坏，官方 FAQ 有记载）。
-- 安全设置（防截屏 / 应用锁）持久化：单库 `mfa` 下的**逐字段 key** `security.privacyWindow` / `security.appLock`（boolean），**每项设置只在自己的模型里读写**（`models/security/PrivacyWindow.ets` / `AppLock.ets` 的 `load` / `setEnabled`，均经 `utils/Prefs.ets`），不设中间 Store 层；写失败返回 `false` 且**不改内存**（先落盘、成功才改内存）；运行态（`AppLock.locked`、`PrivacyWindow` 的临时遮挡）**绝不落盘**。逐字段写入不需要 schema 版本号：缺省即默认值，**新增设置项 = 在 `utils/Prefs.ets` 登记一个 key + 在对应模型的 `load`/`setEnabled` 里各加一处读写 + 加一个默认值常量**。**一次只写一个 key**（逐 key 写无跨字段原子性）。
+- 安全设置（防截屏 / 应用锁）持久化：单库 `mfa` 下的**逐字段 key** `security.privacyWindow` / `security.appLock`（boolean），**每项设置只在自己的模型里读写**（`models/security/PrivacyWindow.ets` / `AppLock.ets` 的 `load` / `setEnabled`，均经 `utils/Prefs.ets`），不设中间 Store 层；写失败返回 `false` 且**不改内存**（先落盘、成功才改内存）；运行态（`AppLock.locked`、`PrivacyWindow` 的临时遮挡）**绝不落盘**。逐字段写入不需要 schema 版本号：缺省即默认值，**新增设置项 = 在 `utils/Prefs.ets` 登记一个 key + 在对应模型的 `load`/`setEnabled` 里各加一处读写 + 加一个默认值常量**，写入统一走 `Prefs.putSecurityFlag(context, key, on)`（**写值 + 置 `security.dirty` 一步完成**，两个模型不再各写一份「先落盘再置脏」）。**一次只写一个 key**（逐 key 写无跨字段原子性）。
 - 安全设置**端云同步**（`models/security/Sync.ets`，本地优先 + 脏标记）：`setEnabled` 落盘成功后只写 `security.dirty = true`（写失败只记日志，不改返回值），**模型不发网络请求**；`SecuritySync.flush(context)`（页面切换开关后 / `EntryAbility.onForeground`）在 dirty **且有 `accessToken`** 时把当前生效值整体上行到 `POST /api/v1/users/edit/config/mfa`（后端存 `config.mfa.security`，按叶子 merge），成功清 dirty；未登录不发请求（无意义且 401 会经 http 拦截器把用户踢回登录页）。**单飞期间的本地变更不能丢**：`_inFlight` 为 true 时 `flush` 直接返回，因此成功回调必须比对「已上行值 vs 当前生效值」，不一致就保留 dirty 并补发一次（否则那最后一次变更永不上行）。`SecuritySync.reconcile(context, server)` 只在登录成功后调一次（`pages/Login.ets` 的 `fetchUser`）：dirty → 先上行（本地为准）；否则服务端有值 → 经 `applyRemote` 恢复到本地；服务端无值 → 不动。`applyRemote` 只改 `enabled`，**绝不**碰 `AppLock.locked`，也不置 dirty。注销账号时调 `SecuritySync.clearDirty`（`pages/user/Delete.ets`）：服务端副本已随账号删除，残留 dirty 会让下一个登录的账号被本次的本地值覆盖。运行态永不参与同步。
 - `models/security/` 下的模型统一契约：`instance()` 单例 + `load(context)` + `get enabled` + `setEnabled(context, on): boolean`；页面只读 `enabled` / `locked`，写入一律走 `setEnabled`（**先落盘、成功才改内存**）。
 - **应用锁状态不变式**（`models/security/AppLock.ets`，安全关键）：`_verifying` 只在发起前置 `true`（**1 处**），复位必须恰为 **4 处**（`reset` / `onBackground` / 结果回调 / 同步异常兜底）；`_instance` 复位同为 4 处（结果回调内仅当 `=== instance`）；`_lastFinishedAt` 只在结果回调与同步异常里更新（**发起阶段不写**，否则失败分支会被自身 3 秒防抖挡住）；`_generation` 在发起时递增，另有三处作废点（`reset` / `onBackground` / 同步异常）。任一出口漏复位 `_verifying` = 「遮罩在、点解锁永远 `SKIPPED`」= 用户被锁死，属阻断级缺陷。改 `verify()` 后用下列数字复核（变了就要能解释原因）：
@@ -138,13 +138,15 @@ MFA/
   - `Authorization.ensure(state)`：**只允许登录页调用**——它在 `refresh_token` 失效时会降级 `login()`，也就是会拉起华为账号授权；从别的页面调用会与 `SessionGuard` 的跳转形成两条并发登录链路（两次 `loginWithHuaweiID` + 两次 `access-token/login`，服务端 upsert 互相覆盖）。
   - 登录页用 `SingleFlight` 做重入锁；成功路径 `await lease.release()` 之后再 `popIfSelf()`（只关栈顶登录页，避免返回手势后误关下层页）。
 - **导航栈读取统一走 `utils/NavState.ets`**（`navPages` / `loginInStack` / `topPageName`），禁止自行 `AppStorageV2.connect(NavPathStack)` 后判断登录页。
-- **首页 `pages/index/Index.ets` 的 `onActive` 刷新有门禁**：`SessionGuard.isLoginVisible()` 或 `Authorization.state() !== NORMAL` 直接返回；**例外**是 `NEED_REFRESH` 且本地还有 `refresh_token` → `renewThenRefresh()` 用 `refreshOnly()` 静默续期后再静默刷新（避免「回到首页既不刷新也不续期」，要等第一个请求拿到 1000 才闪一下登录页）。已有条目时 `refresh(true)` 静默刷新（不弹 loading），首屏与下拉刷新才用 loading；`refresh` 用 `SingleFlight`（`run` 共享在飞任务、`enqueue` 补一次带 loading 的刷新），下拉刷新会真正等待同一次请求。**`interactive` 与 `silent` 是两件事**：本地无条目时即使静默刷新也要弹 loading，失败也必须给提示（否则是「空列表 + 一次 loading + 什么都没有」）。
-- **单飞统一用 `utils/SingleFlight.ets`**（`busy` / `run` / `enqueue`），不要再手写布尔位：布尔位靠 `finally` 或每个分支手动复位，漏一处就永久卡住。
+- **首页 `pages/index/Index.ets` 的 `onActive` 刷新有门禁**：`SessionGuard.isLoginVisible()` 或 `Authorization.state() !== NORMAL` 直接返回；**例外**是 `NEED_REFRESH` 且本地还有 `refresh_token` → `renewThenRefresh()` 用 `refreshOnly()` 静默续期后再静默刷新（避免「回到首页既不刷新也不续期」，要等第一个请求拿到 1000 才闪一下登录页）。已有条目时 `refresh(true)` 静默刷新（不弹 loading），首屏与下拉刷新才用 loading；`refresh` 用 `SingleFlight`（`run` 共享在飞任务、`enqueue` 补一次带 loading 的刷新），下拉刷新会真正等待同一次请求。**「共享还是补一次」的判定不在页面里**：`models/index/RefreshPlanner.ets`（纯逻辑 + 单测）根据「有没有在飞任务 + 在飞的/本次的 silent」返回 `START / SHARE / ENQUEUE`，页面只负责按结论执行与弹窗。`renewThenRefresh` 的静默续期同样用 `SingleFlight`，不要再手写 `renewing` 布尔位。**排序态（`isSortMode`）既不刷新也不消费卡片意图**：刷新会冲掉拖拽顺序，意图门禁必须收在 `consumeFormIntent()` 内部（`@Monitor('formIntent.version')` 那条路径不经过 `onActive`）。**`interactive` 与 `silent` 是两件事**：本地无条目时即使静默刷新也要弹 loading，失败也必须给提示（否则是「空列表 + 一次 loading + 什么都没有」）。
+- **单飞统一用 `utils/SingleFlight.ets`**（`busy` / `run` / `enqueue`），不要再手写布尔位：布尔位靠 `finally` 或每个分支手动复位，漏一处就永久卡住。需要「共享 / 补一次」这类三态决策时，把它抽成返回枚举的纯函数（样板：`models/index/RefreshPlanner.ets`）。
+- **派生视图用 `@Computed` getter，不要在 `build()` 里用普通方法重复计算**：`ListView` / `Toolbar` 的可见列表、分组、标签计数都是「snapshot → filter → sort」，单次 build 会被读多次（`isNoMatch` + `items()`），普通方法等于算 2 遍；`@Computed` 在依赖（条目 `@Trace` 字段 / 筛选 / 搜索词）未变时直接复用。**`@Computed` getter 内只能读状态，不能写**。
 
 ## TOTP 计时与算码（单时钟 + 派生倒计时）
 
 - **全应用只有一个秒级定时器**：`models/totp/Clock.ets`（对齐整秒的调度逻辑抽在 `utils/Ticker.ets`，定时器注入，可单测）。起停**只由 EntryAbility 的前后台回调驱动**（`onForeground` / `onWindowStageCreate` → `attach()`，`onBackground` → `detach()`）；页面与组件**不得**起停时钟，`ListView` / `Detail` 不再有 `onAttach` / `onActive` 之类的计时钩子。
 - **倒计时是派生值**：`ItemRuntime#remaining` 由 `Clock.nowMs` 与归一化 `period` 纯计算得到（`utils/Totp.ets`，与 `@yansongda/otp` 的 `remaining()` 逐点对齐，用例锁定）。**禁止**再引入「每秒本地递减的计数」（会漂移），也**禁止**为进度条新增第二份每秒变动的 `@Trace` 状态。`nowMs` 每秒只写一次，所有卡片在同一帧内刷新（历史实现是每条目 2 个定时器 = 2N 个、相位随运行时间发散 = 每秒最多 N 帧重排）。
+- **模型写入做等值短路**：`ItemRuntime` 的 `issuer` / `username` / `tags` / `pinned` setter 值没变就不写（`tags` 逐元素比较），`ItemsRuntime#reload` 一次性重建映射与 `_ids` 而不是逐条 `delete`/`add`。否则每次刷新都会触发 N+1 次 `@Trace` 通知，列表（`visibleIds` 依赖这些字段）跟着整表重建。
 - **算码驱动只有一个入口**：`ItemsRuntime#onTick(nowMs)`，由 `EntryAbility.wireClock()` 接线（进程内只接一次）。只有「时间窗变了」的条目才重算（`ItemRuntime#refreshIfNeeded`），本地算不了（无 secret / 算码异常）的条目在**同一 tick 内汇总**，只发一次 `Totp.all()` 兜底（历史实现是每条目各发一次 `/totp/detail`）。
 - **配置归一化只做一次**：`utils/Totp.ets#normalizeConfig` 把 `period` / `digits` / `algorithm` 收敛成 `NormConfig`（全字段确定值）。模型之外**不得**再写 `?? 30` / `?? 6` / `typeof === 'number'` 之类兜底——历史实现里 `progress ?? 30`（列表）与 `progress ?? 0`（详情）并存，同一份脏数据在两端表现不一致。
 - **TOTP 参数与时间窗的唯一真相源**：`utils/Totp.ets`（注意：与 #173 删除的自研算码实现同名但无关，本文件只有纯函数）。`normalize*` 负责保证「period 是正整数秒」，`stepOf`/`remainingOf` 负责消费它，二者必须同一处维护，不要再拆回两个文件。
@@ -160,7 +162,7 @@ MFA/
 - 卡片状态管理 V2 自 **API 23（HarmonyOS 6.1.0）**起支持，因此 `build-profile.json5` 的 `compatibleSdkVersion` 不得低于 `6.1.0(23)`。
 - 卡片内「能用哪些组件/属性」**编译期不校验**（SDK `ets-loader/form_components/*.json` 白名单不强制，如 `SymbolGlyph` 不在白名单也能编过），新增组件或属性一律以**真机验证**为准；优先复用已在卡片中跑通的能力（`Text` / `Row` / `Column` / `Blank` / `Divider` / `Image` / `Progress` / 通用属性）。
 - **本地存储唯一入口是 `utils/Prefs.ets`（单库 + GSKV）**：全应用只有一个 preferences 库 `mfa`，`storageType` 首选 **GSKV**——主应用与卡片提供方（`FormExtensionAbility`）是两个进程，官方文档明确 XML 模式「不支持在多进程场景下使用」（文件损坏 + 数据丢失），GSKV「支持多进程并发读写」且逐 key 实时落盘。GSKV 不可用时（预览器 / 跨平台构建）`Prefs` 回落 XML（单进程），此时 `crossProcess: true` 会先 `removePreferencesFromCacheSync` 再读，保留旧的跨进程可见性语义。**任何新增 preferences 读写都必须经 `Prefs`**，禁止新增第二个库名，禁止在卡片内直接读 `preferences`。库名的存储类型创建后**不可切换**（XML 文件与 `.db` 互斥），故不要给已存在的库改名复用、也不要手工指定与既有文件不同的 `storageType`。
-- **库 `mfa` 的 key 布局（唯一真相源 `utils/Prefs.ets`）**：`security.privacyWindow` / `security.appLock`（安全设置，主应用独写）、`security.dirty`（安全设置待上行标记）、`index.filter` / `index.grouped`（首页筛选与分组视图，`models/totp/ListViewStatePrefs.ets` 读写本地 KV（**不上云**），纯逻辑在 `ListViewState.ets`）、`form.snapshot`（卡片快照 object，主应用独写 / 卡片进程只读）、`form.id.<formId>`（**逐 formId 一个 key**，加卡删卡都是单 key 写删，避免两进程读改写同一数组丢更新）。新增数据一律先在此登记 key 常量，避免跨域撞名。
+- **库 `mfa` 的 key 布局（唯一真相源 `utils/Prefs.ets`）**：`security.privacyWindow` / `security.appLock`（安全设置，主应用独写）、`security.dirty`（安全设置待上行标记）、`index.filter` / `index.grouped`（首页筛选与分组视图，`models/totp/ListViewStatePrefs.ets` 读写本地 KV（**不上云**），纯逻辑在 `ListViewState.ets`）、`form.snapshot`（卡片快照 object，主应用独写 / 卡片进程只读；**账号数未变时不写盘、不推卡**，见 `Snapshot.writeIfChanged`，否则每次 `onActive` 静默刷新都会写一次 preferences 并给每张卡发一次 IPC）、`form.id.<formId>`（**逐 formId 一个 key**，加卡删卡都是单 key 写删，避免两进程读改写同一数组丢更新）。新增数据一律先在此登记 key 常量，避免跨域撞名。
 - 卡片渲染在系统进程、与提供方隔离，**不得**在卡内直接读 `preferences`、算码或放密钥；跨进程数据只能以字符串经 `formBindingData` 传递。
 - 卡内交互**只用 `postCardAction` 的 `router` 事件**（不用 `message` / `call`）；入口用 `Text` + 通用属性（背景色 / 圆角 / `onClick`）充当按钮，组件与属性支持一律以真机为准。整卡 `onClick` 与子元素 `onClick` 并存时依赖「子组件优先消费」，真机需确认无冒泡重复触发。
 - **卡片意图消费门禁**：卡片意图（`FormIntent`）统一由 `Index.consumeFormIntent()` 消费；未登录、应用锁锁定、页面未激活时必须保留 pending，不得执行扫码/跳转。`AppLock.unlockVersion` 仅用于解锁后重试（`locked` 是 getter，`@Monitor` 监听不到）；新增解锁入口必须让 `unlock()` 自增该版本。pending 意图超过 5 分钟 TTL 直接丢弃，避免取消解锁/登录后很久又突然触发。
@@ -196,7 +198,7 @@ MFA/
 - 本地测试目录：`entry/src/test/`（`List.test.ets` 是唯一入口，新增文件必须注册进去）
 - Ohos 测试目录：`entry/src/ohosTest/`
 - 修改公共组件、页面跳转、接口调用或运行时模型时，应同步检查相关测试是否需要更新
-- **纯逻辑必须可单测**：`AppLockPolicy` / `AuthStatePolicy` / `SessionThrottle` / `SingleFlight` / `ItemFilter` / `ListViewState` / `WindowCoordinator` 都不 import ArkUI，改动这些逻辑要补/改用例。窗口层与认证判定的历史 bug（孤儿弹窗、误关新窗口、登录态退化）都是靠「把决策抽成纯函数」才变得可验证的，不要再把并发/状态判定直接写进页面或 ArkUI 回调里。
+- **纯逻辑必须可单测**：`AppLockPolicy` / `AuthStatePolicy` / `SessionThrottle` / `SingleFlight` / `ItemFilter` / `ListViewState` / `RefreshPlanner` / `WindowCoordinator` 都不 import ArkUI，改动这些逻辑要补/改用例。窗口层与认证判定的历史 bug（孤儿弹窗、误关新窗口、登录态退化）都是靠「把决策抽成纯函数」才变得可验证的，不要再把并发/状态判定直接写进页面或 ArkUI 回调里。
 - 命令行自检（无需 DevEco 界面，签名材料缺失也不影响编译）：
   ```bash
   cd huawei/atomicservice/MFA
