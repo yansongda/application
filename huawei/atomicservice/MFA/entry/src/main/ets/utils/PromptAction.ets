@@ -46,11 +46,20 @@ const TIMINGS: WindowTimings = {
 class PromptAction {
   private static _action: OhosPromptAction | undefined;
 
-  static get action(): OhosPromptAction {
+  // 返回 undefined 表示 UIContext 尚未注册（早于 `EntryAbility.onWindowStageCreate` 的 loadContent 回调）。
+  // 历史实现用 `context!`：那种场景下抛的是 TypeError，会打断调用方的业务分支且日志里看不出原因；
+  // 现在改为「记日志 + 跳过本次弹窗」——弹窗缺失是可接受的降级，流程中断不是。
+  static get action(): OhosPromptAction | undefined {
     if ('undefined' === typeof PromptAction._action) {
       const context: UIContext | undefined = AppStorageV2.connect(UIContext);
 
-      PromptAction._action = context!.getPromptAction();
+      if ('undefined' === typeof context) {
+        hilog.error(LogDomain.UTILS, 'utils/prompt_action', 'UIContext 尚未注册，跳过本次弹窗');
+
+        return undefined;
+      }
+
+      PromptAction._action = context.getPromptAction();
     }
 
     return PromptAction._action;
@@ -80,7 +89,14 @@ class ArkWindowLogger implements WindowLogger {
 class ArkWindowOpener implements WindowOpener<CustomBuilder> {
   // `autoCancel: false`：loading / 重试框都不允许点遮罩关闭，否则会出现「窗口关了但流程还在跑」
   open(builder: CustomBuilder, onClosed: () => void): Promise<number | undefined> {
-    return PromptAction.action.openCustomDialog({
+    const action: OhosPromptAction | undefined = PromptAction.action;
+
+    if ('undefined' === typeof action) {
+      // 没打开窗口就不会有 onDidDisappear：协调器按「打开失败」处理（窗口 id 为 undefined）
+      return Promise.resolve(undefined);
+    }
+
+    return action.openCustomDialog({
       builder: builder,
       autoCancel: false,
       onDidDisappear: onClosed,
@@ -88,7 +104,13 @@ class ArkWindowOpener implements WindowOpener<CustomBuilder> {
   }
 
   close(windowId: number): void {
-    PromptAction.action.closeCustomDialog(windowId);
+    const action: OhosPromptAction | undefined = PromptAction.action;
+
+    if ('undefined' === typeof action) {
+      return;
+    }
+
+    action.closeCustomDialog(windowId);
   }
 }
 
@@ -148,8 +170,14 @@ export class Toast extends PromptAction {
       return;
     }
 
+    const action: OhosPromptAction | undefined = PromptAction.action;
+
+    if ('undefined' === typeof action) {
+      return;
+    }
+
     try {
-      PromptAction.action.showToast(options);
+      action.showToast(options);
     } catch (error) {
       hilog.warn(LogDomain.UTILS, 'utils/toast', '调用 `showToast` 失败: %{public}s', JSON.stringify(error));
     }

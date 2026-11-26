@@ -50,8 +50,8 @@ struct Detail {
             this.changeAvatar();
           })
 
-        // 账号统计行：ItemsRuntime 未初始化时 ids 缺失，按 0 展示
-        Text($r('app.string.user_detail_page_protected', this.protectedCount))
+        // 账号统计行：与首页标题栏同一口径（`ItemsRuntime.ids` 恒为数组，不再做无意义的判空）
+        Text($r('app.string.user_detail_page_protected', this.itemsRuntime.ids.length))
           .fontSize($r('app.float.caption_font_size'))
           .fontColor($r('sys.color.font_tertiary'))
 
@@ -167,13 +167,6 @@ struct Detail {
     .title($r('app.string.user_detail_page_name'))
   }
 
-  // 统计行兜底：ItemsRuntime 可能尚未初始化，ids 缺失时按 0 展示
-  private get protectedCount(): number {
-    const ids: string[] | undefined = this.itemsRuntime.ids;
-
-    return 'undefined' === typeof ids ? 0 : ids.length;
-  }
-
   // 请求华为账号 profile 授权，失败或用户取消时返回 undefined
   private async authorizeProfile(): Promise<authentication.AuthorizationWithHuaweiIDCredential | undefined> {
     let credential: authentication.AuthorizationWithHuaweiIDCredential;
@@ -203,19 +196,8 @@ struct Detail {
       return;
     }
 
-    try {
-      await Dialog.execute(
-        () => this.loadingDialog(),
-        () => UserApi.editAvatar(avatarUri),
-        () => this.editConfirmDialog(() => this.editAvatar(avatarUri)),
-      );
-
-      this.user.config.avatar = avatarUri;
-
-      hilog.info(LogDomain.PAGES, AppPagesName.USER_DETAIL, '头像已更新，uri 长度: %{public}d', avatarUri.length);
-    } catch (e) {
-      // 用户取消重试，保持原头像
-    }
+    // 与「重试」路径共用同一实现：这里再写一遍请求 + 重试框 + 回写就是两份需要同步维护的逻辑
+    await this.editAvatar(avatarUri);
   }
 
   @Builder
@@ -250,6 +232,8 @@ struct Detail {
       );
 
       this.user.config.avatar = avatarUri;
+
+      hilog.info(LogDomain.PAGES, AppPagesName.USER_DETAIL, '头像已更新，uri 长度: %{public}d', avatarUri.length);
     } catch (e) {
       // 用户取消重试，保持原头像
     }

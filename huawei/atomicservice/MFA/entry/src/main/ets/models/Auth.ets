@@ -62,7 +62,17 @@ export class Authorization {
       return Promise.reject(new Error('华为账号授权失败，请重试'));
     }
 
-    return authenticateWithHuaweiIDResponse.data!;
+    // `code === 0` 不等于授权信息可用：data 缺失时后续 `credential.authorizationCode` 会拿到
+    // undefined 并直接进请求体（表现为「授权成功但登录接口报参数错误」），必须在这里拦下
+    const data: authentication.AuthorizationWithHuaweiIDCredential | undefined = authenticateWithHuaweiIDResponse.data;
+
+    if ('undefined' === typeof data || null === data) {
+      hilog.error(LogDomain.MODELS, 'models/auth', '华为账号授权未返回授权信息(authenticateWithHuaweiID)');
+
+      return Promise.reject(new Error('华为账号授权失败，请重试'));
+    }
+
+    return data;
   }
 
   static async loginWithHuaweiID(): Promise<authentication.LoginWithHuaweiIDCredential> {
@@ -92,7 +102,15 @@ export class Authorization {
       return Promise.reject(new Error('华为账号登录失败，请重试'));
     }
 
-    return loginWithHuaweiIDResponse.data!;
+    const data: authentication.LoginWithHuaweiIDCredential | undefined = loginWithHuaweiIDResponse.data;
+
+    if ('undefined' === typeof data || null === data) {
+      hilog.error(LogDomain.MODELS, 'models/auth', '华为账号登录未返回登录信息(loginWithHuaweiID)');
+
+      return Promise.reject(new Error('华为账号登录失败，请重试'));
+    }
+
+    return data;
   }
 
   state(): State {
@@ -156,7 +174,15 @@ export class Authorization {
       return Promise.reject(new Error('华为账号授权失败，请重试'));
     }
 
-    const response = await AccessToken.login(App.clientId, credential?.authorizationCode!);
+    const code: string | undefined = credential?.authorizationCode;
+
+    if ('undefined' === typeof code || 0 === code.length) {
+      hilog.error(LogDomain.MODELS, 'models/auth', '华为账号授权未返回 authorizationCode');
+
+      return Promise.reject(new Error('华为账号授权失败，请重试'));
+    }
+
+    const response = await AccessToken.login(App.clientId, code);
 
     this.apply(response.access_token, response.refresh_token, response.expired_in);
 
