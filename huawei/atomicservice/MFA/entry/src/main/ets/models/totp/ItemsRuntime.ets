@@ -162,22 +162,32 @@ export class ItemsRuntime {
     return items;
   }
 
-  // 以服务端数据原地刷新：顺序以服务端返回为准，更新已有条目（保留本窗口的验证码）、增删差异条目
+  // 以服务端数据原地刷新：顺序以服务端返回为准，更新已有条目（保留本窗口的验证码）、增删差异条目。
+  //
+  // 不用「逐条 delete / add」：那会对 `@Trace _ids` 写 N+1 次，每次都通知列表重建。
+  // 这里一次性重建映射与 id 顺序，只写一次 `_ids`（配合 setter 的等值短路，数据没变时零通知）。
   reload(items: Iterable<IItem>): void {
     const nextItems: IItem[] = Array.from(items);
-    const nextIds: string[] = nextItems.map((item: IItem): string => item.id);
     const nowMs: number = Clock.instance().nowMs;
+    const nextIds: string[] = [];
+    const nextRuntimes: Map<string, ItemRuntime> = new Map();
     const needServer: ItemRuntime[] = [];
 
-    this._ids
-      .filter((id: string): boolean => !nextIds.includes(id))
-      .forEach((id: string): void => this.delete(id));
-
     for (const item of nextItems) {
+      nextIds.push(item.id);
+
       const existing: ItemRuntime | undefined = this._runtimes.get(item.id);
 
+      // 新条目：与 add() 同口径（构造 + 立即算码），但不逐条写 `_ids`
       if ('undefined' === typeof existing) {
-        this.add(item);
+        const runtime = new ItemRuntime(item);
+
+        nextRuntimes.set(item.id, runtime);
+
+        if (this.refresh(runtime, item, nowMs)) {
+          needServer.push(runtime);
+        }
+
         continue;
       }
 
@@ -188,11 +198,15 @@ export class ItemsRuntime {
       // config 的 setter 只在周期 / 密钥真变了时作废验证码，普通刷新不会打断倒计时
       existing.config = item.config;
 
+      nextRuntimes.set(item.id, existing);
+
       if (this.refresh(existing, item, nowMs)) {
         needServer.push(existing);
       }
     }
 
+    // 服务端已删除的条目直接随映射一起丢弃（不再逐条 delete）
+    this._runtimes = nextRuntimes;
     this._ids = nextIds;
 
     if (needServer.length > 0) {

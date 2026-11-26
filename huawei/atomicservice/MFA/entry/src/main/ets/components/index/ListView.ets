@@ -32,7 +32,7 @@ export struct ListView {
 
   build() {
     Column() {
-      if (this.isNoMatch()) {
+      if (this.isNoMatch) {
         this.noMatch()
       } else {
         this.items()
@@ -71,7 +71,7 @@ export struct ListView {
         // 分组 key 必须包含组内成员：ArkUI 的 ForEach 在 key 未变时**不会**重新执行 itemGenerator，
         // 只用 `${kind}:${tag}` 会让「组内条目增减」停留在旧值（取消置顶后该项仍留在置顶组，
         // 而卡片内容已通过 @Trace 刷新成未置顶——表现为置顶组里多一条无置顶标记的重复项）
-        ForEach(this.groups(), (group: ItemGroupView) => {
+        ForEach(this.groups, (group: ItemGroupView) => {
           ListItemGroup({ header: this.groupHeader(group), space: 10 }) {
             ForEach(group.ids, (id: string) => {
               this.listItem(id)
@@ -79,7 +79,7 @@ export struct ListView {
           }
         }, (group: ItemGroupView): string => `${group.kind}:${group.tag}:${group.ids.join(',')}`)
       } else {
-        Repeat<string>(this.visibleIds())
+        Repeat<string>(this.visibleIds)
           .each((ri: RepeatItem<string>) => {
             this.listItem(ri.item.valueOf())
           })
@@ -201,7 +201,12 @@ export struct ListView {
     return this.itemsRuntime.snapshot();
   }
 
-  private visibleIds(): string[] {
+  // 下面三个都是**派生视图**，用 `@Computed` 而不是普通方法：
+  // 单次 build 里 `isNoMatch` 与 `items()` 会各读一次可见列表（分组分支还要再算一次分组），
+  // 普通方法等于「snapshot → filter → sort」一次 build 跑 2 遍；`@Computed` 在依赖
+  // （条目字段 / 筛选 / 搜索词 / 排序态）未变时直接复用上次结果，参数变化时才重算。
+  @Computed
+  private get visibleIds(): string[] {
     const filtered = filterItems(this.snapshot(), this.state.filterKind, this.state.filterTag, this.state.query);
     const ordered = this.isSortMode ? filtered : sortPinnedFirst(filtered);
     const ids: string[] = [];
@@ -213,11 +218,13 @@ export struct ListView {
     return ids;
   }
 
-  private isNoMatch(): boolean {
-    return this.itemsRuntime.ids.length > 0 && this.visibleIds().length === 0;
+  @Computed
+  private get isNoMatch(): boolean {
+    return this.itemsRuntime.ids.length > 0 && this.visibleIds.length === 0;
   }
 
-  private groups(): ItemGroupView[] {
+  @Computed
+  private get groups(): ItemGroupView[] {
     return groupItems(sortPinnedFirst(filterItems(this.snapshot(), this.state.filterKind, this.state.filterTag, this.state.query)));
   }
 

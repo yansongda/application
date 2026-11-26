@@ -59,10 +59,6 @@ export class ItemRuntime {
     return this._id;
   }
 
-  public set id(value: string) {
-    this._id = value;
-  }
-
   @Trace
   private _code: string | undefined;
 
@@ -70,10 +66,8 @@ export class ItemRuntime {
     return this._code;
   }
 
-  public set code(value: string | undefined) {
-    this._code = value;
-  }
-
+  // 下面四个 setter 都做**等值短路**：`ItemsRuntime#reload` 每次刷新都会把服务端值写回，
+  // 而 `@Trace` 写入会通知依赖方（列表的 `visibleIds` 读过这些字段）→ 不短路就是「数据没变也整表重建」。
   @Trace
   private _issuer: string;
 
@@ -82,7 +76,9 @@ export class ItemRuntime {
   }
 
   public set issuer(value: string) {
-    this._issuer = value;
+    if (this._issuer !== value) {
+      this._issuer = value;
+    }
   }
 
   @Trace
@@ -93,7 +89,9 @@ export class ItemRuntime {
   }
 
   public set username(value: string) {
-    this._username = value;
+    if (this._username !== value) {
+      this._username = value;
+    }
   }
 
   // 标签/置顶：当前 UI 只支持单标签，数组结构为后续多标签预留
@@ -105,7 +103,10 @@ export class ItemRuntime {
   }
 
   public set tags(value: string[]) {
-    this._tags = [...value];
+    // 数组不能比引用：`[...value]` 每次都是新对象，不逐元素比对的话刷新必通知
+    if (!ItemRuntime.sameTags(this._tags, value)) {
+      this._tags = [...value];
+    }
   }
 
   // 卡片右上角展示用：当前取第一个标签
@@ -121,7 +122,23 @@ export class ItemRuntime {
   }
 
   public set pinned(value: boolean) {
-    this._pinned = value;
+    if (this._pinned !== value) {
+      this._pinned = value;
+    }
+  }
+
+  private static sameTags(left: string[], right: string[]): boolean {
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    for (let index = 0; index < left.length; index++) {
+      if (left[index] !== right[index]) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private _config: NormConfig = normalizeConfig(undefined);
