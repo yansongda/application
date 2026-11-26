@@ -11,7 +11,8 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { LogDomain } from '../../App';
 import { shouldRelock, shouldDebounceVerify } from '../../utils/AppLockPolicy';
-import { KEY_SECURITY_APP_LOCK, KEY_SECURITY_DIRTY, Prefs, PrefsInstance } from '../../utils/Prefs';
+import { KEY_SECURITY_APP_LOCK, Prefs } from '../../utils/Prefs';
+import { stringOf } from '../../utils/Resource';
 
 // 用户设置默认关：开启后「重新打开或离开 1 分钟后」需验证身份
 const DEFAULT_APP_LOCK: boolean = false;
@@ -79,18 +80,12 @@ export class AppLock {
   // 开关写入：**先落盘、成功才改内存**——失败返回 false 且内存不变（调用方提示用户）。
   // 防锁死降级（设备确无凭据）也走这里，落盘失败时内存仍为 true，仅日志留痕，不阻塞解锁
   setEnabled(context: Context, on: boolean): boolean {
-    const prefs: PrefsInstance | undefined = Prefs.open(context);
-
-    if (!Prefs.putBoolean(prefs, KEY_SECURITY_APP_LOCK, on)) {
+    // 落盘 + 置脏标记（「本地已生效、待上行」）由 `Prefs.putSecurityFlag` 一步完成，
+    // 真正上行由 SecuritySync.flush 统一负责（模型不发请求）
+    if (!Prefs.putSecurityFlag(context, KEY_SECURITY_APP_LOCK, on)) {
       hilog.error(LogDomain.MODELS, 'models/security', 'app_lock_save_failed: appLock=%{public}s', on.toString());
 
       return false;
-    }
-
-    // 本地已生效后只标记「待同步」：真正上行由 SecuritySync.flush 统一负责（模型不发请求）。
-    // 标记写失败不改变返回值（设置本身已落盘生效），但必须留痕：否则下次登录 reconcile 会用服务端旧值覆盖本地
-    if (!Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, true)) {
-      hilog.error(LogDomain.MODELS, 'models/security', 'app_lock_dirty_failed: appLock=%{public}s', on.toString());
     }
 
     this._enabled = on;
@@ -347,18 +342,11 @@ export class AppLock {
     hilog.warn(LogDomain.MODELS, 'models/security', 'disable: reason=%{public}s', 'no_credential');
   }
 
-  // 认证控件标题：SDK 要求 string（不接受 Resource），且本机 SDK 无 resourceToString 全局函数
+  // 认证控件标题：SDK 要求 string（不接受 Resource），且本机 SDK 无 resourceToString 全局函数。
+  // 文案读取失败（`stringOf` 内部记日志）时用空标题继续发起认证：
+  // 防锁死优先（R2：不得让用户失去解锁路径）
   private static buildWidgetParam(context: Context): userAuth.WidgetParam {
-    let title: string = '';
-
-    try {
-      title = context.resourceManager.getStringSync($r('app.string.lock_page_verify_title').id);
-    } catch (e) {
-      // 文案读取失败属资源异常路径：记 error 后用空标题继续发起认证（防锁死优先，R2：不得让用户失去解锁路径）
-      hilog.error(LogDomain.MODELS, 'models/security', 'title_get_failed: %{public}s', JSON.stringify(e));
-    }
-
-    return { title: title };
+    return { title: stringOf($r('app.string.lock_page_verify_title'), '', context) };
   }
 
   // 依次探测 PIN / FACE / FINGERPRINT（ATL3）：不抛错即认为可用；
