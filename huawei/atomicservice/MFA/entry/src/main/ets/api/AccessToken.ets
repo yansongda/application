@@ -19,12 +19,6 @@ export interface AccessTokenLoginRefreshRequest {
   refresh_token: string;
 }
 
-export interface AccessTokenLoginRefreshResponse {
-  access_token: string;
-  expired_in: number;
-  refresh_token: string;
-}
-
 export class AccessToken {
   static async login(clientId: string, authorizationCode: string): Promise<AccessTokenLoginResponse> {
     const response: AccessTokenLoginResponse =
@@ -41,9 +35,9 @@ export class AccessToken {
     return response;
   }
 
-  static async loginRefresh(clientId: string, refreshToken: string): Promise<AccessTokenLoginRefreshResponse> {
-    const response: AccessTokenLoginRefreshResponse =
-      await request<AccessTokenLoginRefreshResponse, AccessTokenLoginRefreshRequest>(
+  static async loginRefresh(clientId: string, refreshToken: string): Promise<AccessTokenLoginResponse> {
+    const response: AccessTokenLoginResponse =
+      await request<AccessTokenLoginResponse, AccessTokenLoginRefreshRequest>(
         'api/v1/access-token/login/refresh',
         {
           platform: 'HUAWEI',

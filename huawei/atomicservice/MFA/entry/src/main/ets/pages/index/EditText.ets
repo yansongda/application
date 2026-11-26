@@ -1,4 +1,3 @@
-import { application } from '@kit.AbilityKit';
 import { AppStorageV2, KeyboardAvoidMode, LoadingDialogV2 } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Totp } from '../../api/Totp';
@@ -6,6 +5,7 @@ import { AppPagesName, LogDomain } from '../../App';
 import { IInfoCardJumpResult } from '../../components/InfoCard';
 import { ItemRuntime } from '../../models/totp/ItemRuntime';
 import { Toast } from '../../utils/PromptAction';
+import { stringOf } from '../../utils/Resource';
 
 // 编辑页路由参数：显式携带编辑模式，避免依赖路由名推断导致误写字段
 export class EditTextParams {
@@ -140,16 +140,8 @@ struct EditText {
 
   // 空输入时回退到默认文案（走 string 资源，避免在代码里硬编码中文）
   private fallbackValue(): string {
-    const value = this.isIssuer ? $r('app.string.index_edit_issuer_unknown') :
-      $r('app.string.index_edit_username_unknown');
-
-    try {
-      return application.getApplicationContext().resourceManager.getStringSync(value.id);
-    } catch (e) {
-      hilog.warn(LogDomain.PAGES, this.logPage(), '读取默认文案失败: %{public}s', JSON.stringify(e));
-
-      return '';
-    }
+    return stringOf(this.isIssuer ? $r('app.string.index_edit_issuer_unknown') :
+      $r('app.string.index_edit_username_unknown'));
   }
 
   private async submit(): Promise<void> {

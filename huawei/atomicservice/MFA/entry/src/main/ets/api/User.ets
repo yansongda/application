@@ -1,4 +1,4 @@
-import { IMfaConfigSecurity, IUser } from '../models/User';
+import { IMfaConfigSecurity, IUser } from '../types/User';
 import { request, requestNoBody, requestVoid, requestVoidNoBody } from './request';
 
 export interface EditAvatarRequest {

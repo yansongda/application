@@ -30,11 +30,17 @@ export class FormBridge {
     return formBindingData.createFormBindingData(data);
   }
 
-  // 账号列表变化后：写快照并推送全部已添加卡片
+  // 账号列表变化后：写快照并推送全部已添加卡片。
+  // 账号数未变时直接跳过：卡片只渲染 `count`，重复写盘 + 跨进程推送拿不到任何新信息，
+  // 而这条链会被「下拉刷新 / 每次 onActive 静默刷新」反复触发。
   static sync(context: Context, ids: string[]): void {
     hilog.info(LogDomain.MODELS, 'models/form/FormBridge', '卡片同步: 账号数=%{public}d', ids.length);
 
-    Snapshot.write(context, ids.length);
+    if (!Snapshot.writeIfChanged(context, ids.length)) {
+      hilog.info(LogDomain.MODELS, 'models/form/FormBridge', '卡片同步跳过: 账号数未变 count=%{public}d', ids.length);
+
+      return;
+    }
 
     FormBridge.push(context);
   }

@@ -1,19 +1,9 @@
 import { IItem } from '../types/Item';
 import { request, requestNoBody, requestVoid } from './request';
 
-export interface AllResponse extends IItem {}
-
 export interface CreateRequest {
   uri: string;
 }
-
-export interface CreateResponse extends IItem {}
-
-export interface DetailRequest {
-  id: string;
-}
-
-export interface DetailResponse extends IItem {}
 
 export interface EditIssuerRequest {
   id: string;
@@ -48,17 +38,16 @@ export interface SortRequestItem {
   sort: number;
 }
 
+// 响应类型统一用 `IItem`：`/totp/all`、`/totp/create` 返回的就是同一个条目结构，
+// 之前各自 `extends IItem {}` 的空接口只是三份同义类型。单独刷新条目已由 `/totp/all` 兜底，
+// 不再保留 `/totp/detail`（全仓无调用）。
 export class Totp {
-  static async all(): Promise<AllResponse[]> {
-    return requestNoBody<AllResponse[]>('api/v1/totp/all');
+  static async all(): Promise<IItem[]> {
+    return requestNoBody<IItem[]>('api/v1/totp/all');
   }
 
-  static async create(uri: string): Promise<CreateResponse> {
-    return request<CreateResponse, CreateRequest>('api/v1/totp/create', { uri });
-  }
-
-  static async detail(id: string): Promise<DetailResponse> {
-    return request<DetailResponse, DetailRequest>('api/v1/totp/detail', { id });
+  static async create(uri: string): Promise<IItem> {
+    return request<IItem, CreateRequest>('api/v1/totp/create', { uri });
   }
 
   static async editIssuer(id: string, issuer: string): Promise<void> {

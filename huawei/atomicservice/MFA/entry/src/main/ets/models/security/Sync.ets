@@ -18,7 +18,7 @@ import { LogDomain } from '../../App';
 import { User as UserApi } from '../../api/User';
 import { Authorization } from '../Auth';
 import { SingleFlight } from '../../utils/SingleFlight';
-import { IMfaConfigSecurity } from '../User';
+import { IMfaConfigSecurity } from '../../types/User';
 import { KEY_SECURITY_DIRTY, Prefs, PrefsInstance } from '../../utils/Prefs';
 import { AppLock } from './AppLock';
 import { PrivacyWindow } from './PrivacyWindow';

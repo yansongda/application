@@ -1,4 +1,3 @@
-import { ItemRuntime } from '../../models/totp/ItemRuntime';
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import {
   AdvancedDialogV2Button,
@@ -31,6 +30,7 @@ import { OTPAuthURI } from '@yansongda/otp';
 import { ItemFilterKind } from '../../utils/ItemFilter';
 import { AuthExpiredError, errorMessage } from '../../utils/Errors';
 import { SingleFlight } from '../../utils/SingleFlight';
+import { RefreshPlan, RefreshPlanner } from '../../models/index/RefreshPlanner';
 import { LoadingLease } from '../../utils/dialog/WindowCoordinator';
 import { SessionGuard } from '../../utils/SessionGuard';
 
@@ -51,12 +51,12 @@ export struct Index {
   private pinningId: string | undefined = undefined;
   private snapshotIds: string[] = [];
   // 请求单飞：onActive 静默刷新与下拉刷新共享同一次请求（保留在飞 Promise，不是布尔锁，
-  // 后来者会真正等待本次刷新结束）；inflightSilent 记录本次在飞的是否静默，
-  // 供后来者判断要不要补一次带 loading 的刷新
+  // 后来者会真正等待本次刷新结束）；「在飞的是静默还是交互式、这次该不该补一次」由
+  // `RefreshPlanner` 决定（纯逻辑 + 单测，见 models/index/RefreshPlanner.ets）
   private refreshFlight: SingleFlight<void> = new SingleFlight<void>();
-  private inflightSilent: boolean = false;
+  private refreshPlanner: RefreshPlanner = new RefreshPlanner();
   // 静默续期单飞：onActive 可能被连续触发（切前后台 / 弹窗收起），重复续期会连打两次 refresh
-  private renewing: boolean = false;
+  private renewFlight: SingleFlight<void> = new SingleFlight<void>();
   @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
   @Local
@@ -75,6 +75,13 @@ export struct Index {
 
   // 冷启动恢复筛选/分组：拿不到 context 时用默认视图（不阻塞页面）
   aboutToAppear(): void {
+    // 算码 / 服务端兜底的失败只由 ItemsRuntime 汇总上报一次（不再是每条目各弹一次）；
+    // 模型层不 import Toast，提示形式由页面决定。Index 是常驻页面（详情/帮助/备份都在它上方），
+    // 所以这里的接线在本进程内一直有效。
+    this.itemsRuntime.onError = (message: ResourceStr): void => {
+      Toast.show({ message: message, duration: 3000 });
+    };
+
     const context = this.getUIContext().getHostContext();
 
     if ('undefined' === typeof context) {
@@ -187,6 +194,8 @@ export struct Index {
       hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '页面显示');
 
       if (this.isSortMode) {
+        // 排序态不刷新：拖拽中的本地顺序与服务端不一致，刷新会把用户刚拖好的顺序冲掉。
+        // （卡片意图的门禁不在这里，在 `consumeFormIntent` 内部：`@Monitor` 那条路径不经过本回调）
         return;
       }
 
@@ -222,8 +231,8 @@ export struct Index {
 
       hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '页面隐藏');
 
-      // 仅暂停定时器，保留运行时实例以便返回时原地增量刷新
-      this.itemsRuntime.stopAll();
+      // 不停表：时间来自全局 Clock，起停只由前后台驱动（见 ability/EntryAbility.ets）。
+      // 页面隐藏期间验证码仍在刷新，返回时无需 rely 重新算码的时机。
     })
   }
 
@@ -251,9 +260,9 @@ export struct Index {
     this.enterSortMode();
   }
 
-  // 打开验证码详情：复用列表项持有的运行时实例
+  // 打开验证码详情：传条目 id，详情页从 ItemsRuntime 取**同一个**运行时实例（不复制）
   private openDetail(id: string): void {
-    this.pages.pushPathByName(AppPagesName.INDEX_DETAIL, new ItemRuntime(this.itemsRuntime.get(id)));
+    this.pages.pushPathByName(AppPagesName.INDEX_DETAIL, id);
   }
 
   // 请求删除：记录待删 id 并弹确认框（真正删除在 deleteDialog 内）
@@ -500,25 +509,21 @@ export struct Index {
   // 首屏（本地无条目）与下拉刷新仍走 loading，避免空态/失败时没有任何反馈。
   private refresh(silent: boolean = false): Promise<void> {
     const pending: Promise<void> | undefined = this.refreshFlight.pending;
-
     // 单飞：在飞时返回同一个 Promise，调用方会真正等待本次刷新结束。
     // 要不要弹 loading 由**首个**调用者决定（静默刷新失败是无声的）。
-    if ('undefined' === typeof pending) {
-      this.inflightSilent = silent;
+    const plan: RefreshPlan = this.refreshPlanner.plan('undefined' !== typeof pending, silent);
 
-      return this.refreshFlight.run(() => this.doRefresh(silent));
+    // 交互式调用撞上在飞的静默刷新：等它结束后补一次带 loading 的刷新
+    // （`enqueue` 会同步占位，不会留下「旧任务结束到新任务登记」之间的并发缝隙）
+    if (RefreshPlan.ENQUEUE === plan) {
+      return this.refreshFlight.enqueue((): Promise<void> => this.doRefresh(false));
     }
 
-    if (silent || !this.inflightSilent) {
+    if (RefreshPlan.SHARE === plan && 'undefined' !== typeof pending) {
       return pending;
     }
 
-    // 非静默调用方（下拉刷新 / 重试按钮）撞上在飞的静默刷新：等它结束后再补一次带 loading 的刷新，
-    // 否则用户点了「重试」却看不到任何反馈（静默分支失败不弹框）。
-    // `enqueue` 会同步占位，不会留下「旧任务结束到新任务登记」之间的并发缝隙。
-    this.inflightSilent = false;
-
-    return this.refreshFlight.enqueue(() => this.doRefresh(false));
+    return this.refreshFlight.run((): Promise<void> => this.doRefresh(silent));
   }
 
   private async doRefresh(silent: boolean): Promise<void> {
@@ -583,24 +588,27 @@ export struct Index {
   // 失败分两类：AuthExpiredError（refresh_token 也失效，SessionGuard 已跳登录页，这里只记日志，
   // **不得**再弹任何框）、其它（网络 / 服务端）保持现状等下一次 onActive 自然重试。
   private renewThenRefresh(): void {
-    if (this.renewing) {
+    // 单飞用 `SingleFlight` 而不是手写布尔位：连续 onActive 时后到者共享同一次续期，
+    // 且不会出现「漏复位 = 之后再也不续期」的永久卡死（见 utils/SingleFlight.ets 文件头）
+    this.renewFlight.run((): Promise<void> => this.renewSilently()).catch((e: Error): void => {
+      hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '静默续期失败: %{public}s', JSON.stringify(e));
+    });
+  }
+
+  private async renewSilently(): Promise<void> {
+    try {
+      await this.authorization.refreshOnly();
+    } catch (e) {
+      // AuthExpiredError：refresh_token 也失效，SessionGuard 已跳登录页，这里只记日志、**不得**弹框；
+      // 其它（网络 / 服务端）：保持现状等下一次 onActive 自然重试
+      hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '静默续期失败: %{public}s', JSON.stringify(e));
+
       return;
     }
 
-    this.renewing = true;
-
-    this.authorization.refreshOnly()
-      .then((): void => {
-        this.refresh(true).catch(() => {
-          // 失败已在 refresh 内部处理，仅避免 unhandled rejection
-        });
-      })
-      .catch((e: Error): void => {
-        hilog.warn(LogDomain.PAGES, AppPagesName.INDEX, '静默续期失败: %{public}s', JSON.stringify(e));
-      })
-      .finally((): void => {
-        this.renewing = false;
-      });
+    this.refresh(true).catch(() => {
+      // 失败已在 refresh 内部处理，仅避免 unhandled rejection
+    });
   }
 
   // 卡片快照同步（单入口）：账号列表变化后写 preferences 并主动推送最新数据到已添加的卡片
@@ -634,6 +642,15 @@ export struct Index {
     const route: FormRoute | undefined = this.formIntent.pendingRoute();
 
     if ('undefined' === typeof route) {
+      return;
+    }
+
+    // 排序态不消费：拖拽中的列表与服务端顺序暂不一致，此时拉起扫码 / 新建会在返回后留下
+    // 一份和界面不符的 `snapshotIds`。门禁收在这里而不是 `onActive`，
+    // 是因为 `@Monitor('formIntent.version')` 那条路径不经过 `onActive`。
+    if (this.isSortMode) {
+      hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '卡片意图暂缓: 排序态 route=%{public}s', route);
+
       return;
     }
 

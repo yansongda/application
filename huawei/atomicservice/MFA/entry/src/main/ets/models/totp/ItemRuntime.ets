@@ -1,46 +1,46 @@
-import { IItem, IItemConfig } from '../../types/Item';
+// TOTP 条目运行时：**只持有数据与算码结果**，不持定时器、不弹提示、不发请求。
+//
+// 与历史实现的差别（PR 重构要点）：
+// - 不再有 `setInterval`/`setTimeout`/`start`/`stop`/`resume`：时间来自全局 `Clock`，
+//   倒计时（`remaining`）是 `nowMs` 的**纯派生值**，没有「每秒本地递减的计数」可漂移；
+// - 配置进模型时一次性归一化（`utils/Totp.ets#normalizeConfig`），下游不再兜底默认值；
+// - 端内算码失败**不在这里提示、不在这里请求服务端**：返回 `RefreshOutcome.NEED_SERVER`，
+//   由 `ItemsRuntime` 汇总成一次批量回退（N 条失败 = 1 个请求、1 条提示），
+//   模型层因此不依赖 `Toast` / `api/*`，可以直接单测。
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { TOTP } from '@yansongda/otp';
 import { LogDomain } from '../../App';
-import { Toast } from '../../utils/PromptAction';
-import { loginInStack } from '../../utils/NavState';
-import { Totp } from '../../api/Totp';
-import { OtpAlgorithm, TOTP } from '@yansongda/otp';
+import { IItem, IItemConfig, NormConfig } from '../../types/Item';
+import { DEFAULT_PERIOD, normalizeConfig, remainingOf, stepOf } from '../../utils/Totp';
+import { Clock } from './Clock';
 
-// TOTP 条目运行时（端内算码 + 周期倒计时）。
-// 服务端未返回周期/进度时的兜底值（秒）
-export const DEFAULT_PERIOD: number = 30;
+const TAG: string = 'models/runtime';
 
-// 与后端 Totp::digits()/algorithm() 的兜底一致：仅在 6~8 位 / SHA1|SHA256|SHA512 时采用下发值
-const DEFAULT_DIGITS: number = 6;
-const DEFAULT_ALGORITHM: OtpAlgorithm = OtpAlgorithm.SHA1;
-
-function normalizeDigits(digits: number | undefined): number {
-  return digits === 7 || digits === 8 ? digits : DEFAULT_DIGITS;
-}
-
-function normalizeAlgorithm(algorithm: string | undefined): OtpAlgorithm {
-  switch (algorithm) {
-    case 'SHA256':
-      return OtpAlgorithm.SHA256;
-    case 'SHA512':
-      return OtpAlgorithm.SHA512;
-    default:
-      return DEFAULT_ALGORITHM;
-  }
+// `refreshIfNeeded` 的结论
+export enum RefreshOutcome {
+  // 仍在同一时间窗内，无需动作（含「已尝试过但失败」，避免每秒重试）
+  UNCHANGED,
+  // 端内算码成功
+  LOCAL,
+  // 端内不可算（无 secret / 算码异常）：需服务端兜底
+  NEED_SERVER,
 }
 
 @ObservedV2
 export class ItemRuntime {
-  constructor(item: IItem | ItemRuntime) {
+  // 只从服务端条目构造：`code` 有意**不**在这里复制——验证码只由 `computeLocal`（端内，权威）
+  // 与 `applyServerCode`（服务端，仅补空位）写入，避开了「把上一窗口的服务端码当本窗口展示」。
+  constructor(item: IItem) {
     this._id = item.id;
-    this._code = item.code;
     this._issuer = item.issuer;
     this._username = item.username;
     this._tags = item.tags ? [...item.tags] : [];
     this._pinned = item.pinned === true;
-    this._config = item.config;
+    this._config = normalizeConfig(item.config);
   }
 
+  // 「无数据」占位实例（id 为空）：供 `@Param` 默认值与 `ItemsRuntime#get` 未命中时使用，
+  // 让 UI 不必到处写 `runtime?.xxx`。调用方可用 `id.length === 0` 识别占位实例。
   static empty(): ItemRuntime {
     return new ItemRuntime({
       id: '',
@@ -59,10 +59,6 @@ export class ItemRuntime {
     return this._id;
   }
 
-  public set id(value: string) {
-    this._id = value;
-  }
-
   @Trace
   private _code: string | undefined;
 
@@ -70,21 +66,8 @@ export class ItemRuntime {
     return this._code;
   }
 
-  public set code(value: string | undefined) {
-    this._code = value;
-  }
-
-  @Trace
-  private _progress: number | undefined;
-
-  public get progress(): number | undefined {
-    return this._progress;
-  }
-
-  public set progress(value: number | undefined) {
-    this._progress = value;
-  }
-
+  // 下面四个 setter 都做**等值短路**：`ItemsRuntime#reload` 每次刷新都会把服务端值写回，
+  // 而 `@Trace` 写入会通知依赖方（列表的 `visibleIds` 读过这些字段）→ 不短路就是「数据没变也整表重建」。
   @Trace
   private _issuer: string;
 
@@ -93,7 +76,9 @@ export class ItemRuntime {
   }
 
   public set issuer(value: string) {
-    this._issuer = value;
+    if (this._issuer !== value) {
+      this._issuer = value;
+    }
   }
 
   @Trace
@@ -104,7 +89,9 @@ export class ItemRuntime {
   }
 
   public set username(value: string) {
-    this._username = value;
+    if (this._username !== value) {
+      this._username = value;
+    }
   }
 
   // 标签/置顶：当前 UI 只支持单标签，数组结构为后续多标签预留
@@ -116,7 +103,10 @@ export class ItemRuntime {
   }
 
   public set tags(value: string[]) {
-    this._tags = [...value];
+    // 数组不能比引用：`[...value]` 每次都是新对象，不逐元素比对的话刷新必通知
+    if (!ItemRuntime.sameTags(this._tags, value)) {
+      this._tags = [...value];
+    }
   }
 
   // 卡片右上角展示用：当前取第一个标签
@@ -132,141 +122,134 @@ export class ItemRuntime {
   }
 
   public set pinned(value: boolean) {
-    this._pinned = value;
+    if (this._pinned !== value) {
+      this._pinned = value;
+    }
   }
 
-  private _config: IItemConfig;
+  private static sameTags(left: string[], right: string[]): boolean {
+    if (left.length !== right.length) {
+      return false;
+    }
 
-  public get config(): IItemConfig {
+    for (let index = 0; index < left.length; index++) {
+      if (left[index] !== right[index]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private _config: NormConfig = normalizeConfig(undefined);
+
+  // 归一化配置：period / digits / algorithm 全部确定值，UI 直接读，不需要兜底
+  public get config(): NormConfig {
     return this._config;
   }
 
   public set config(value: IItemConfig) {
-    this._config = value;
-    this._progress = value.period;
-  }
+    const next: NormConfig = normalizeConfig(value);
+    const periodChanged: boolean = next.period !== this._config.period;
+    const secretChanged: boolean = next.secret !== this._config.secret;
 
-  private _timeoutId: number | undefined;
-  private _intervalId: number | undefined;
+    this._config = next;
 
-  // 取码序号：防止并发算码时旧结果覆盖新码
-  private _computeSeq: number = 0;
-
-  start() {
-    this.stop();
-
-    // 登录页在栈中说明正在重新认证：不要自动算码 / 起定时器，免得在登录页背后空转请求
-    if (loginInStack()) {
-      return;
+    // 周期或密钥变了 → 旧码属于旧的时间窗 / 旧密钥，连同两个窗口序号一起作废，下一次 tick 立即重算。
+    // 数据没变时**不得**改动其它状态：`ItemsRuntime#reload` 每次下拉刷新都会写 config，
+    // 历史实现无条件 `progress = period` 会让进度条每次回到满格。
+    if (periodChanged || secretChanged) {
+      this._attemptedStep = -1;
+      this._requestedStep = -1;
+      this.setCode(undefined);
     }
-
-    this.freshCode().catch(() => {
-      // 失败已通过 Toast 提示，这里仅避免 unhandled rejection
-    });
-
-    this.schedule();
   }
 
-  // 恢复定时器（如退后台后回前台）：重启计时并立即重算一次；端内算码代价极低，重算可吸收退后台期间的时间跃迁
-  resume() {
-    if (this._timeoutId !== undefined) {
-      return;
-    }
-
-    if (loginInStack()) {
-      return;
-    }
-
-    this.freshCode().catch(() => {
-      // 失败已通过 Toast 提示，这里仅避免 unhandled rejection
-    });
-
-    this.schedule();
+  // 当前窗口剩余整秒 ∈ [1, period]：**纯派生**自全局时钟，每秒随 nowMs 自动刷新。
+  // 不变量：这里只能读状态，不能写状态、不能算码（否则与「派生」语义冲突）。
+  public get remaining(): number {
+    return remainingOf(Clock.instance().nowMs, this._config.period);
   }
 
-  stop() {
-    clearTimeout(this._timeoutId)
-    clearInterval(this._intervalId)
+  // 最近一次「尝试过端内算码」的窗口序号：同一窗口内不重复尝试（失败也不每秒重试 / 每秒打一条日志）
+  private _attemptedStep: number = -1;
 
-    // 保留最后一次验证码：回前台/滚回屏幕时立即可见，新验证码由页面刷新或周期到达时获取
-    this._progress = undefined;
-    this._timeoutId = undefined;
-    this._intervalId = undefined;
-  }
+  // 最近一次「已发起服务端兜底」的窗口序号：同一窗口最多请求一次（否则每秒一个请求）
+  private _requestedStep: number = -1;
 
-  // 根据更新周期对齐进度并重建定时器，周期到达时端内重算并重建定时器；
-  // 倒计时必须与 TOTP 计数器同样按 epoch 秒取模，否则 period 非 60 约数（45s）或时区偏移非整小时（+05:30）时倒计时与验证码翻转错开
-  private schedule() {
-    if (!(this._config.period > 0)) {
-      hilog.warn(LogDomain.MODELS, 'models/runtime', '非法的更新周期: %{public}d', this._config.period);
+  // 时间窗推进到新的一格时端内重算；调用方（ItemsRuntime#onTick）负责汇总 NEED_SERVER
+  refreshIfNeeded(nowMs: number): RefreshOutcome {
+    const step: number = stepOf(nowMs, this._config.period);
 
-      return;
-    }
+    if (step !== this._attemptedStep) {
+      this._attemptedStep = step;
+      // 换窗口 = 旧码作废：不允许把上一格的码当本格展示（旧码必然被服务端拒绝）
+      this.setCode(undefined);
 
-    const nowSeconds = Math.floor(Date.now() / 1000);
-
-    let progress = this._config.period - (nowSeconds % this._config.period);
-    this._progress = progress;
-
-    const intervalId = setInterval(() => {
-      progress--;
-
-      if (progress <= 0) {
-        // 用局部 intervalId 清理自身：rotate() 可能已重建定时器并覆盖实例字段 _intervalId，引用字段会误清新定时器
-        clearInterval(intervalId);
-      }
-
-      this._progress = progress;
-    }, 1000);
-
-    const timeoutId = setTimeout((): void => this.rotate(), Math.max(progress, 1) * 1000);
-
-    this._timeoutId = timeoutId;
-    this._intervalId = intervalId;
-  }
-
-  // 周期到点：端内重算并重建定时器（以端内算码为主，secret 缺失/算码失败时回退服务端 detail）
-  private rotate() {
-    this.freshCode().catch(() => {
-      // 失败已通过 Toast 提示，这里仅避免 unhandled rejection
-    });
-
-    this.schedule();
-  }
-
-  async freshCode() {
-    const seq = ++this._computeSeq;
-    const secret = this._config.secret;
-
-    if ('undefined' !== typeof secret && secret.length > 0) {
-      try {
-        const code: string = new TOTP({
-          secret: secret,
-          period: this._config.period,
-          digits: normalizeDigits(this._config.digits),
-          algorithm: normalizeAlgorithm(this._config.algorithm)
-        }).generate();
-
-        if (seq === this._computeSeq) {
-          this._code = code;
-        }
-
-        return;
-      } catch (e) {
-        hilog.warn(LogDomain.MODELS, 'models/runtime', '端内算码失败，回退服务端: id=%{public}s', this._id);
+      if (this.computeLocal(nowMs)) {
+        return RefreshOutcome.LOCAL;
       }
     }
 
-    const detail =
-      await Toast.execute(
-        () => Totp.detail(this._id),
-        undefined,
-        undefined,
-        $r('app.string.models_runtime_refresh_code_failed')
-      );
+    // 本窗口仍无可用验证码（无 secret / 算码抛错 / 首次加载）：每个窗口最多兜底一次。
+    // 「有没有本窗口的码」由 `_code` 是否为 undefined 表达，不再单列一个窗口序号。
+    if ('undefined' === typeof this._code && this._requestedStep !== step) {
+      this._requestedStep = step;
 
-    if (seq === this._computeSeq) {
-      this._code = detail.code;
+      return RefreshOutcome.NEED_SERVER;
+    }
+
+    return RefreshOutcome.UNCHANGED;
+  }
+
+  // 服务端验证码落地（两条路径共用：兜底请求返回 / 列表刷新带来的码）。
+  // 只在**当前窗口还没有码**时采用：端内算码是权威来源，且迟到返回的旧窗口码必须丢弃。
+  // issuedAtMs = 该码所属时刻（兜底用请求发起时刻，列表刷新用当前时刻）。
+  // 返回是否真正落地（调用方据此决定要不要再发兜底请求）。
+  applyServerCode(code: string | undefined, issuedAtMs: number): boolean {
+    if ('undefined' === typeof code || code.length <= 0 || 'undefined' !== typeof this._code) {
+      return false;
+    }
+
+    if (stepOf(issuedAtMs, this._config.period) !== stepOf(Clock.instance().nowMs, this._config.period)) {
+      return false;
+    }
+
+    this.setCode(code);
+
+    return true;
+  }
+
+  // 端内算码（唯一调用点：refreshIfNeeded）。成功返回 true 并已写入 `_code`
+  private computeLocal(nowMs: number): boolean {
+    const secret: string | undefined = this._config.secret;
+
+    if ('undefined' === typeof secret || secret.length <= 0) {
+      return false;
+    }
+
+    try {
+      // 显式传 nowMs：保证「算哪一格」与本 tick 的 remaining 完全一致，
+      // 不依赖 generate 内部再取一次 Date.now()（周期边界处会算出上一格）
+      this.setCode(new TOTP({
+        secret: secret,
+        period: this._config.period,
+        digits: this._config.digits,
+        algorithm: this._config.algorithm,
+      }).generate(nowMs));
+
+      return true;
+    } catch (e) {
+      hilog.warn(LogDomain.MODELS, TAG, '端内算码失败，转服务端兜底: id=%{public}s', this._id);
+
+      return false;
+    }
+  }
+
+  // 写验证码：值没变不写，避免无意义的 @Trace 变更 / UI 刷新
+  private setCode(code: string | undefined): void {
+    if (this._code !== code) {
+      this._code = code;
     }
   }
 }

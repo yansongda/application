@@ -32,7 +32,7 @@ export struct ListView {
 
   build() {
     Column() {
-      if (this.isNoMatch()) {
+      if (this.isNoMatch) {
         this.noMatch()
       } else {
         this.items()
@@ -71,7 +71,7 @@ export struct ListView {
         // 分组 key 必须包含组内成员：ArkUI 的 ForEach 在 key 未变时**不会**重新执行 itemGenerator，
         // 只用 `${kind}:${tag}` 会让「组内条目增减」停留在旧值（取消置顶后该项仍留在置顶组，
         // 而卡片内容已通过 @Trace 刷新成未置顶——表现为置顶组里多一条无置顶标记的重复项）
-        ForEach(this.groups(), (group: ItemGroupView) => {
+        ForEach(this.groups, (group: ItemGroupView) => {
           ListItemGroup({ header: this.groupHeader(group), space: 10 }) {
             ForEach(group.ids, (id: string) => {
               this.listItem(id)
@@ -79,7 +79,7 @@ export struct ListView {
           }
         }, (group: ItemGroupView): string => `${group.kind}:${group.tag}:${group.ids.join(',')}`)
       } else {
-        Repeat<string>(this.visibleIds())
+        Repeat<string>(this.visibleIds)
           .each((ri: RepeatItem<string>) => {
             this.listItem(ri.item.valueOf())
           })
@@ -92,9 +92,12 @@ export struct ListView {
             this.itemsRuntime.move(from, to);
           } : undefined)
           // 刻意不启用 virtualScroll：它默认开启节点缓存池复用，而复用只会更新「子组件变量」，
-          // 不会重建 each 里直接构建的内建 ListItem（by-value @Builder 参数、swipeAction 闭包、
-          // onAttach 都停留在构建期）。实测后果：已删除条目留下幽灵行、新增行定时器不启动、
-          // 滑出面板拿旧 id 删除导致后端 2008。账号列表规模很小，没有虚拟滚动的收益。
+          // 不会重建 each 里直接构建的内建 ListItem（by-value @Builder 参数、swipeAction 闭包
+          // 都停留在构建期）。实测后果：已删除条目留下幽灵行、滑出面板拿旧 id 删除导致后端 2008。
+          // 账号列表规模很小，没有虚拟滚动的收益。
+          //
+          // 验证码与倒计时不依赖 onAttach/onDetach：时间来自全局 Clock，起停只由前后台驱动
+          // （见 ability/EntryAbility.ets）。页面切换 / 节点重建都不会让某一行「停表」。
       }
     }
     .width('100%')
@@ -121,12 +124,6 @@ export struct ListView {
         },
       },
       edgeEffect: SwipeEdgeEffect.None,
-    })
-    .onAttach(() => {
-      this.itemsRuntime.start(id);
-    })
-    .onDetach(() => {
-      this.itemsRuntime.stop(id);
     })
     .onClick(() => {
       if (this.isSortMode) {
@@ -204,7 +201,12 @@ export struct ListView {
     return this.itemsRuntime.snapshot();
   }
 
-  private visibleIds(): string[] {
+  // 下面三个都是**派生视图**，用 `@Computed` 而不是普通方法：
+  // 单次 build 里 `isNoMatch` 与 `items()` 会各读一次可见列表（分组分支还要再算一次分组），
+  // 普通方法等于「snapshot → filter → sort」一次 build 跑 2 遍；`@Computed` 在依赖
+  // （条目字段 / 筛选 / 搜索词 / 排序态）未变时直接复用上次结果，参数变化时才重算。
+  @Computed
+  private get visibleIds(): string[] {
     const filtered = filterItems(this.snapshot(), this.state.filterKind, this.state.filterTag, this.state.query);
     const ordered = this.isSortMode ? filtered : sortPinnedFirst(filtered);
     const ids: string[] = [];
@@ -216,11 +218,13 @@ export struct ListView {
     return ids;
   }
 
-  private isNoMatch(): boolean {
-    return this.itemsRuntime.ids.length > 0 && this.visibleIds().length === 0;
+  @Computed
+  private get isNoMatch(): boolean {
+    return this.itemsRuntime.ids.length > 0 && this.visibleIds.length === 0;
   }
 
-  private groups(): ItemGroupView[] {
+  @Computed
+  private get groups(): ItemGroupView[] {
     return groupItems(sortPinnedFirst(filterItems(this.snapshot(), this.state.filterKind, this.state.filterTag, this.state.query)));
   }
 

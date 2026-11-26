@@ -5,6 +5,7 @@ import { Toast } from '../../utils/PromptAction';
 import { SessionGuard } from '../../utils/SessionGuard';
 import { AppStorageV2, LoadingDialogV2, PersistenceV2 } from '@kit.ArkUI';
 import { ListViewStatePrefs } from '../../models/totp/ListViewStatePrefs';
+import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import { SecuritySync } from '../../models/security/Sync';
 
 @Builder
@@ -19,6 +20,8 @@ struct Delete {
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
   private user: User =
     PersistenceV2.globalConnect({ type: User, defaultCreator: () => new User() })!;
+  // 注销账号后必须清空：运行时里持有全部条目的**明文 secret**，且列表刷新回调仍能触发算码
+  private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
   private authorization: Authorization =
     PersistenceV2.globalConnect({ type: Authorization, defaultCreator: () => new Authorization() })!;
 
@@ -75,6 +78,9 @@ struct Delete {
                 ListViewStatePrefs.clear(context);
                 SecuritySync.clearDirty(context);
               }
+
+              // 清空 TOTP 运行时：明文 secret 与算码定时器一并释放（否则旧账号的密钥一直驻留到进程退出）
+              this.itemsRuntime.clearAll();
 
               // 清空栈后交给统一入口跳登录页。
               // throttle: false —— 这是**显式**跳转（用户刚注销），不能被「自动跳转节流」挡掉；

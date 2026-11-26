@@ -9,7 +9,7 @@ import { AppStorageV2, window } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
 import { PrivacyWindow as PrivacyWindowWriter } from '../../utils/PrivacyWindow';
-import { KEY_SECURITY_DIRTY, KEY_SECURITY_PRIVACY_WINDOW, Prefs, PrefsInstance } from '../../utils/Prefs';
+import { KEY_SECURITY_PRIVACY_WINDOW, Prefs } from '../../utils/Prefs';
 
 // 用户设置默认开 = fail-closed（用户在不知情时被截屏的风险 > 自己被挡的风险）
 const DEFAULT_PRIVACY_WINDOW: boolean = true;
@@ -46,20 +46,13 @@ export class PrivacyWindow {
   // 设置该项：**先落盘、成功才改内存**——失败直接 false 且内存不变（调用方提示用户），
   // 因此不需要「先乐观改内存再回滚」那套闭包。成功后立即落地到窗口，页面无需再手工 apply。
   setEnabled(context: Context, on: boolean): boolean {
-    const prefs: PrefsInstance | undefined = Prefs.open(context);
-
-    if (!Prefs.putBoolean(prefs, KEY_SECURITY_PRIVACY_WINDOW, on)) {
+    // 落盘 + 置脏标记由 `Prefs.putSecurityFlag` 一步完成（与 AppLock 同一入口），
+    // 真正上行由 SecuritySync.flush 统一负责（模型不发请求）
+    if (!Prefs.putSecurityFlag(context, KEY_SECURITY_PRIVACY_WINDOW, on)) {
       hilog.error(LogDomain.MODELS, 'models/security', 'screen_protect_save_failed: enabled=%{public}s',
         on.toString());
 
       return false;
-    }
-
-    // 本地已生效后只标记「待同步」：真正上行由 SecuritySync.flush 统一负责（模型不发请求）。
-    // 标记写失败不改变返回值（设置本身已落盘生效），但必须留痕：否则下次登录 reconcile 会用服务端旧值覆盖本地
-    if (!Prefs.putBoolean(prefs, KEY_SECURITY_DIRTY, true)) {
-      hilog.error(LogDomain.MODELS, 'models/security', 'screen_protect_dirty_failed: enabled=%{public}s',
-        on.toString());
     }
 
     this._enabled = on;

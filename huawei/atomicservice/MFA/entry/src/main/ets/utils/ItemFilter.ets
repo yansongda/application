@@ -249,18 +249,6 @@ export function collectTags(items: ItemView[]): string[] {
   return tags;
 }
 
-export function countTag(items: ItemView[], tag: string): number {
-  let count = 0;
-
-  for (const item of items) {
-    if (item.tags.includes(tag)) {
-      count++;
-    }
-  }
-
-  return count;
-}
-
 // 单标签的渲染数据：标签名 + 条目数
 export interface TagStat {
   tag: string;
@@ -268,7 +256,7 @@ export interface TagStat {
 }
 
 // 标签 → 条目数（首次出现顺序）：一次遍历算完，供菜单一次性渲染。
-// 语义与 `collectTags` + 每个 tag 各调一次 `countTag` 等价（同一 item 内的重复标签只计一次），
+// 语义是「同一 item 内的重复标签只计一次」的标签计数（不再提供逐 tag 的 countTag：零调用），
 // 但只有一次数组遍历与一次 snapshot，标签多时不会 O(tag × item) 反复扫全量
 export function collectTagStats(items: ItemView[]): TagStat[] {
   const order: string[] = [];
