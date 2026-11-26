@@ -60,7 +60,7 @@
 ```
 utils/Ticker.ets            对齐整秒的递归调度（定时器注入，可单测）→ 「最多 1 个定时器 / 停止不复活 / 退订即回收」
         │
-models/totp/TotpClock.ets   @ObservedV2 单例 + @Trace nowMs；attach()/detach() 只由 EntryAbility 前后台驱动
+models/totp/Clock.ets   @ObservedV2 单例 + @Trace nowMs；attach()/detach() 只由 EntryAbility 前后台驱动
         │                                    └─ 算码订阅（EntryAbility.wireClock 接线，进程内一次）
 utils/Totp.ets              TOTP 参数与时间窗的唯一真相源：normalizePeriod/Digits/Algorithm/Config + stepOf/remainingOf
         │
@@ -117,7 +117,7 @@ UI（ListView / ListItemCard / Detail / Index / Delete）
   （防止 tick 回调里调用 `stop()` 后被重新登记）。
 - `publish()` 遍历订阅者副本并逐条 `try/catch`：一个条目算码失败不影响其它条目。
 
-### 4.2 `models/totp/TotpClock.ets`
+### 4.2 `models/totp/Clock.ets`
 
 - `@ObservedV2` 单例（`AppStorageV2.connect`，与 `AppLock.instance()` 同模式）+ `@Trace nowMs`。
 - `attach()` = `ticker.start()`（先立即推进一次，回前台不必等下一个整秒）；`detach()` = `ticker.stop()`。
@@ -141,13 +141,17 @@ UI（ListView / ListItemCard / Detail / Index / Delete）
 删除：`_timeoutId`、`_intervalId`、`_progress`、`schedule()`、`rotate()`、`start()`、`resume()`、`stop()`、
 本地递减、`Toast` / `api/Totp` 依赖（净减约 90 行）。
 
-保留/新增的状态机（仅三个窗口序号，全部用于「不重复、不过期」）：
+保留/新增的状态机（**仅两个**窗口序号，全部用于「不重复、不过期」）：
 
 | 字段 | 含义 |
 |---|---|
-| `_attemptedStep` | 最近一次尝试端内算码的窗口 |
+| `_attemptedStep` | 最近一次尝试端内算码的窗口（同窗口不重复尝试，避免每秒重复抛异常/打日志） |
 | `_requestedStep` | 最近一次已发起服务端兜底的窗口（每窗口最多 1 次请求） |
-| `_codeStep` | 当前 `_code` 所属窗口（-1 = 无可用码 / 属于旧窗口） |
+
+「本窗口有没有可用验证码」**不另设字段**，由 `_code` 是否为 `undefined` 表达：换窗口时
+`refreshIfNeeded` 先作废旧码（`setCode(undefined)`）再端内重算，因此
+`_code === undefined` 严格等价于「本窗口没有可用码」。代价是**算码失败时不展示上一窗口的旧码**
+（旧码必然被服务端拒绕），改为空白/未知。
 
 `refreshIfNeeded(nowMs)` 返回 `RefreshOutcome`：
 
@@ -155,26 +159,29 @@ UI（ListView / ListItemCard / Detail / Index / Delete）
 - `NEED_SERVER`：本窗口仍无可用码且尚未发起过兜底（无 secret / 算码抛错 / 首次加载）；
 - `UNCHANGED`：同窗口已处理过。
 
-`applyServerCode(code, issuedAtMs)` 用「请求发出时的窗口 == 当前窗口 == `_attemptedStep`」三重校验，
-丢弃迟到返回的旧窗口验证码。`config` setter 只在 `period`/`secret` **真变了**时作废上述三个序号
-（普通刷新不再打断倒计时，修 §1.2-4）。
+`applyServerCode(code, issuedAtMs)` 是服务端码的**唯一入口**（兜底请求返回 / 列表刷新带来的码共用）：
+只在「本窗口还没有码」且「`issuedAtMs` 与当前时刻同一窗口」时落地，返回是否真正采用
+（调用方据此决定要不要再发兜底请求）。`config` setter 只在 `period`/`secret` **真变了**时作废
+上述两个序号与当前码（普通刷新不再打断倒计时，修 §1.2-4）。
 
 ### 4.5 `models/totp/ItemsRuntime.ets`
 
 - `onTick(nowMs)`：`loginInStack()` 门禁 → 遍历 `_ids` → `refreshIfNeeded` → 汇总 `NEED_SERVER` →
   `fallbackFromServer(targets, issuedAtMs)`。
+- `refresh(runtime, item, nowMs)`：`add` 与 `reload` 共用的「端内算码 + 服务端码补位」，
+  返回是否还需要发兜底请求（响应里已带回本窗口的码时直接补位，不再多发一次请求）。
 - `fallbackFromServer`：`SingleFlight<IItem[]>` + 一次 `Totp.all()`，把结果按 id 分发；
   `_fallbackIssuedAt` 记录真正发起请求的时刻（单飞期间的后来者不会改写它）。
 - 失败：`AuthExpiredError` 直接返回（SessionGuard 已跳登录页），其余经 `onError` 上报，
   并做 **60s 节流**；端内算码恢复（`LOCAL`）时重置节流。
 - `clearAll()`：清运行时映射 + id 顺序（注销链调用）。
-- 删除 `start/stop/stopAll/resumeAll`（起停已归 `TotpClock`）。
+- 删除 `start/stop/stopAll/resumeAll`（起停已归 `Clock`）。
 
 ### 4.6 UI 与生命周期
 
 | 文件 | 改动 |
 |---|---|
-| `ability/EntryAbility.ets` | `resumeAll/stopAll` → `TotpClock.attach/detach`；新增 `wireClock()`（`_clockWired` 保证进程内只订阅一次），冷启动在 `loadContent` 回调里也 `attach()` 一次 |
+| `ability/EntryAbility.ets` | `resumeAll/stopAll` → `Clock.attach/detach`；新增 `wireClock()`（`_clockWired` 保证进程内只订阅一次），冷启动在 `loadContent` 回调里也 `attach()` 一次 |
 | `components/index/ListView.ets` | 删 `.onAttach/.onDetach` 计时钩子；保留 `virtualScroll` 关闭的既有结论（幽灵行 / 滑出面板旧 id 问题与本次无关） |
 | `components/index/ListItemCard.ets` | `Progress({ value: runtime.remaining, total: runtime.config.period })`，去掉 `DEFAULT_PERIOD` 兜底 |
 | `pages/index/Index.ets` | `aboutToAppear` 接线 `itemsRuntime.onError → Toast`；`onHidden` 不再 `stopAll()`；`openDetail(id)` 传 id |

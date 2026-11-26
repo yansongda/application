@@ -1,13 +1,13 @@
 // TOTP 条目集合运行时：id 顺序（@Trace，供列表 Repeat 使用）+ 条目运行时映射 + **全应用唯一**的算码驱动。
 //
 // 分层（与本目录其它模型一致）：
-// - 时间：`models/totp/TotpClock.ets`（唯一秒级定时器）；
+// - 时间：`models/totp/Clock.ets`（唯一秒级定时器）；
 // - 算码：本类每 tick 遍历条目，让到期的条目端内重算（`ItemRuntime#refreshIfNeeded`）；
 // - 兜底：本端算不了（无 secret / 算码异常）的条目在**同一 tick 内汇总**，只发一次 `/totp/all`，
 //   避免历史实现「每条目各发一次 /totp/detail」的 N 倍请求与 N 条失败提示；
 // - 提示：本类不 import 任何 UI 模块，失败经 `onError` 回调交给页面（由 `pages/index/Index.ets` 接线）。
 //
-// 注意：本类**不再**提供 start/stop/resume —— 起停只有一个入口（`TotpClock.attach/detach`，
+// 注意：本类**不再**提供 start/stop/resume —— 起停只有一个入口（`Clock.attach/detach`，
 // 由 EntryAbility 的前后台回调驱动）。页面切换不参与计时，因此不会出现「详情页压住列表时表停了」。
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { LogDomain } from '../../App';
@@ -18,7 +18,7 @@ import { ItemView } from '../../utils/ItemFilter';
 import { loginInStack } from '../../utils/NavState';
 import { SingleFlight } from '../../utils/SingleFlight';
 import { ItemRuntime, RefreshOutcome } from './ItemRuntime';
-import { TotpClock } from './TotpClock';
+import { Clock } from './Clock';
 
 const TAG: string = 'models/items_runtime';
 // 兜底失败提示的最小间隔：断网时每 30s 一次的验证码周期不该变成每 30s 一次的气泡
@@ -54,7 +54,7 @@ export class ItemsRuntime {
     return this._ids;
   }
 
-  // 每秒驱动一次（由 EntryAbility 把 TotpClock 与本方法接线）：
+  // 每秒驱动一次（由 EntryAbility 把 Clock 与本方法接线）：
   // 只有「时间窗变了」的条目才会真正重算，因此这里每秒的成本是一次整数除法比较。
   onTick(nowMs: number): void {
     // 登录页在栈中说明正在重新认证：不要算码、也不要发兜底请求（会在登录页背后空转）
@@ -107,13 +107,11 @@ export class ItemsRuntime {
     this._runtimes.set(item.id, runtime);
     this._ids = this._ids.filter((current: string): boolean => current !== item.id).concat(item.id);
 
-    // 新增即算码：不能只等下一次 tick，否则新条目最多白 1 秒。
-    // 端内算不了（无 secret）时用创建接口返回的验证码兜底；连这个都没有才发请求。
-    const nowMs: number = TotpClock.instance().nowMs;
+    // 新增即算码：不能只等下一次 tick，否则新条目最多白 1 秒；
+    // 创建响应里已带回验证码，只有连它都没有时才发兜底请求
+    const nowMs: number = Clock.instance().nowMs;
 
-    runtime.applyServerCodeForCurrentWindow(item.code);
-
-    if (RefreshOutcome.NEED_SERVER === runtime.refreshIfNeeded(nowMs)) {
+    if (this.refresh(runtime, item, nowMs)) {
       this.fallbackFromServer([runtime], nowMs);
     }
 
@@ -168,20 +166,19 @@ export class ItemsRuntime {
   reload(items: Iterable<IItem>): void {
     const nextItems: IItem[] = Array.from(items);
     const nextIds: string[] = nextItems.map((item: IItem): string => item.id);
-    const nowMs: number = TotpClock.instance().nowMs;
+    const nowMs: number = Clock.instance().nowMs;
     const needServer: ItemRuntime[] = [];
 
     this._ids
       .filter((id: string): boolean => !nextIds.includes(id))
       .forEach((id: string): void => this.delete(id));
 
-    nextItems.forEach((item: IItem): void => {
+    for (const item of nextItems) {
       const existing: ItemRuntime | undefined = this._runtimes.get(item.id);
 
       if ('undefined' === typeof existing) {
         this.add(item);
-
-        return;
+        continue;
       }
 
       existing.issuer = item.issuer;
@@ -190,20 +187,30 @@ export class ItemsRuntime {
       existing.pinned = item.pinned === true;
       // config 的 setter 只在周期 / 密钥真变了时作废验证码，普通刷新不会打断倒计时
       existing.config = item.config;
-      // 端内算码是权威来源：仅当**当前窗口**还没有验证码时才用服务端值兜底，
-      // 避免用旧窗口的服务端码覆盖本地新码（周期边界竞态）
-      existing.applyServerCodeForCurrentWindow(item.code);
 
-      if (RefreshOutcome.NEED_SERVER === existing.refreshIfNeeded(nowMs)) {
+      if (this.refresh(existing, item, nowMs)) {
         needServer.push(existing);
       }
-    });
+    }
 
     this._ids = nextIds;
 
     if (needServer.length > 0) {
       this.fallbackFromServer(needServer, nowMs);
     }
+  }
+
+  // 单条目的「端内算码 + 服务端码补位」（add 与 reload 共用）。
+  // 返回是否还需要发一次服务端兜底请求。
+  private refresh(runtime: ItemRuntime, item: IItem, nowMs: number): boolean {
+    const outcome: RefreshOutcome = runtime.refreshIfNeeded(nowMs);
+
+    // 本次响应里已带回本窗口的验证码：直接补位，不必再发兜底请求
+    if (runtime.applyServerCode(item.code, nowMs)) {
+      return false;
+    }
+
+    return RefreshOutcome.NEED_SERVER === outcome;
   }
 
   // 注销账号 / 清空本地数据：运行时持有**明文 secret**，必须显式清空，

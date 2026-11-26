@@ -228,7 +228,7 @@ export struct Index {
 
       hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '页面隐藏');
 
-      // 不停表：时间来自全局 TotpClock，起停只由前后台驱动（见 ability/EntryAbility.ets）。
+      // 不停表：时间来自全局 Clock，起停只由前后台驱动（见 ability/EntryAbility.ets）。
       // 页面隐藏期间验证码仍在刷新，返回时无需 rely 重新算码的时机。
     })
   }

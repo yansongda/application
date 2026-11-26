@@ -152,7 +152,7 @@ struct Detail {
         this.runtime = this.itemsRuntime.get(id);
       }
     })
-    // 计时与算码不在这里起停：时间来自全局 TotpClock（起停只由前后台驱动），
+    // 计时与算码不在这里起停：时间来自全局 Clock（起停只由前后台驱动），
     // 页面切到前台/后台不影响任何一行的验证码刷新。
   }
 

@@ -19,7 +19,7 @@ import { AppStorageV2 } from '@kit.ArkUI';
 import { AlignedTicker, SystemTimerSource } from '../../utils/Ticker';
 
 @ObservedV2
-export class TotpClock {
+export class Clock {
   // 当前时刻（毫秒）。每秒写一次；UI 通过 ItemRuntime 的派生 getter 读取。
   @Trace nowMs: number = Date.now();
 
@@ -36,8 +36,8 @@ export class TotpClock {
     });
   }
 
-  static instance(): TotpClock {
-    return AppStorageV2.connect(TotpClock, () => new TotpClock())!;
+  static instance(): Clock {
+    return AppStorageV2.connect(Clock, () => new Clock())!;
   }
 
   // 回前台 / 冷启动：立即推进一次（不必等下一个整秒）并开始计时

@@ -1,7 +1,7 @@
 // TOTP 条目运行时：**只持有数据与算码结果**，不持定时器、不弹提示、不发请求。
 //
 // 与历史实现的差别（PR 重构要点）：
-// - 不再有 `setInterval`/`setTimeout`/`start`/`stop`/`resume`：时间来自全局 `TotpClock`，
+// - 不再有 `setInterval`/`setTimeout`/`start`/`stop`/`resume`：时间来自全局 `Clock`，
 //   倒计时（`remaining`）是 `nowMs` 的**纯派生值**，没有「每秒本地递减的计数」可漂移；
 // - 配置进模型时一次性归一化（`utils/Totp.ets#normalizeConfig`），下游不再兜底默认值；
 // - 端内算码失败**不在这里提示、不在这里请求服务端**：返回 `RefreshOutcome.NEED_SERVER`，
@@ -12,7 +12,7 @@ import { TOTP } from '@yansongda/otp';
 import { LogDomain } from '../../App';
 import { IItem, IItemConfig, NormConfig } from '../../types/Item';
 import { DEFAULT_PERIOD, normalizeConfig, remainingOf, stepOf } from '../../utils/Totp';
-import { TotpClock } from './TotpClock';
+import { Clock } from './Clock';
 
 const TAG: string = 'models/runtime';
 
@@ -28,9 +28,10 @@ export enum RefreshOutcome {
 
 @ObservedV2
 export class ItemRuntime {
-  constructor(item: IItem | ItemRuntime) {
+  // 只从服务端条目构造：`code` 有意**不**在这里复制——验证码只由 `computeLocal`（端内，权威）
+  // 与 `applyServerCode`（服务端，仅补空位）写入，避开了「把上一窗口的服务端码当本窗口展示」。
+  constructor(item: IItem) {
     this._id = item.id;
-    this._code = item.code;
     this._issuer = item.issuer;
     this._username = item.username;
     this._tags = item.tags ? [...item.tags] : [];
@@ -137,58 +138,45 @@ export class ItemRuntime {
 
     this._config = next;
 
-    // 周期或密钥变了，当前验证码与「已尝试 / 已兜底」的窗口全部作废，下一次 tick 立即重算。
+    // 周期或密钥变了 → 旧码属于旧的时间窗 / 旧密钥，连同两个窗口序号一起作废，下一次 tick 立即重算。
     // 数据没变时**不得**改动其它状态：`ItemsRuntime#reload` 每次下拉刷新都会写 config，
     // 历史实现无条件 `progress = period` 会让进度条每次回到满格。
     if (periodChanged || secretChanged) {
       this._attemptedStep = -1;
       this._requestedStep = -1;
-      this._codeStep = -1;
+      this.setCode(undefined);
     }
   }
 
-  public get period(): number {
-    return this._config.period;
-  }
-
   // 当前窗口剩余整秒 ∈ [1, period]：**纯派生**自全局时钟，每秒随 nowMs 自动刷新。
-  // 不变量：这里只能读状态，不能写状态、不能算码（否则与 @Computed/派生语义冲突）。
+  // 不变量：这里只能读状态，不能写状态、不能算码（否则与「派生」语义冲突）。
   public get remaining(): number {
-    return remainingOf(TotpClock.instance().nowMs, this._config.period);
+    return remainingOf(Clock.instance().nowMs, this._config.period);
   }
 
-  // 当前时间窗序号（供调试 / 单测；UI 不用）
-  public get step(): number {
-    return stepOf(TotpClock.instance().nowMs, this._config.period);
-  }
-
-  // 最近一次「尝试过端内算码」的窗口序号
+  // 最近一次「尝试过端内算码」的窗口序号：同一窗口内不重复尝试（失败也不每秒重试 / 每秒打一条日志）
   private _attemptedStep: number = -1;
 
   // 最近一次「已发起服务端兜底」的窗口序号：同一窗口最多请求一次（否则每秒一个请求）
   private _requestedStep: number = -1;
 
-  // 当前 `_code` 所属的窗口序号（-1 表示无可用验证码 / 属于旧窗口）
-  private _codeStep: number = -1;
-
   // 时间窗推进到新的一格时端内重算；调用方（ItemsRuntime#onTick）负责汇总 NEED_SERVER
   refreshIfNeeded(nowMs: number): RefreshOutcome {
     const step: number = stepOf(nowMs, this._config.period);
-    let computed: boolean = false;
 
     if (step !== this._attemptedStep) {
       this._attemptedStep = step;
-      computed = this.computeLocal(nowMs);
+      // 换窗口 = 旧码作废：不允许把上一格的码当本格展示（旧码必然被服务端拒绝）
+      this.setCode(undefined);
 
-      if (computed) {
-        this._codeStep = step;
-
+      if (this.computeLocal(nowMs)) {
         return RefreshOutcome.LOCAL;
       }
     }
 
-    // 本窗口仍没有可用验证码（无 secret / 算码抛错 / 首次加载）：每个窗口最多兜底一次
-    if (this._codeStep !== step && this._requestedStep !== step) {
+    // 本窗口仍无可用验证码（无 secret / 算码抛错 / 首次加载）：每个窗口最多兜底一次。
+    // 「有没有本窗口的码」由 `_code` 是否为 undefined 表达，不再单列一个窗口序号。
+    if ('undefined' === typeof this._code && this._requestedStep !== step) {
       this._requestedStep = step;
 
       return RefreshOutcome.NEED_SERVER;
@@ -197,38 +185,22 @@ export class ItemRuntime {
     return RefreshOutcome.UNCHANGED;
   }
 
-  // 服务端兜底结果落地：只在「请求发出时那一格仍是当前格、且确实是本条目尝试过的那一格」时采用，
-  // 避免慢请求返回的旧窗口验证码覆盖本地刚算出的新码（周期边界竞态）
-  applyServerCode(code: string, issuedAtMs: number): void {
-    const step: number = stepOf(issuedAtMs, this._config.period);
-
-    if (step !== this._attemptedStep) {
-      return;
+  // 服务端验证码落地（两条路径共用：兜底请求返回 / 列表刷新带来的码）。
+  // 只在**当前窗口还没有码**时采用：端内算码是权威来源，且迟到返回的旧窗口码必须丢弃。
+  // issuedAtMs = 该码所属时刻（兜底用请求发起时刻，列表刷新用当前时刻）。
+  // 返回是否真正落地（调用方据此决定要不要再发兜底请求）。
+  applyServerCode(code: string | undefined, issuedAtMs: number): boolean {
+    if ('undefined' === typeof code || code.length <= 0 || 'undefined' !== typeof this._code) {
+      return false;
     }
 
-    if (step !== stepOf(TotpClock.instance().nowMs, this._config.period)) {
-      return;
+    if (stepOf(issuedAtMs, this._config.period) !== stepOf(Clock.instance().nowMs, this._config.period)) {
+      return false;
     }
 
-    this._code = code;
-    this._codeStep = step;
-  }
+    this.setCode(code);
 
-  // 服务端数据兜底（列表刷新 / 新增条目时用）：仅当**当前窗口**还没有验证码时采用，
-  // 端内算出的码是权威来源，不被服务端旧窗口的码覆盖
-  applyServerCodeForCurrentWindow(code: string | undefined): void {
-    if ('undefined' === typeof code || code.length <= 0) {
-      return;
-    }
-
-    const step: number = stepOf(TotpClock.instance().nowMs, this._config.period);
-
-    if (this._codeStep === step) {
-      return;
-    }
-
-    this._code = code;
-    this._codeStep = step;
+    return true;
   }
 
   // 端内算码（唯一调用点：refreshIfNeeded）。成功返回 true 并已写入 `_code`
@@ -242,18 +214,25 @@ export class ItemRuntime {
     try {
       // 显式传 nowMs：保证「算哪一格」与本 tick 的 remaining 完全一致，
       // 不依赖 generate 内部再取一次 Date.now()（周期边界处会算出上一格）
-      this._code = new TOTP({
+      this.setCode(new TOTP({
         secret: secret,
         period: this._config.period,
         digits: this._config.digits,
         algorithm: this._config.algorithm,
-      }).generate(nowMs);
+      }).generate(nowMs));
 
       return true;
     } catch (e) {
       hilog.warn(LogDomain.MODELS, TAG, '端内算码失败，转服务端兜底: id=%{public}s', this._id);
 
       return false;
+    }
+  }
+
+  // 写验证码：值没变不写，避免无意义的 @Trace 变更 / UI 刷新
+  private setCode(code: string | undefined): void {
+    if (this._code !== code) {
+      this._code = code;
     }
   }
 }

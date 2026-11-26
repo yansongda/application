@@ -95,7 +95,7 @@ MFA/
 - 忽略目录包括：`src/ohosTest/`、`src/test/`、`src/mock/`、`node_modules/`、`oh_modules/`、`build/`、`.preview/`
 - 当前规则集包含性能与 TypeScript 相关推荐规则
 - 安全相关规则对不安全加密算法有限制，修改安全或加密相关逻辑时要特别谨慎
-- `@security/no-unsafe-mac`（warn）此前命中自研 `utils/Totp.ets` 的 HMAC-SHA1；改用 `@yansongda/otp` 后该告警不再出现在工程源码（`oh_modules/`、`src/test/**`、`src/ohosTest/**` 在 `code-linter.json5` 中被 ignore）。**规则与豁免策略不变**（不放宽规则、不加 disable 注释）
+- `@security/no-unsafe-mac`（warn）此前命中自研实现 `utils/Totp.ets` 的 HMAC-SHA1（该文件已在 #173 删除，算码改由 `@yansongda/otp` 承担；**与当前同名的新文件无关**——后者只是纯函数形式的参数与时间窗工具）；改用 `@yansongda/otp` 后该告警不再出现在工程源码（`oh_modules/`、`src/test/**`、`src/ohosTest/**` 在 `code-linter.json5` 中被 ignore）。**规则与豁免策略不变**（不放宽规则、不加 disable 注释）
 
 ## 开发约束
 
@@ -143,10 +143,11 @@ MFA/
 
 ## TOTP 计时与算码（单时钟 + 派生倒计时）
 
-- **全应用只有一个秒级定时器**：`models/totp/TotpClock.ets`（对齐整秒的调度逻辑抽在 `utils/Ticker.ets`，定时器注入，可单测）。起停**只由 EntryAbility 的前后台回调驱动**（`onForeground` / `onWindowStageCreate` → `attach()`，`onBackground` → `detach()`）；页面与组件**不得**起停时钟，`ListView` / `Detail` 不再有 `onAttach` / `onActive` 之类的计时钩子。
-- **倒计时是派生值**：`ItemRuntime#remaining` 由 `TotpClock.nowMs` 与归一化 `period` 纯计算得到（`utils/Totp.ets`，与 `@yansongda/otp` 的 `remaining()` 逐点对齐，用例锁定）。**禁止**再引入「每秒本地递减的计数」（会漂移），也**禁止**为进度条新增第二份每秒变动的 `@Trace` 状态。`nowMs` 每秒只写一次，所有卡片在同一帧内刷新（历史实现是每条目 2 个定时器 = 2N 个、相位随运行时间发散 = 每秒最多 N 帧重排）。
+- **全应用只有一个秒级定时器**：`models/totp/Clock.ets`（对齐整秒的调度逻辑抽在 `utils/Ticker.ets`，定时器注入，可单测）。起停**只由 EntryAbility 的前后台回调驱动**（`onForeground` / `onWindowStageCreate` → `attach()`，`onBackground` → `detach()`）；页面与组件**不得**起停时钟，`ListView` / `Detail` 不再有 `onAttach` / `onActive` 之类的计时钩子。
+- **倒计时是派生值**：`ItemRuntime#remaining` 由 `Clock.nowMs` 与归一化 `period` 纯计算得到（`utils/Totp.ets`，与 `@yansongda/otp` 的 `remaining()` 逐点对齐，用例锁定）。**禁止**再引入「每秒本地递减的计数」（会漂移），也**禁止**为进度条新增第二份每秒变动的 `@Trace` 状态。`nowMs` 每秒只写一次，所有卡片在同一帧内刷新（历史实现是每条目 2 个定时器 = 2N 个、相位随运行时间发散 = 每秒最多 N 帧重排）。
 - **算码驱动只有一个入口**：`ItemsRuntime#onTick(nowMs)`，由 `EntryAbility.wireClock()` 接线（进程内只接一次）。只有「时间窗变了」的条目才重算（`ItemRuntime#refreshIfNeeded`），本地算不了（无 secret / 算码异常）的条目在**同一 tick 内汇总**，只发一次 `Totp.all()` 兜底（历史实现是每条目各发一次 `/totp/detail`）。
-- **配置归一化只做一次**：`utils/Totp.ets#normalizeConfig` 把 `period` / `digits` / `algorithm` 收敛成 `NormConfig`（全字段确定值）。模型之外**不得**再写 `?? 30` / `?? 6` / `typeof === 'number'` 之类兜底——历史实现里 `progress ?? 30`（列表）与 `progress ?? 0`（详情）并存，同一份脏数据在两端表现不一致。**`utils/Totp.ets` 是参数合法域与时间窗的唯一真相源**：`normalize*` 负责保证「period 是正整数秒」，`stepOf`/`remainingOf` 负责消费它，二者必须同一处维护，不要再拆回两个文件。
+- **配置归一化只做一次**：`utils/Totp.ets#normalizeConfig` 把 `period` / `digits` / `algorithm` 收敛成 `NormConfig`（全字段确定值）。模型之外**不得**再写 `?? 30` / `?? 6` / `typeof === 'number'` 之类兜底——历史实现里 `progress ?? 30`（列表）与 `progress ?? 0`（详情）并存，同一份脏数据在两端表现不一致。
+- **TOTP 参数与时间窗的唯一真相源**：`utils/Totp.ets`（注意：与 #173 删除的自研算码实现同名但无关，本文件只有纯函数）。`normalize*` 负责保证「period 是正整数秒」，`stepOf`/`remainingOf` 负责消费它，二者必须同一处维护，不要再拆回两个文件。
 - **模型不碰 UI / 网络**：`models/totp/ItemRuntime.ets` 不得 import `utils/PromptAction` 或 `api/*`；失败经 `ItemsRuntime#onError` 上报（由 `pages/index/Index.ets` 接线到 Toast），且**同一波失败只提示一次**（60s 节流），避免断网时每个验证码周期弹一次气泡。
 - **详情页与列表共用同一个 `ItemRuntime` 实例**：路由参数传条目 **id**，页面用 `ItemsRuntime#get(id)` 取；不要再 `new ItemRuntime(...)` 复制（副本会导致「详情页改了标签/置顶，列表要等一次网络刷新才同步」，且明文 secret 在内存里存两份）。
 - **注销账号必须 `ItemsRuntime.clearAll()`**（`pages/user/Delete.ets` 的清理链）：运行时持有全部条目的**明文 secret**，不清就会残留到进程退出，换账号登录后还会被继续算码。

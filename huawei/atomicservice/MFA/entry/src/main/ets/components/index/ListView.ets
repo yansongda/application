@@ -96,7 +96,7 @@ export struct ListView {
           // 都停留在构建期）。实测后果：已删除条目留下幽灵行、滑出面板拿旧 id 删除导致后端 2008。
           // 账号列表规模很小，没有虚拟滚动的收益。
           //
-          // 验证码与倒计时不依赖 onAttach/onDetach：时间来自全局 TotpClock，起停只由前后台驱动
+          // 验证码与倒计时不依赖 onAttach/onDetach：时间来自全局 Clock，起停只由前后台驱动
           // （见 ability/EntryAbility.ets）。页面切换 / 节点重建都不会让某一行「停表」。
       }
     }
