@@ -7,6 +7,7 @@ import listViewStateTest from './ListViewState.test';
 import otpSecretStrictTest from './OtpSecretStrict.test';
 import sessionThrottleTest from './SessionThrottle.test';
 import singleFlightTest from './SingleFlight.test';
+import totpRuntimeTest from './TotpRuntime.test';
 import windowCoordinatorTest from './WindowCoordinator.test';
 
 export default function testsuite() {
@@ -19,5 +20,6 @@ export default function testsuite() {
   otpSecretStrictTest();
   sessionThrottleTest();
   singleFlightTest();
+  totpRuntimeTest();
   windowCoordinatorTest();
 }

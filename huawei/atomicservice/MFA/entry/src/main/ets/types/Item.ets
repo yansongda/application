@@ -1,3 +1,5 @@
+import { OtpAlgorithm } from '@yansongda/otp';
+
 export interface IItem {
   id: string;
   issuer: string;
@@ -19,4 +21,15 @@ export interface IItemConfig {
   // 可选以兼容 PR #176 之前的历史响应，读取方按 6 / SHA1 兜底
   digits?: number;
   algorithm?: string;
+}
+
+// 归一化后的条目配置：**每个字段都是确定值**（无 undefined / 无脏值）。
+// 归一化唯一入口是 `utils/TotpParams.ets#normalizeConfig`；模型内只存这个形态，
+// 因此 UI 与算码逻辑里**不得**再出现 `?? 30` / `?? 6` / `typeof === 'number'` 之类兜底。
+// secret 仍为可选：缺失表示「本端不可算码，须回退服务端」。
+export interface NormConfig {
+  period: number;
+  digits: number;
+  algorithm: OtpAlgorithm;
+  secret?: string;
 }
