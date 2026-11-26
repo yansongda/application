@@ -1,28 +1,8 @@
 import { Type } from '@kit.ArkUI';
+import { IUser, IUserConfig } from '../types/User';
 
-export interface IMfaConfigSecurity {
-  // 字段名与后端 `config.mfa.security` 一致（snake_case），与端上 preferences 一一对应
-  privacy_window?: boolean | null;
-  app_lock?: boolean | null;
-}
-
-export interface IConfigMfa {
-  security?: IMfaConfigSecurity | null;
-}
-
-// 接口返回的是普通 JSON（不是被观测的类实例），因此对外只承诺这些字段
-export interface IUserConfig {
-  avatar?: string | null;
-  nickname?: string | null;
-  slogan?: string | null;
-  // MFA 安全设置的云端副本：老数据无该字段，读取方按「服务端未保存过」处理
-  mfa?: IConfigMfa | null;
-}
-
-export interface IUser {
-  phone?: string | null;
-  config?: IUserConfig | null;
-}
+// 用户资料模型：后端契约类型在 `types/User.ets`（叶子），本文件只放被观测的类。
+// 分层理由见 `types/User.ets` 文件头（避免 `api → models` 反向依赖）。
 
 // 空值归一：接口/持久化可能给出 null，统一转成 undefined，保持与类型声明一致（用 ?? / typeof 判断都不会再漏）
 function normalizeText(value: string | null | undefined): string | undefined {
