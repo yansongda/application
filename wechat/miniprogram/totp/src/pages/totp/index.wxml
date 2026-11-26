@@ -18,7 +18,7 @@
   </view>
 
   <block wx:else>
-    <block wx:if="{{items.length > 0}}">
+    <block wx:if="{{totalCount > 0}}">
       <view class="toolbar">
         <block wx:if="{{isSortMode}}">
           <text class="toolbar-sort-hint">长按拖动可调整顺序</text>
@@ -99,6 +99,7 @@
             bindtouchstart="onTouchStart"
             bindtouchmove="onTouchMove"
             bindtouchend="onTouchEnd"
+            bindtouchcancel="onTouchCancel"
             data-index="{{index}}"
           >
             <app-totp-item
@@ -118,7 +119,7 @@
       </view>
     </block>
 
-    <view class="empty-state" wx:if="{{items.length <= 0}}">
+    <view class="empty-state" wx:if="{{totalCount <= 0}}">
       <t-icon name="lock-checked" size="96rpx" color="#5bb43b" />
       <view class="empty-title">保护您的每一个账号</view>
       <view class="empty-tip">添加账号后，即可离线生成动态验证码</view>
@@ -136,7 +137,7 @@
     </view>
 
     <t-fab
-      wx:if="{{!isSortMode && items.length > 0}}"
+      wx:if="{{!isSortMode && totalCount > 0}}"
       icon="add"
       style="right: 16px; bottom: calc(86px + env(safe-area-inset-bottom));"
       bind:click="onFabClick"
