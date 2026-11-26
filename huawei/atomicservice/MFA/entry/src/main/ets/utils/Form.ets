@@ -1,6 +1,6 @@
-// 卡片展示快照（单库 preferences `mfa` 的 `form.snapshot` / `form.id.<formId>`）：主应用只写账号数与
-// 时间戳，卡片提供方（FormExtensionAbility）同步读取并注入卡片。
-// 快照只存 count / updatedAt，不落任何账号明细（issuer / username 等一律不入盘）。
+// 卡片展示快照（单库 preferences `mfa` 的 `form.snapshot` / `form.id.<formId>`）：主应用只写账号数，
+// 卡片提供方（FormExtensionAbility）同步读取并注入卡片。
+// 快照只存 count，不落任何账号明细（issuer / username 等一律不入盘）。
 //
 // 方法必须全部同步：FormExtensionAbility.onAddForm 是同步签名
 // （SDK @ohos.app.form.FormExtensionAbility.d.ts:83），异步方法无法在其内 await。
@@ -21,31 +21,41 @@ const TAG: string = 'utils/form';
 
 export interface SnapshotData {
   count: number;
-
-  updatedAt: number;
 }
 
 export class Snapshot {
-  static write(context: Context, count: number): void {
+  // 写快照：**内容未变则不写**（返回是否真的写入）。
+  // 卡片只渲染账号数，而 `FormBridge.sync` 每次列表刷新都会调到这里（`Index.onActive` 很频繁），
+  // 无条件写盘 + 推卡片等于每次刷新都做一次 preferences 写与一次跨进程 IPC。
+  static writeIfChanged(context: Context, count: number): boolean {
     const prefs: PrefsInstance | undefined = Prefs.open(context, CROSS_PROCESS);
 
     if ('undefined' === typeof prefs) {
-      return;
+      return false;
     }
 
-    const snapshot: SnapshotData = { count: count, updatedAt: Date.now() };
+    // 快照缺失时即使 count 为 0 也要落一次：卡片进程首次装配依赖它的存在性
+    const current: object | undefined = Prefs.getObject(prefs, KEY_FORM_SNAPSHOT);
+
+    if ('undefined' !== typeof current && count === (current as SnapshotData).count) {
+      return false;
+    }
+
+    const snapshot: SnapshotData = { count: count };
 
     if (!Prefs.putObject(prefs, KEY_FORM_SNAPSHOT, snapshot)) {
       hilog.error(LogDomain.UTILS, TAG, '快照写入失败: count=%{public}d', count);
 
-      return;
+      return false;
     }
 
     hilog.info(LogDomain.UTILS, TAG, '快照写入: count=%{public}d', count);
+
+    return true;
   }
 
   static read(context: Context): SnapshotData {
-    const empty: SnapshotData = { count: 0, updatedAt: 0 };
+    const empty: SnapshotData = { count: 0 };
     const prefs: PrefsInstance | undefined = Prefs.open(context, CROSS_PROCESS);
 
     if ('undefined' === typeof prefs) {
@@ -67,7 +77,7 @@ export class Snapshot {
       return empty;
     }
 
-    return { count: snapshot.count, updatedAt: 'number' === typeof snapshot.updatedAt ? snapshot.updatedAt : 0 };
+    return { count: snapshot.count };
   }
 
   static addFormId(context: Context, formId: string): void {
