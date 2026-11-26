@@ -1,4 +1,4 @@
-import { DEFAULT_PERIOD, ItemRuntime } from '../../models/totp/ItemRuntime';
+import { ItemRuntime } from '../../models/totp/ItemRuntime';
 import { Clipboard } from '../../utils/Clipboard';
 import { Toast } from '../../utils/PromptAction';
 
@@ -79,8 +79,9 @@ export struct ListItemCard {
         .padding({ left: $r('app.integer.page_padding_smaller'), right: $r('app.integer.page_padding_smaller') })
 
         Progress({
-          value: this.runtime.progress ?? DEFAULT_PERIOD,
-          total: this.runtime.config?.period ?? DEFAULT_PERIOD,
+          // 剩余秒数与总周期都来自归一化配置 / 全局时钟的派生值：没有兜底默认值，也没有本地递减的计数
+          value: this.runtime.remaining,
+          total: this.runtime.config.period,
           type: ProgressType.Linear,
         })
           .height($r('app.integer.card_progress_height'))

@@ -1,4 +1,3 @@
-import { ItemRuntime } from '../../models/totp/ItemRuntime';
 import { ItemsRuntime } from '../../models/totp/ItemsRuntime';
 import {
   AdvancedDialogV2Button,
@@ -75,6 +74,13 @@ export struct Index {
 
   // 冷启动恢复筛选/分组：拿不到 context 时用默认视图（不阻塞页面）
   aboutToAppear(): void {
+    // 算码 / 服务端兜底的失败只由 ItemsRuntime 汇总上报一次（不再是每条目各弹一次）；
+    // 模型层不 import Toast，提示形式由页面决定。Index 是常驻页面（详情/帮助/备份都在它上方），
+    // 所以这里的接线在本进程内一直有效。
+    this.itemsRuntime.onError = (message: ResourceStr): void => {
+      Toast.show({ message: message, duration: 3000 });
+    };
+
     const context = this.getUIContext().getHostContext();
 
     if ('undefined' === typeof context) {
@@ -222,8 +228,8 @@ export struct Index {
 
       hilog.info(LogDomain.PAGES, AppPagesName.INDEX, '页面隐藏');
 
-      // 仅暂停定时器，保留运行时实例以便返回时原地增量刷新
-      this.itemsRuntime.stopAll();
+      // 不停表：时间来自全局 TotpClock，起停只由前后台驱动（见 ability/EntryAbility.ets）。
+      // 页面隐藏期间验证码仍在刷新，返回时无需 rely 重新算码的时机。
     })
   }
 
@@ -251,9 +257,9 @@ export struct Index {
     this.enterSortMode();
   }
 
-  // 打开验证码详情：复用列表项持有的运行时实例
+  // 打开验证码详情：传条目 id，详情页从 ItemsRuntime 取**同一个**运行时实例（不复制）
   private openDetail(id: string): void {
-    this.pages.pushPathByName(AppPagesName.INDEX_DETAIL, new ItemRuntime(this.itemsRuntime.get(id)));
+    this.pages.pushPathByName(AppPagesName.INDEX_DETAIL, id);
   }
 
   // 请求删除：记录待删 id 并弹确认框（真正删除在 deleteDialog 内）

@@ -92,9 +92,12 @@ export struct ListView {
             this.itemsRuntime.move(from, to);
           } : undefined)
           // 刻意不启用 virtualScroll：它默认开启节点缓存池复用，而复用只会更新「子组件变量」，
-          // 不会重建 each 里直接构建的内建 ListItem（by-value @Builder 参数、swipeAction 闭包、
-          // onAttach 都停留在构建期）。实测后果：已删除条目留下幽灵行、新增行定时器不启动、
-          // 滑出面板拿旧 id 删除导致后端 2008。账号列表规模很小，没有虚拟滚动的收益。
+          // 不会重建 each 里直接构建的内建 ListItem（by-value @Builder 参数、swipeAction 闭包
+          // 都停留在构建期）。实测后果：已删除条目留下幽灵行、滑出面板拿旧 id 删除导致后端 2008。
+          // 账号列表规模很小，没有虚拟滚动的收益。
+          //
+          // 验证码与倒计时不依赖 onAttach/onDetach：时间来自全局 TotpClock，起停只由前后台驱动
+          // （见 ability/EntryAbility.ets）。页面切换 / 节点重建都不会让某一行「停表」。
       }
     }
     .width('100%')
@@ -121,12 +124,6 @@ export struct ListView {
         },
       },
       edgeEffect: SwipeEdgeEffect.None,
-    })
-    .onAttach(() => {
-      this.itemsRuntime.start(id);
-    })
-    .onDetach(() => {
-      this.itemsRuntime.stop(id);
     })
     .onClick(() => {
       if (this.isSortMode) {

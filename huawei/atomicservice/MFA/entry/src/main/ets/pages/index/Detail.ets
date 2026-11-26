@@ -19,8 +19,12 @@ export function builder() {
 
 @ComponentV2
 struct Detail {
-  private runtime: ItemRuntime | undefined = undefined;
+  // 与列表**同一个**运行时实例（按 id 从 ItemsRuntime 取），不再复制：
+  // 历史实现传 `new ItemRuntime(...)` 副本，导致「详情页改了标签/置顶，列表不更新」要靠一次网络刷新才同步，
+  // 且明文 secret 在内存里存了两份。占位实例（id 为空）只用于 onReady 之前的首帧。
+  private runtime: ItemRuntime = ItemRuntime.empty();
   private pages: NavPathStack = AppStorageV2.connect(NavPathStack, () => new NavPathStack())!;
+  @Local
   private itemsRuntime: ItemsRuntime = AppStorageV2.connect(ItemsRuntime, () => new ItemsRuntime())!;
 
   build() {
@@ -30,14 +34,14 @@ struct Detail {
         Column({ space: $r('app.integer.column_space') }) {
           Column() {
             Progress({
-              value: this.runtime?.progress ?? 0,
-              total: this.runtime?.config.period ?? 30,
+              value: this.runtime.remaining,
+              total: this.runtime.config.period,
               type: ProgressType.Linear
             })
               .height(2)
               .color($r('app.color.brand'))
 
-            Text(this.runtime?.code ?? $r('app.string.index_detail_page_value_unknown'))
+            Text(this.runtime.code ?? $r('app.string.index_detail_page_value_unknown'))
               .textAlign(TextAlign.Center)
               .fontSize(70)
               .width('100%')
@@ -50,7 +54,7 @@ struct Detail {
               .type(ButtonType.Capsule)
               .margin({ top: 20 })
               .onClick(async () => {
-                const code = this.runtime?.code;
+                const code = this.runtime.code;
 
                 if ('undefined' === typeof code || code.length === 0) {
                   return;
@@ -70,12 +74,14 @@ struct Detail {
             items: [
               new InfoCardItem({
                 title: $r('app.string.index_page_issuer'),
-                value: this.runtime?.issuer ?? $r('app.string.index_detail_page_value_unknown'),
+                value: this.runtime.issuer.length > 0 ? this.runtime.issuer :
+                  $r('app.string.index_detail_page_value_unknown'),
                 eventClick: { action: AppPagesName.INDEX_EDIT_ISSUER, params: new EditTextParams(this.runtime, true) },
               }),
               new InfoCardItem({
                 title: $r('app.string.index_page_username'),
-                value: this.runtime?.username ?? $r('app.string.index_detail_page_value_unknown'),
+                value: this.runtime.username.length > 0 ? this.runtime.username :
+                  $r('app.string.index_detail_page_value_unknown'),
                 eventClick: { action: AppPagesName.INDEX_EDIT_USERNAME, params: new EditTextParams(this.runtime, false) },
               }),
             ]
@@ -86,14 +92,14 @@ struct Detail {
             items: [
               new InfoCardItem({
                 title: $r('app.string.index_page_tag'),
-                value: this.tagDisplay(this.runtime?.tag ?? ''),
+                value: this.tagDisplay(this.runtime.tag),
                 eventClick: {
                   action: (): Promise<string> => this.openTagPage(),
                 },
               }),
               new InfoCardItem({
                 title: $r('app.string.index_page_pinned'),
-                value: this.pinDisplay(this.runtime?.pinned === true),
+                value: this.pinDisplay(this.runtime.pinned),
                 eventClick: {
                   action: async (): Promise<string | undefined> => this.togglePinned(),
                 },
@@ -106,15 +112,15 @@ struct Detail {
             items: [
               new InfoCardItem({
                 title: $r('app.string.index_page_config_period'),
-                value: (this.runtime?.config.period ?? '30').toString() + 's',
+                value: this.runtime.config.period.toString() + 's',
               }),
               new InfoCardItem({
                 title: $r('app.string.index_page_config_digits'),
-                value: (this.runtime?.config.digits ?? 6).toString() + ' 位',
+                value: this.runtime.config.digits.toString() + ' 位',
               }),
               new InfoCardItem({
                 title: $r('app.string.index_page_config_algorithm'),
-                value: this.runtime?.config.algorithm ?? 'SHA1',
+                value: this.runtime.config.algorithm.toString(),
               }),
             ]
           })
@@ -139,16 +145,15 @@ struct Detail {
     .backgroundColor($r('sys.color.background_secondary'))
     .title($r('app.string.index_detail_page_title'))
     .onReady((context: NavDestinationContext) => {
-      this.runtime = context.pathInfo.param as ItemRuntime;
+      // 路由参数是条目 id（不是运行时副本）：从 ItemsRuntime 取同一个实例
+      const id = context.pathInfo.param as string;
+
+      if ('string' === typeof id && id.length > 0) {
+        this.runtime = this.itemsRuntime.get(id);
+      }
     })
-    .onActive(() => {
-      this.runtime?.start();
-    })
-    .onInactive(() => {
-      this.runtime?.stop();
-    })
-    // 不在此处清空 runtime：onReady 仅在 NavDestination 创建时触发一次，清空后返回时无法恢复，
-    // onActive 重启定时器会变成空操作（验证码与进度条卡死）；停表已由 onInactive 负责
+    // 计时与算码不在这里起停：时间来自全局 TotpClock（起停只由前后台驱动），
+    // 页面切到前台/后台不影响任何一行的验证码刷新。
   }
 
   @Builder
@@ -161,10 +166,6 @@ struct Detail {
   // 标签行：push 标签页并等待 pop；返回给 InfoCard 的展示值，同时同步 runtime.tags
   private openTagPage(): Promise<string> {
     const runtime = this.runtime;
-
-    if ('undefined' === typeof runtime) {
-      return Promise.resolve('');
-    }
 
     return new Promise<string>((resolve) => {
       this.pages.pushPathByName(AppPagesName.INDEX_EDIT_TAG,
@@ -182,10 +183,6 @@ struct Detail {
   // 置顶行：先请求、成功才改内存；失败返回 undefined，InfoCard 保持原值
   private async togglePinned(): Promise<string | undefined> {
     const runtime = this.runtime;
-
-    if ('undefined' === typeof runtime) {
-      return undefined;
-    }
 
     const next = !runtime.pinned;
 
