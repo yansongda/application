@@ -139,7 +139,7 @@
     <t-fab
       wx:if="{{!isSortMode && totalCount > 0}}"
       icon="add"
-      style="right: 16px; bottom: calc(86px + env(safe-area-inset-bottom));"
+      style="right: 16px; bottom: calc(82px + env(safe-area-inset-bottom));"
       bind:click="onFabClick"
       aria-label="添加账号"
     ></t-fab>
