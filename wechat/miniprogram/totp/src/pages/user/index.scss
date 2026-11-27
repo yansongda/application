@@ -1,8 +1,8 @@
 .page {
   min-height: 100vh;
-  // 自定义 tabBar 浮在页面之上（不压缩视口），底部预留 54px 内容区 + 安全区，
+  // 自定义 tabBar 浮在页面之上（不压缩视口），底部预留 50px 内容区 + 安全区，
   // 避免「注销账号」被遮住。
-  padding-bottom: calc(48rpx + 54px + env(safe-area-inset-bottom));
+  padding-bottom: calc(48rpx + 50px + env(safe-area-inset-bottom));
   background-color: #f5f5f5;
 }
 
