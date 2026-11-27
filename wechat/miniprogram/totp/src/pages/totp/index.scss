@@ -5,7 +5,7 @@
 
 .page-sort {
   // 自定义 tabBar 不压缩页面视口，需自行扣除 tabBar 高度，避免排序列表被遮挡
-  height: calc(100vh - 54px - env(safe-area-inset-bottom));
+  height: calc(100vh - 50px - env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   overflow-y: auto;

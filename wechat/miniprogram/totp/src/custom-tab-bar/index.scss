@@ -1,5 +1,5 @@
 // 自定义 tabBar：白底 + 顶部细线，选中态用品牌绿（#5bb43b）。
-// 内容区固定 54px + 底部安全区；tab 页需按同一常量预留底部空间，
+// 内容区固定 50px + 底部安全区；tab 页需按同一常量预留底部空间，
 // 见 pages/totp/index.scss 的 items / page-sort 与 pages/user/index.scss 的 page。
 .tab-bar {
   position: fixed;
@@ -9,7 +9,7 @@
   z-index: 5000;
   box-sizing: border-box;
   display: flex;
-  height: calc(54px + env(safe-area-inset-bottom));
+  height: calc(50px + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   background-color: #ffffff;
   border-top: 0.5px solid #e5e5e5;
